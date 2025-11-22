@@ -1,5 +1,13 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { Box, Grid, Typography, Alert } from "@mui/material";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
+import {
+    Box,
+    Grid,
+    Typography,
+    Alert,
+    Container,
+    Paper,
+    Stack,
+} from "@mui/material";
 import { useApiClient } from "../services/apiClient";
 import HoldingsCard from "../components/investments/HoldingsCard.jsx";
 import WatchlistCard from "../components/investments/WatchlistCard.jsx";
@@ -15,7 +23,6 @@ export default function InvestmentsPage() {
         removeFromWatchlist,
     } = useApiClient();
 
-    // 直接存后端原始对象（PascalCase）
     const [overview, setOverview] = useState(null);
     const [watchlist, setWatchlist] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -31,8 +38,8 @@ export default function InvestmentsPage() {
                 getWatchlist(),
             ]);
 
-            setOverview(o || {});                        // 不强制 camelCase
-            setWatchlist(Array.isArray(w) ? w : []);     // watchlist 直接原样保存
+            setOverview(o || {});
+            setWatchlist(Array.isArray(w) ? w : []);
         } catch (err) {
             console.error("Failed to load investments data", err);
             setError(err.message || "Failed to load investments data.");
@@ -103,15 +110,111 @@ export default function InvestmentsPage() {
 
     const holdings = overview?.Holdings ?? overview?.holdings ?? [];
 
+    const totals = useMemo(() => {
+        const list = holdings || [];
+        const marketValue = list.reduce(
+            (sum, h) => sum + (h.MarketValue ?? h.marketValue ?? 0),
+            0
+        );
+        const pnl = list.reduce(
+            (sum, h) => sum + (h.UnrealizedPnL ?? h.unrealizedPnL ?? 0),
+            0
+        );
+        return {
+            marketValue,
+            pnl,
+            positions: list.length,
+        };
+    }, [holdings]);
+
+    const statCardStyles = {
+        bgcolor: "rgba(15,23,42,0.85)",
+        border: "1px solid rgba(148,163,184,0.35)",
+        borderRadius: 3,
+        px: 2.5,
+        py: 1.5,
+        minWidth: 180,
+    };
+
     return (
-        <Box>
-            <Box mb={3}>
-                <Typography variant="h5" fontWeight={600}>
-                    Investments
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                    Track your positions, watchlist, and latest market news.
-                </Typography>
+        <Container
+            maxWidth="lg"
+            sx={{
+                mt: 2,
+                mb: 4,
+                display: "flex",
+                flexDirection: "column",
+                gap: 3,
+            }}
+        >
+            <Box
+                sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 2,
+                }}
+            >
+                <Box>
+                    <Typography variant="overline" color="text.secondary">
+                        INVESTMENTS
+                    </Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
+                        Portfolio overview
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Track your positions, watchlist, and latest market news.
+                    </Typography>
+                </Box>
+
+                <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={1.5}
+                    alignItems="stretch"
+                >
+                    <Paper elevation={0} sx={statCardStyles}>
+                        <Typography variant="caption" color="text.secondary">
+                            Total market value
+                        </Typography>
+                        <Typography variant="h6" sx={{ mt: 0.5 }}>
+                            {totals.marketValue.toLocaleString("en-CA", {
+                                style: "currency",
+                                currency: "USD",
+                                maximumFractionDigits: 0,
+                            })}
+                        </Typography>
+                    </Paper>
+                    <Paper elevation={0} sx={statCardStyles}>
+                        <Typography variant="caption" color="text.secondary">
+                            Unrealized PnL
+                        </Typography>
+                        <Typography
+                            variant="h6"
+                            sx={{
+                                mt: 0.5,
+                                color:
+                                    totals.pnl >= 0
+                                        ? "success.main"
+                                        : "error.main",
+                            }}
+                        >
+                            {totals.pnl.toLocaleString("en-CA", {
+                                style: "currency",
+                                currency: "USD",
+                                maximumFractionDigits: 0,
+                            })}
+                        </Typography>
+                    </Paper>
+                    <Paper elevation={0} sx={statCardStyles}>
+                        <Typography variant="caption" color="text.secondary">
+                            Positions
+                        </Typography>
+                        <Typography variant="h6" sx={{ mt: 0.5 }}>
+                            {totals.positions}
+                        </Typography>
+                    </Paper>
+                </Stack>
             </Box>
 
             {error && (
@@ -122,18 +225,34 @@ export default function InvestmentsPage() {
                 </Box>
             )}
 
-            <Grid container spacing={3}>
-                <Grid item xs={12} md={7}>
-                    <HoldingsCard
-                        holdings={holdings}
-                        loading={loading}
-                        saving={saving}
-                        onAdd={handleAddInvestment}
-                        onDelete={handleDeleteInvestment}
-                    />
+            {/* 第一行：Investments + Watchlist；第二行右侧 News */}
+            <Grid container spacing={3} alignItems="stretch">
+                {/* 第一行：Investments */}
+                <Grid
+                    item
+                    xs={12}
+                    md={7}
+                    sx={{ display: "flex", width: "100%", minWidth: 0 }}
+                >
+                    <Box sx={{ width: "100%" }}>
+                        <HoldingsCard
+                            holdings={holdings}
+                            loading={loading}
+                            saving={saving}
+                            onAdd={handleAddInvestment}
+                            onDelete={handleDeleteInvestment}
+                        />
+                    </Box>
                 </Grid>
-                <Grid item xs={12} md={5}>
-                    <Box display="flex" flexDirection="column" gap={3}>
+
+                {/* 第一行：Watchlist */}
+                <Grid
+                    item
+                    xs={12}
+                    md={5}
+                    sx={{ display: "flex", width: "100%", minWidth: 0 }}
+                >
+                    <Box sx={{ width: "100%" }}>
                         <WatchlistCard
                             items={watchlist}
                             loading={loading}
@@ -141,10 +260,24 @@ export default function InvestmentsPage() {
                             onAdd={handleAddWatchlist}
                             onDelete={handleDeleteWatchlist}
                         />
+                    </Box>
+                </Grid>
+
+                {/* 第二行：左侧占位，让 News 靠右 */}
+                <Grid item xs={false} md={7} />
+
+                {/* 第二行：右侧 News */}
+                <Grid
+                    item
+                    xs={12}
+                    md={5}
+                    sx={{ display: "flex", width: "100%", minWidth: 0 }}
+                >
+                    <Box sx={{ width: "100%" }}>
                         <NewsCard overview={overview} loading={loading} />
                     </Box>
                 </Grid>
             </Grid>
-        </Box>
+        </Container>
     );
 }

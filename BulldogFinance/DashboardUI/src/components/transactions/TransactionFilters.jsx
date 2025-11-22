@@ -25,7 +25,18 @@ export default function TransactionFilters({ filters, onChange, onReset }) {
     };
 
     return (
-        <Paper sx={{ p: 2, mb: 2 }}>
+        <Paper
+            sx={{
+                p: 2,
+                mb: 2,
+                bgcolor: "rgba(15,23,42,0.9)",
+                border: "1px solid rgba(148,163,184,0.35)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 1,
+                width: "100%",
+            }}
+        >
             <Typography variant="subtitle1" gutterBottom>
                 Filters
             </Typography>

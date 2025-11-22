@@ -43,7 +43,7 @@ export default function TransactionForm({
         if (selectedAccountId && selectedAccountId !== accountId) {
             setAccountId(selectedAccountId);
         }
-    }, [selectedAccountId]);
+    }, [selectedAccountId, accountId]);
 
     const currentAccount = accounts.find((a) => a.accountId === accountId);
     const currency = currentAccount?.currency || "CAD";
@@ -67,17 +67,30 @@ export default function TransactionForm({
             currency,
         });
 
-        // 清空金额和备注，方便继续记下一笔
         setAmount("");
         setNote("");
     };
 
     return (
-        <Paper sx={{ p: 3 }}>
+        <Paper
+            sx={{
+                p: 3,
+                bgcolor: "rgba(15,23,42,0.9)",
+                border: "1px solid rgba(148,163,184,0.35)",
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                width: "100%",
+            }}
+        >
             <Typography variant="h6" gutterBottom>
                 Add a transaction
             </Typography>
-            <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+            <Box
+                component="form"
+                onSubmit={handleSubmit}
+                sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 2, flex: 1 }}
+            >
                 <Grid container spacing={2}>
                     <Grid item xs={12} md={6}>
                         <Typography variant="caption" color="text.secondary">

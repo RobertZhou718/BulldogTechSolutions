@@ -7,14 +7,19 @@ export default function GreetingCard({ name, total }) {
             sx={{
                 bgcolor: "rgba(15,23,42,0.9)",
                 border: "1px solid rgba(148,163,184,0.35)",
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
             }}
         >
-            <CardContent>
+            <CardContent
+                sx={{ display: "flex", flexDirection: "column", gap: 0.5, flex: 1 }}
+            >
                 <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                     Welcome back
                 </Typography>
                 <Typography variant="h5" sx={{ mb: 1 }}>
-                    Good to see you, {name || "Investor"} 👋
+                    Good to see you, {name || "Investor"}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                     Here is a quick overview of your aggregated balance across all linked

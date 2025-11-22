@@ -20,6 +20,7 @@ function formatDate(dateStr) {
 
 export default function TransactionTable({
     transactions,
+    accountNames,
     sortField,
     sortDirection,
     onSortChange,
@@ -43,7 +44,17 @@ export default function TransactionTable({
     };
 
     return (
-        <Paper sx={{ p: 2 }}>
+        <Paper
+            sx={{
+                p: 2,
+                bgcolor: "rgba(15,23,42,0.9)",
+                border: "1px solid rgba(148,163,184,0.35)",
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                width: "100%",
+            }}
+        >
             <Typography variant="h6" gutterBottom>
                 Transaction history
             </Typography>
@@ -87,7 +98,9 @@ export default function TransactionTable({
                                 <TableCell>
                                     {formatDate(tx.occurredAtUtc || tx.occurredAt || tx.createdAtUtc)}
                                 </TableCell>
-                                <TableCell>{tx.accountName || tx.accountId}</TableCell>
+                            <TableCell>
+                                {accountNames?.[tx.accountId] || tx.accountName || tx.accountId}
+                            </TableCell>
                                 <TableCell>
                                     {tx.type === "EXPENSE" ? "Expense" : "Income"}
                                 </TableCell>
