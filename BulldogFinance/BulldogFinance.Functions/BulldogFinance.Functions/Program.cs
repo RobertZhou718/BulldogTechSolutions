@@ -1,4 +1,5 @@
 using Azure.Data.Tables;
+using Azure.Storage.Blobs;
 using Azure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,6 +56,45 @@ var host = new HostBuilder()
 
             return new TableServiceClient(uri, credential);
         });
+        services.AddSingleton<BlobServiceClient>(sp =>
+        {
+            var config = sp.GetRequiredService<IConfiguration>();
+
+            var connectionString = config["BlobStorage:ConnectionString"];
+            var serviceUri = config["BlobStorage:ServiceUri"];
+            var managedIdentityClientId = config["ManagedIdentity:ClientId"];
+
+            if (!string.IsNullOrWhiteSpace(connectionString))
+            {
+                return new BlobServiceClient(connectionString);
+            }
+
+            if (string.IsNullOrWhiteSpace(serviceUri))
+            {
+                throw new InvalidOperationException(
+                    "Either BlobStorage:ConnectionString or BlobStorage:ServiceUri must be configured.");
+            }
+
+            var uri = new Uri(serviceUri);
+
+            DefaultAzureCredential credential;
+
+            if (!string.IsNullOrWhiteSpace(managedIdentityClientId))
+            {
+                credential = new DefaultAzureCredential(
+                    new DefaultAzureCredentialOptions
+                    {
+                        ManagedIdentityClientId = managedIdentityClientId
+                    });
+            }
+            else
+            {
+                credential = new DefaultAzureCredential();
+            }
+
+            return new BlobServiceClient(uri, credential);
+        });
+
         services.AddHttpClient("Finnhub", (sp, client) =>
         {
             var config = sp.GetRequiredService<IConfiguration>();
@@ -66,6 +106,9 @@ var host = new HostBuilder()
         services.AddSingleton<ITransactionRepository, TransactionRepository>();
         services.AddSingleton<IInvestmentService, InvestmentService>();
         services.AddSingleton<IInvestmentOverviewService, InvestmentOverviewService>();
+        services.AddSingleton<IReportStorage, BlobReportStorage>();
+        services.AddSingleton<IReportService, ReportService>();
+        services.AddSingleton<IAiClient, AzureOpenAiClient>();
 
     })
     .Build();

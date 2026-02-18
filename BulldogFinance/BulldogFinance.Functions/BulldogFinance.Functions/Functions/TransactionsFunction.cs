@@ -37,7 +37,6 @@ namespace BulldogFinance.Functions.Functions
             HttpRequestData req,
             FunctionContext context)
         {
-            // 1. userId（先用 header 模拟）
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
             {
@@ -46,7 +45,6 @@ namespace BulldogFinance.Functions.Functions
                 return unauthorized;
             }
 
-            // 2. 读取 body
             string body;
             using (var reader = new StreamReader(req.Body))
             {
@@ -89,7 +87,6 @@ namespace BulldogFinance.Functions.Functions
                 return bad;
             }
 
-            // 3. 获取账户
             var account = await _accountRepository.GetAccountAsync(userId, requestModel.AccountId);
             if (account == null || account.IsArchived)
             {
@@ -101,7 +98,6 @@ namespace BulldogFinance.Functions.Functions
             var now = DateTime.UtcNow;
             var occurredAt = requestModel.OccurredAtUtc ?? now;
 
-            // 金额转分
             var amountCents = (long)decimal.Round(
                 requestModel.Amount * 100m,
                 0,
@@ -111,7 +107,6 @@ namespace BulldogFinance.Functions.Functions
                 ? account.Currency
                 : requestModel.Currency!.Trim().ToUpperInvariant();
 
-            // 4. 创建 TransactionEntity
             var transactionId = Guid.NewGuid().ToString("N");
 
             var transactionEntity = new TransactionEntity
@@ -133,12 +128,11 @@ namespace BulldogFinance.Functions.Functions
 
             await _transactionRepository.CreateTransactionAsync(transactionEntity);
 
-            // 5. 更新账户余额
             if (typeUpper == "INCOME")
             {
                 account.CurrentBalanceCents += amountCents;
             }
-            else // EXPENSE
+            else
             {
                 account.CurrentBalanceCents -= amountCents;
             }
