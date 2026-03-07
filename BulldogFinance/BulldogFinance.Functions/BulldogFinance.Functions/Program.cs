@@ -101,6 +101,12 @@ var host = new HostBuilder()
             var baseUrl = config["Finnhub:BaseUrl"] ?? "https://finnhub.io/api/v1/";
             client.BaseAddress = new Uri(baseUrl);
         });
+        services.AddHttpClient("McpServer", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(60);
+        });
+
+        services.AddSingleton<IMcpChatService, McpChatService>();
         services.AddSingleton<IUserRepository, UserRepository>();
         services.AddSingleton<IAccountRepository, AccountRepository>();
         services.AddSingleton<ITransactionRepository, TransactionRepository>();

@@ -12,7 +12,6 @@ namespace BulldogFinance.Functions.Helper
     {
         public static string? GetUserId(HttpRequestData req)
         {
-            // 1. Azure 内置 Auth：X-MS-CLIENT-PRINCIPAL-ID （推荐作为稳定 userId）
             if (req.Headers.TryGetValues("X-MS-CLIENT-PRINCIPAL-ID", out var principalIds))
             {
                 var id = principalIds.FirstOrDefault();
@@ -22,7 +21,6 @@ namespace BulldogFinance.Functions.Helper
                 }
             }
 
-            // 2. 本地开发 / 手工调试：X-Debug-UserId
             if (req.Headers.TryGetValues("X-Debug-UserId", out var debugIds))
             {
                 var id = debugIds.FirstOrDefault();
