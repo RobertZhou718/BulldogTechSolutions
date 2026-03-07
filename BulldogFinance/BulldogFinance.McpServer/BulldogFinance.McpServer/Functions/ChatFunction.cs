@@ -3,19 +3,19 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 
-namespace BulldogFinance.McpServer;
+namespace BulldogFinance.McpServer.Functions;
 
-public class Function1
+public class ChatFunction
 {
-    private readonly ILogger<Function1> _logger;
+    private readonly ILogger<ChatFunction> _logger;
 
-    public Function1(ILogger<Function1> logger)
+    public ChatFunction(ILogger<ChatFunction> logger)
     {
         _logger = logger;
     }
 
-    [Function("Function1")]
-    public IActionResult Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post")] HttpRequest req)
+    [Function("ChatFunction")]
+    public IActionResult Run([HttpTrigger(AuthorizationLevel.Function, "get", "post")] HttpRequest req)
     {
         _logger.LogInformation("C# HTTP trigger function processed a request.");
         return new OkObjectResult("Welcome to Azure Functions!");
