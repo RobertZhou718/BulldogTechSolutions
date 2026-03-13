@@ -1,12 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using BulldogFinance.Functions.Models.Tools;
 
 namespace BulldogFinance.Functions.Services.Chat
 {
-    internal interface IToolExecutor
+    public interface IToolExecutor
     {
+        IReadOnlyCollection<ToolDefinitionDto> GetAvailableToolDefinitions();
+
+        Task<ToolExecutionResult> ExecuteAsync(
+            string userId,
+            ToolExecutionRequest request,
+            CancellationToken ct = default);
     }
 }

@@ -6,7 +6,16 @@ using System.Threading.Tasks;
 
 namespace BulldogFinance.Functions.Models.Chat
 {
-    internal class ChatAgentStepDto
+    public sealed class ChatAgentStepDto
     {
+        public int StepNumber { get; set; }
+
+        public string Thought { get; set; } = string.Empty;
+
+        public List<ChatToolCallDto> ToolCalls { get; set; } = new();
+
+        public List<ChatToolResultDto> ToolResults { get; set; } = new();
+
+        public string? AssistantMessage { get; set; }
     }
 }

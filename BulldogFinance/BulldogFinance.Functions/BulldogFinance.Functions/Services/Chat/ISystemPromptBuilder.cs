@@ -1,12 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using BulldogFinance.Functions.Models.Chat;
+using BulldogFinance.Functions.Models.Tools;
 
 namespace BulldogFinance.Functions.Services.Chat
 {
-    internal interface ISystemPromptBuilder
+    public interface ISystemPromptBuilder
     {
+        string Build(
+            ChatContextDto context,
+            IReadOnlyCollection<ToolDefinitionDto> availableTools);
     }
 }
