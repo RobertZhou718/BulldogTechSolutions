@@ -1,5 +1,5 @@
 ﻿using BulldogFinance.Functions.Helper;
-using BulldogFinance.Functions.Services;
+using BulldogFinance.Functions.Services.Users;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using System.Linq;

@@ -20,4 +20,9 @@
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Timer" Version="4.3.1" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.7" />
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Models\Tools\" />
+    <Folder Include="Services\Watchlist\" />
+    <Folder Include="Services\Tools\" />
+  </ItemGroup>
 </Project>

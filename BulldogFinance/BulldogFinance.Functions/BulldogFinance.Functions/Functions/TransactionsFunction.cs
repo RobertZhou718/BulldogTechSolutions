@@ -1,6 +1,7 @@
 ﻿using BulldogFinance.Functions.Helper;
-using BulldogFinance.Functions.Models;
-using BulldogFinance.Functions.Services;
+using BulldogFinance.Functions.Models.Transactions;
+using BulldogFinance.Functions.Services.Accounts;
+using BulldogFinance.Functions.Services.Transactions;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using System;

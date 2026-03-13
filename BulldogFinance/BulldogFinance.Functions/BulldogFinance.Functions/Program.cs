@@ -4,7 +4,12 @@ using Azure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using BulldogFinance.Functions.Services;
+using BulldogFinance.Functions.Services.Accounts;
+using BulldogFinance.Functions.Services.Users;
+using BulldogFinance.Functions.Services.Transactions;
+using BulldogFinance.Functions.Services.Investments;
+using BulldogFinance.Functions.Services.Reports;
+using BulldogFinance.Functions.Services.Chat;
 
 var host = new HostBuilder()
     .ConfigureFunctionsWebApplication()
