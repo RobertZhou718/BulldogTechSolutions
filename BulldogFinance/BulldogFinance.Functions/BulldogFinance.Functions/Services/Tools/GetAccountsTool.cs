@@ -88,12 +88,12 @@ namespace BulldogFinance.Functions.Services.Tools
             return ToolExecutionResult.Success(
                 Name,
                 summary,
-                new
+                new GetAccountsToolResult
                 {
-                    totalCount = accountDtos.Count,
-                    includeArchived,
-                    accountType,
-                    accounts = accountDtos
+                    TotalCount = accountDtos.Count,
+                    IncludeArchived = includeArchived,
+                    AccountType = accountType,
+                    Accounts = accountDtos
                 });
         }
 
