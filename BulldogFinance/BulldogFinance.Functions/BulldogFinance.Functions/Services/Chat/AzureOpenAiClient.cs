@@ -1,72 +1,40 @@
-﻿using System;
-using System.ClientModel;
-using System.Collections.Generic;
-using System.Text;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using Azure;
 using Azure.AI.OpenAI;
 using Azure.Identity;
 using BulldogFinance.Functions.Models.Tools;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using OpenAI.Chat;
+using System;
+using System.ClientModel;
+using System.Collections.Generic;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace BulldogFinance.Functions.Services.Chat
 {
-    public sealed class AzureOpenAiClient
+    public sealed class AzureOpenAiClient : IAiClient
     {
         private readonly ChatClient _chatClient;
-        private readonly ILogger<AzureOpenAiClient> _logger;
+        private readonly ILogger _logger;
 
         public AzureOpenAiClient(
-            IConfiguration configuration,
-            ILogger<AzureOpenAiClient> logger)
+            IConfiguration config,
+            ILogger logger)
         {
             _logger = logger;
 
-            var endpoint =
-                configuration["AzureOpenAI:Endpoint"] ??
-                configuration["AzureOpenAi:Endpoint"] ??
-                throw new InvalidOperationException("AzureOpenAI:Endpoint is required.");
+            var endpoint = config["AzureOpenAI:Endpoint"];
+            var apiKey = config["AzureOpenAI:Key"];
+            var deployment = config["AzureOpenAI:Deployment"] ?? "";
 
-            var deployment =
-                configuration["AzureOpenAI:ChatDeployment"] ??
-                configuration["AzureOpenAI:DeploymentName"] ??
-                configuration["AzureOpenAi:ChatDeployment"] ??
-                configuration["AzureOpenAi:DeploymentName"] ??
-                throw new InvalidOperationException("AzureOpenAI:ChatDeployment is required.");
+            if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(deployment))
+                throw new InvalidOperationException("Missing AzureOpenAI:Endpoint/Key/Deployment configuration.");
 
-            var apiKey =
-                configuration["AzureOpenAI:ApiKey"] ??
-                configuration["AzureOpenAi:ApiKey"];
-
-            var managedIdentityClientId = configuration["ManagedIdentity:ClientId"];
-
-            Azure.AI.OpenAI.AzureOpenAIClient azureClient;
-
-            if (!string.IsNullOrWhiteSpace(apiKey))
-            {
-                azureClient = new Azure.AI.OpenAI.AzureOpenAIClient(
-                    new Uri(endpoint),
-                    new ApiKeyCredential(apiKey));
-            }
-            else
-            {
-                DefaultAzureCredential credential = !string.IsNullOrWhiteSpace(managedIdentityClientId)
-                    ? new DefaultAzureCredential(
-                        new DefaultAzureCredentialOptions
-                        {
-                            ManagedIdentityClientId = managedIdentityClientId
-                        })
-                    : new DefaultAzureCredential();
-
-                azureClient = new Azure.AI.OpenAI.AzureOpenAIClient(
-                    new Uri(endpoint),
-                    credential);
-            }
-
-            _chatClient = azureClient.GetChatClient(deployment);
+            AzureOpenAIClient aoai = new(new Uri(endpoint), new AzureKeyCredential(apiKey));
+            _chatClient = aoai.GetChatClient(deployment);
         }
 
         public async Task<ChatCompletion> CompleteAsync(
@@ -93,6 +61,54 @@ namespace BulldogFinance.Functions.Services.Chat
 
             ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options, ct);
             return completion;
+        }
+
+        public async Task<AiGenerationResult> GenerateAsync(
+            string systemPrompt,
+            string userPrompt,
+            int maxOutputTokens,
+            float temperature = 0.2f,
+            CancellationToken ct = default)
+        {
+            var messages = new List<ChatMessage>
+            {
+                new SystemChatMessage(systemPrompt),
+                new UserChatMessage(userPrompt)
+            };
+
+            var options = new ChatCompletionOptions
+            {
+                Temperature = temperature,
+                MaxOutputTokenCount = maxOutputTokens
+            };
+
+            _logger.LogInformation(
+                "Sending report generation request. MaxOutputTokens={MaxOutputTokens}, Temperature={Temperature}",
+                maxOutputTokens,
+                temperature);
+
+            ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options, ct);
+
+            var text = ExtractAssistantText(completion);
+
+            var inputTokens = 0;
+            var outputTokens = 0;
+            var totalTokens = 0;
+
+            if (completion?.Usage is not null)
+            {
+                inputTokens = completion.Usage.InputTokenCount;
+                outputTokens = completion.Usage.OutputTokenCount;
+                totalTokens = inputTokens + outputTokens;
+            }
+
+            return new AiGenerationResult
+            {
+                Text = text,
+                InputTokens = inputTokens,
+                OutputTokens = outputTokens,
+                TotalTokens = totalTokens
+            };
         }
 
         public static string ExtractAssistantText(ChatCompletion completion)
@@ -130,7 +146,7 @@ namespace BulldogFinance.Functions.Services.Chat
 
         private static string BuildParameterSchemaJson(ToolDefinitionDto definition)
         {
-            var properties = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            var properties = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
             var required = new List<string>();
 
             foreach (var kvp in definition.Parameters)
@@ -138,11 +154,10 @@ namespace BulldogFinance.Functions.Services.Chat
                 var parameterName = kvp.Key;
                 var parameter = kvp.Value;
 
-                var schema = new Dictionary<string, object?>();
-
-                schema["type"] = string.IsNullOrWhiteSpace(parameter.Type)
-                    ? "string"
-                    : parameter.Type;
+                var schema = new Dictionary<string, object>
+                {
+                    ["type"] = string.IsNullOrWhiteSpace(parameter.Type) ? "string" : parameter.Type
+                };
 
                 if (!string.IsNullOrWhiteSpace(parameter.Description))
                 {
@@ -167,7 +182,7 @@ namespace BulldogFinance.Functions.Services.Chat
                 }
             }
 
-            var root = new Dictionary<string, object?>
+            var root = new Dictionary<string, object>
             {
                 ["type"] = "object",
                 ["properties"] = properties,

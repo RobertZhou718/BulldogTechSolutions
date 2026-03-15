@@ -1,5 +1,7 @@
 ﻿using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models;
+using BulldogFinance.Functions.Models.Accounts;
+using BulldogFinance.Functions.Models.Transactions;
 using BulldogFinance.Functions.Models.Users;
 using BulldogFinance.Functions.Services.Accounts;
 using BulldogFinance.Functions.Services.Transactions;

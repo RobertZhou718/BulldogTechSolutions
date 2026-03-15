@@ -227,7 +227,10 @@ namespace BulldogFinance.Functions.Services.Chat
         {
             var arguments = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
 
-            var rawArguments = toolCall.FunctionArguments ?? "{}";
+            // Convert BinaryData to string, and use "{}" if null
+            var rawArguments = toolCall.FunctionArguments != null
+                ? toolCall.FunctionArguments.ToString()
+                : "{}";
 
             using var document = JsonDocument.Parse(rawArguments);
 

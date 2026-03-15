@@ -1,10 +1,11 @@
-using System.Net;
-using System.Text.Json;
+using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Chat;
 using BulldogFinance.Functions.Services.Chat;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
+using System.Net;
+using System.Text.Json;
 
 namespace BulldogFinance.Functions.Functions
 {
@@ -23,13 +24,21 @@ namespace BulldogFinance.Functions.Functions
 
         [Function("Chat")]
         public async Task<HttpResponseData> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "chat")] HttpRequestData req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "chat")] HttpRequestData req,
             CancellationToken cancellationToken)
         {
             try
             {
-                var request = await req.ReadFromJsonAsync<ChatRequest>(cancellationToken: cancellationToken);
 
+                var userId = AuthHelper.GetUserId(req);
+                if (string.IsNullOrWhiteSpace(userId))
+                {
+                    var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
+                    await unauthorized.WriteStringAsync("Unauthorized.");
+                    return unauthorized;
+                }
+
+                var request = await req.ReadFromJsonAsync<ChatRequest>(cancellationToken: cancellationToken);
                 if (request is null || string.IsNullOrWhiteSpace(request.Message))
                 {
                     var badRequest = req.CreateResponse(HttpStatusCode.BadRequest);
@@ -39,19 +48,6 @@ namespace BulldogFinance.Functions.Functions
                     }, cancellationToken);
 
                     return badRequest;
-                }
-
-                var userId = ResolveUserId(req, request);
-
-                if (string.IsNullOrWhiteSpace(userId))
-                {
-                    var unauthorized = req.CreateResponse(HttpStatusCode.BadRequest);
-                    await unauthorized.WriteAsJsonAsync(new
-                    {
-                        error = "User id is required."
-                    }, cancellationToken);
-
-                    return unauthorized;
                 }
 
                 var response = await _chatAgentService.ChatAsync(
@@ -76,20 +72,6 @@ namespace BulldogFinance.Functions.Functions
 
                 return error;
             }
-        }
-
-        private static string? ResolveUserId(HttpRequestData req, ChatRequest request)
-        {
-            if (req.Headers.TryGetValues("x-user-id", out var headerValues))
-            {
-                var headerUserId = headerValues.FirstOrDefault();
-                if (!string.IsNullOrWhiteSpace(headerUserId))
-                {
-                    return headerUserId;
-                }
-            }
-
-            return request.UserId;
         }
     }
 }
