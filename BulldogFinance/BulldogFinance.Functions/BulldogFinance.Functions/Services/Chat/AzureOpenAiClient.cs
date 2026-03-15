@@ -18,11 +18,11 @@ namespace BulldogFinance.Functions.Services.Chat
     public sealed class AzureOpenAiClient : IAiClient
     {
         private readonly ChatClient _chatClient;
-        private readonly ILogger _logger;
+        private readonly ILogger<AzureOpenAIClient> _logger;
 
         public AzureOpenAiClient(
             IConfiguration config,
-            ILogger logger)
+            ILogger<AzureOpenAIClient> logger)
         {
             _logger = logger;
 

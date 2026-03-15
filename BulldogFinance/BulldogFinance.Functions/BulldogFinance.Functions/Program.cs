@@ -110,15 +110,24 @@ var host = new HostBuilder()
 
         services.AddSingleton<IUserRepository, UserRepository>();
         services.AddSingleton<IAccountRepository, AccountRepository>();
+        services.AddSingleton<ITransactionRepository, TransactionRepository>();
+
+        services.AddSingleton<IInvestmentService, InvestmentService>();
+        services.AddSingleton<IInvestmentOverviewService, InvestmentOverviewService>();
+
+        services.AddSingleton<IAiClient, AzureOpenAiClient>();
+        services.AddSingleton(sp => (AzureOpenAiClient)sp.GetRequiredService<IAiClient>());
 
         services.AddSingleton<IConversationService, ConversationService>();
         services.AddSingleton<ISystemPromptBuilder, SystemPromptBuilder>();
         services.AddSingleton<IToolExecutor, ToolExecutor>();
         services.AddSingleton<IChatAgentService, ChatAgentService>();
-        services.AddSingleton<AzureOpenAiClient>();
 
         services.AddSingleton<IAgentTool, GetUserProfileTool>();
         services.AddSingleton<IAgentTool, GetAccountsTool>();
+
+        services.AddSingleton<IReportStorage, BlobReportStorage>();
+        services.AddSingleton<IReportService, ReportService>();
 
     })
     .Build();
