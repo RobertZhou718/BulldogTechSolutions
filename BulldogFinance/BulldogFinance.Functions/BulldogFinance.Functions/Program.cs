@@ -1,10 +1,16 @@
 using Azure.Data.Tables;
-using Azure.Storage.Blobs;
 using Azure.Identity;
+using Azure.Storage.Blobs;
+using BulldogFinance.Functions.Services.Accounts;
+using BulldogFinance.Functions.Services.Chat;
+using BulldogFinance.Functions.Services.Investments;
+using BulldogFinance.Functions.Services.Reports;
+using BulldogFinance.Functions.Services.Tools;
+using BulldogFinance.Functions.Services.Transactions;
+using BulldogFinance.Functions.Services.Users;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using BulldogFinance.Functions.Services;
 
 var host = new HostBuilder()
     .ConfigureFunctionsWebApplication()
@@ -101,14 +107,27 @@ var host = new HostBuilder()
             var baseUrl = config["Finnhub:BaseUrl"] ?? "https://finnhub.io/api/v1/";
             client.BaseAddress = new Uri(baseUrl);
         });
+
         services.AddSingleton<IUserRepository, UserRepository>();
         services.AddSingleton<IAccountRepository, AccountRepository>();
         services.AddSingleton<ITransactionRepository, TransactionRepository>();
+
         services.AddSingleton<IInvestmentService, InvestmentService>();
         services.AddSingleton<IInvestmentOverviewService, InvestmentOverviewService>();
+
+        services.AddSingleton<IAiClient, AzureOpenAiClient>();
+        services.AddSingleton(sp => (AzureOpenAiClient)sp.GetRequiredService<IAiClient>());
+
+        services.AddSingleton<IConversationService, ConversationService>();
+        services.AddSingleton<ISystemPromptBuilder, SystemPromptBuilder>();
+        services.AddSingleton<IToolExecutor, ToolExecutor>();
+        services.AddSingleton<IChatAgentService, ChatAgentService>();
+
+        services.AddSingleton<IAgentTool, GetUserProfileTool>();
+        services.AddSingleton<IAgentTool, GetAccountsTool>();
+
         services.AddSingleton<IReportStorage, BlobReportStorage>();
         services.AddSingleton<IReportService, ReportService>();
-        services.AddSingleton<IAiClient, AzureOpenAiClient>();
 
     })
     .Build();

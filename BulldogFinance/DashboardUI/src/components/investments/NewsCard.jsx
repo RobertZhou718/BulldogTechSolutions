@@ -1,15 +1,5 @@
 import React, { useMemo } from "react";
-import {
-    Card,
-    CardHeader,
-    CardContent,
-    List,
-    ListItem,
-    ListItemText,
-    Chip,
-    Link,
-    Typography,
-} from "@mui/material";
+import Card from "@/components/ui/Card.jsx";
 
 export default function NewsCard({ overview, loading }) {
     const items = useMemo(() => {
@@ -44,81 +34,59 @@ export default function NewsCard({ overview, loading }) {
             }));
         });
 
-        const list =
-            fromHoldings.length > 0 ? fromHoldings : fromPopular;
-
-        list.sort((a, b) => {
-            const da = a.datetime ? new Date(a.datetime).getTime() : 0;
-            const db = b.datetime ? new Date(b.datetime).getTime() : 0;
-            return db - da;
-        });
-
-        return list.slice(0, 8);
+        return (fromHoldings.length > 0 ? fromHoldings : fromPopular)
+            .sort((a, b) => {
+                const da = a.datetime ? new Date(a.datetime).getTime() : 0;
+                const db = b.datetime ? new Date(b.datetime).getTime() : 0;
+                return db - da;
+            })
+            .slice(0, 8);
     }, [overview]);
 
     return (
-        <Card
-            sx={{
-                bgcolor: "rgba(15,23,42,0.9)",
-                border: "1px solid rgba(148,163,184,0.35)",
-            }}
-        >
-            <CardHeader title="Latest news" />
-            <CardContent>
-                {loading && items.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                        Loading news...
-                    </Typography>
-                ) : items.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                        No recent news available.
-                    </Typography>
-                ) : (
-                    <List dense>
-                        {items.map((n) => (
-                            <ListItem
-                                key={`${n.id}-${n.symbol}`}
-                                alignItems="flex-start"
-                                disableGutters
-                                sx={{ mb: 1 }}
-                            >
-                                <Chip
-                                    label={n.symbol}
-                                    size="small"
-                                    sx={{
-                                        mr: 1,
-                                        height: 20,
-                                        fontSize: 11,
-                                    }}
-                                />
-                                <ListItemText
-                                    primary={
-                                        <Link
-                                            href={n.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            underline="hover"
-                                            color="inherit"
-                                        >
-                                            {n.headline}
-                                        </Link>
-                                    }
-                                    secondary={
-                                        n.source || n.datetime
-                                            ? `${n.source ?? ""} · ${n.datetime
-                                                ? new Date(
-                                                    n.datetime
-                                                ).toLocaleDateString()
-                                                : ""
-                                            }`
-                                            : null
-                                    }
-                                />
-                            </ListItem>
-                        ))}
-                    </List>
-                )}
-            </CardContent>
+        <Card className="h-full">
+            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                News
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
+                Latest market headlines
+            </h2>
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+                Recent symbol-linked news from your holdings and popular names.
+            </p>
+
+            {loading && items.length === 0 ? (
+                <p className="mt-6 text-sm text-[var(--text-muted)]">Loading news...</p>
+            ) : items.length === 0 ? (
+                <p className="mt-6 text-sm text-[var(--text-muted)]">No recent news available.</p>
+            ) : (
+                <div className="mt-6 space-y-4">
+                    {items.map((item) => (
+                        <a
+                            key={`${item.id}-${item.symbol}`}
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-4 transition hover:border-[#b2ddff] hover:bg-white"
+                        >
+                            <div className="flex items-start gap-3">
+                                <span className="inline-flex rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-xs font-medium text-[var(--accent)]">
+                                    {item.symbol}
+                                </span>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium text-[var(--text-main)]">
+                                        {item.headline}
+                                    </p>
+                                    <p className="mt-1 text-sm text-[var(--text-soft)]">
+                                        {item.source ?? "Source"} ·{" "}
+                                        {item.datetime ? new Date(item.datetime).toLocaleDateString() : "Recent"}
+                                    </p>
+                                </div>
+                            </div>
+                        </a>
+                    ))}
+                </div>
+            )}
         </Card>
     );
 }

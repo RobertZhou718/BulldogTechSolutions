@@ -1,19 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-    Box,
-    CircularProgress,
-    Container,
-    Grid,
-    Typography,
-    Paper,
-    Stack,
-    Select,
-    MenuItem,
-} from "@mui/material";
-import { useApiClient } from "../services/apiClient";
-import TransactionForm from "../components/transactions/TransactionForm.jsx";
-import TransactionFilters from "../components/transactions/TransactionFilters.jsx";
-import TransactionTable from "../components/transactions/TransactionTable.jsx";
+import TransactionFilters from "@/components/transactions/TransactionFilters.jsx";
+import TransactionForm from "@/components/transactions/TransactionForm.jsx";
+import TransactionTable from "@/components/transactions/TransactionTable.jsx";
+import LatestReportCard from "@/components/reports/LatestReportCard.jsx";
+import EmptyState from "@/components/ui/EmptyState.jsx";
+import MetricCard from "@/components/ui/MetricCard.jsx";
+import PageHeader from "@/components/ui/PageHeader.jsx";
+import Spinner from "@/components/ui/Spinner.jsx";
+import { formatCurrency } from "@/lib/utils";
+import { useApiClient } from "@/services/apiClient";
+import { Field, Select } from "@/components/ui/Field.jsx";
 
 export default function TransactionsPage() {
     const { getAccounts, getTransactions, createTransaction } = useApiClient();
@@ -25,14 +21,7 @@ export default function TransactionsPage() {
     const [loadingAccounts, setLoadingAccounts] = useState(true);
     const [loadingTx, setLoadingTx] = useState(false);
     const [error, setError] = useState("");
-
-    const [filters, setFilters] = useState({
-        type: "ALL",
-        from: "",
-        to: "",
-        category: "",
-    });
-
+    const [filters, setFilters] = useState({ type: "ALL", from: "", to: "", category: "" });
     const [sortField, setSortField] = useState("date");
     const [sortDirection, setSortDirection] = useState("desc");
 
@@ -41,7 +30,7 @@ export default function TransactionsPage() {
             try {
                 const data = await getAccounts();
                 setAccounts(data || []);
-                if (data && data.length > 0) {
+                if (data?.length) {
                     setFormAccountId(data[0].accountId);
                     setHistoryAccountId(data[0].accountId);
                 }
@@ -62,17 +51,9 @@ export default function TransactionsPage() {
             setError("");
             try {
                 const params = {};
-
-                if (historyAccountId !== "ALL") {
-                    params.accountId = historyAccountId;
-                }
-
-                if (filters.from) {
-                    params.from = new Date(filters.from + "T00:00:00Z").toISOString();
-                }
-                if (filters.to) {
-                    params.to = new Date(filters.to + "T23:59:59Z").toISOString();
-                }
+                if (historyAccountId !== "ALL") params.accountId = historyAccountId;
+                if (filters.from) params.from = new Date(`${filters.from}T00:00:00Z`).toISOString();
+                if (filters.to) params.to = new Date(`${filters.to}T23:59:59Z`).toISOString();
 
                 const data = await getTransactions(params);
                 setTransactions(data || []);
@@ -88,15 +69,10 @@ export default function TransactionsPage() {
     const visibleTransactions = useMemo(() => {
         let list = [...transactions];
 
-        if (filters.type !== "ALL") {
-            list = list.filter((tx) => tx.type === filters.type);
-        }
-
+        if (filters.type !== "ALL") list = list.filter((tx) => tx.type === filters.type);
         if (filters.category) {
             const keyword = filters.category.toLowerCase();
-            list = list.filter((tx) =>
-                (tx.category || "").toLowerCase().includes(keyword)
-            );
+            list = list.filter((tx) => (tx.category || "").toLowerCase().includes(keyword));
         }
 
         list.sort((a, b) => {
@@ -106,12 +82,8 @@ export default function TransactionsPage() {
                 return sortDirection === "asc" ? av - bv : bv - av;
             }
 
-            const ad = new Date(
-                a.occurredAtUtc || a.occurredAt || a.createdAtUtc || 0
-            ).getTime();
-            const bd = new Date(
-                b.occurredAtUtc || b.occurredAt || b.createdAtUtc || 0
-            ).getTime();
+            const ad = new Date(a.occurredAtUtc || a.occurredAt || a.createdAtUtc || 0).getTime();
+            const bd = new Date(b.occurredAtUtc || b.occurredAt || b.createdAtUtc || 0).getTime();
             return sortDirection === "asc" ? ad - bd : bd - ad;
         });
 
@@ -132,20 +104,14 @@ export default function TransactionsPage() {
         const totals = visibleTransactions.reduce(
             (acc, tx) => {
                 const amount = Number(tx.amount) || 0;
-                if (tx.type === "EXPENSE") {
-                    acc.expense += amount;
-                } else {
-                    acc.income += amount;
-                }
+                if (tx.type === "EXPENSE") acc.expense += amount;
+                else acc.income += amount;
                 return acc;
             },
             { income: 0, expense: 0 }
         );
-        return {
-            ...totals,
-            net: totals.income - totals.expense,
-            count: visibleTransactions.length,
-        };
+
+        return { ...totals, net: totals.income - totals.expense, count: visibleTransactions.length };
     }, [visibleTransactions]);
 
     const accountNameMap = useMemo(
@@ -157,27 +123,14 @@ export default function TransactionsPage() {
         [accounts]
     );
 
-    const formatCurrency = (value) =>
-        value.toLocaleString("en-CA", {
-            style: "currency",
-            currency,
-            maximumFractionDigits: 0,
-        });
-
     const handleCreateTransaction = async (txInput) => {
         try {
             await createTransaction(txInput);
 
             const params = {};
-            if (historyAccountId !== "ALL") {
-                params.accountId = historyAccountId;
-            }
-            if (filters.from) {
-                params.from = new Date(filters.from + "T00:00:00Z").toISOString();
-            }
-            if (filters.to) {
-                params.to = new Date(filters.to + "T23:59:59Z").toISOString();
-            }
+            if (historyAccountId !== "ALL") params.accountId = historyAccountId;
+            if (filters.from) params.from = new Date(`${filters.from}T00:00:00Z`).toISOString();
+            if (filters.to) params.to = new Date(`${filters.to}T23:59:59Z`).toISOString();
 
             const data = await getTransactions(params);
             setTransactions(data || []);
@@ -187,205 +140,94 @@ export default function TransactionsPage() {
         }
     };
 
-    const handleFilterChange = (nextFilters) => {
-        setFilters(nextFilters);
-    };
-
-    const handleResetFilters = () => {
-        setFilters({
-            type: "ALL",
-            from: "",
-            to: "",
-            category: "",
-        });
-    };
-
-    const handleSortChange = (field, direction) => {
-        setSortField(field);
-        setSortDirection(direction);
-    };
-
-    const statCardStyles = {
-        bgcolor: "rgba(15,23,42,0.85)",
-        border: "1px solid rgba(148,163,184,0.35)",
-        borderRadius: 3,
-        px: 2.5,
-        py: 1.5,
-        minWidth: 180,
-    };
-
     if (loadingAccounts) {
         return (
-            <Box sx={{ mt: 6, display: "flex", justifyContent: "center" }}>
-                <CircularProgress />
-            </Box>
+            <div className="mt-12 flex justify-center">
+                <Spinner className="h-8 w-8" />
+            </div>
         );
     }
 
     if (!accounts.length) {
         return (
-            <Box sx={{ mt: 6, textAlign: "center" }}>
-                <Typography variant="h6" gutterBottom>
-                    No accounts found
-                </Typography>
-                <Typography color="text.secondary">
-                    Please complete onboarding and create at least one account first.
-                </Typography>
-            </Box>
+            <EmptyState
+                title="No accounts found"
+                description="Complete onboarding and create at least one account before managing transactions."
+            />
         );
     }
 
     return (
-        <Container
-            maxWidth="lg"
-            sx={{
-                mt: 2,
-                mb: 4,
-                display: "flex",
-                flexDirection: "column",
-                gap: 3,
-            }}
-        >
-            <Box
-                sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: 2,
-                }}
+        <div className="space-y-8">
+            <PageHeader
+                eyebrow="Transactions"
+                title={historyAccountId === "ALL" ? "All accounts" : viewAccount?.name || "Selected account"}
+                description="Add transactions, filter by date or type, and review account activity in one place."
+                actions={
+                    <div className="min-w-[240px]">
+                        <Field label="Viewing">
+                            <Select
+                                value={historyAccountId || ""}
+                                onChange={(e) => setHistoryAccountId(e.target.value)}
+                            >
+                                <option value="ALL">All accounts</option>
+                                {accounts.map((acc) => (
+                                    <option key={acc.accountId} value={acc.accountId}>
+                                        {acc.name}
+                                    </option>
+                                ))}
+                            </Select>
+                        </Field>
+                    </div>
+                }
             >
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                    <Box>
-                        <Typography variant="overline" color="text.secondary">
-                            Transactions
-                        </Typography>
-                        <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
-                            {historyAccountId === "ALL"
-                                ? "All accounts"
-                                : viewAccount?.name || "Selected account"}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Add transactions, filter by date or type, and review your history.
-                        </Typography>
-                    </Box>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <Typography variant="caption" color="text.secondary">
-                            Viewing
-                        </Typography>
-                        <Select
-                            size="small"
-                            value={historyAccountId || ""}
-                            onChange={(e) => setHistoryAccountId(e.target.value)}
-                            sx={{ minWidth: 200 }}
-                        >
-                            <MenuItem value="ALL">All accounts</MenuItem>
-                            {accounts.map((acc) => (
-                                <MenuItem key={acc.accountId} value={acc.accountId}>
-                                    {acc.name}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </Box>
-                </Box>
-
-                <Stack
-                    direction={{ xs: "column", sm: "row" }}
-                    spacing={1.5}
-                    alignItems="stretch"
-                >
-                    <Paper elevation={0} sx={statCardStyles}>
-                        <Typography variant="caption" color="text.secondary">
-                            Net flow
-                        </Typography>
-                        <Typography
-                            variant="h6"
-                            sx={{
-                                mt: 0.5,
-                                color: summary.net >= 0 ? "success.main" : "error.main",
-                            }}
-                        >
-                            {formatCurrency(summary.net)}
-                        </Typography>
-                    </Paper>
-                    <Paper elevation={0} sx={statCardStyles}>
-                        <Typography variant="caption" color="text.secondary">
-                            Inflows
-                        </Typography>
-                        <Typography variant="h6" sx={{ mt: 0.5 }}>
-                            {formatCurrency(summary.income)}
-                        </Typography>
-                    </Paper>
-                    <Paper elevation={0} sx={statCardStyles}>
-                        <Typography variant="caption" color="text.secondary">
-                            Outflows
-                        </Typography>
-                        <Typography variant="h6" sx={{ mt: 0.5 }}>
-                            {formatCurrency(summary.expense)}
-                        </Typography>
-                    </Paper>
-                    <Paper elevation={0} sx={statCardStyles}>
-                        <Typography variant="caption" color="text.secondary">
-                            Items shown
-                        </Typography>
-                        <Typography variant="h6" sx={{ mt: 0.5 }}>
-                            {summary.count}
-                        </Typography>
-                    </Paper>
-                </Stack>
-            </Box>
-
-            {error && (
-                <Typography sx={{ mb: 2 }} color="error">
-                    {error}
-                </Typography>
-            )}
-
-            <Grid
-                container
-                spacing={3}
-                alignItems="stretch"
-                sx={{ width: "100%", mx: 0 }}
-            >
-                <Grid item xs={12} sx={{ display: "flex", width: "100%", minWidth: 0 }}>
-                    <TransactionForm
-                        accounts={accounts}
-                        selectedAccountId={formAccountId}
-                        onAccountChange={setFormAccountId}
-                        onSubmit={handleCreateTransaction}
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <MetricCard
+                        label="Net flow"
+                        value={formatCurrency(summary.net, currency, 0)}
+                        tone={summary.net >= 0 ? "positive" : "negative"}
                     />
-                </Grid>
-                <Grid
-                    item
-                    xs={12}
-                    sx={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 2,
-                        width: "100%",
-                        minWidth: 0,
-                    }}
-                >
-                    <TransactionFilters
-                        filters={filters}
-                        onChange={handleFilterChange}
-                        onReset={handleResetFilters}
+                    <MetricCard label="Inflows" value={formatCurrency(summary.income, currency, 0)} />
+                    <MetricCard label="Outflows" value={formatCurrency(summary.expense, currency, 0)} />
+                    <MetricCard label="Items shown" value={summary.count} />
+                </div>
+            </PageHeader>
+
+            {error ? <p className="text-sm font-medium text-[var(--color-error-500)]">{error}</p> : null}
+
+            <div className="grid gap-6">
+                <LatestReportCard />
+
+                <TransactionForm
+                    accounts={accounts}
+                    selectedAccountId={formAccountId}
+                    onAccountChange={setFormAccountId}
+                    onSubmit={handleCreateTransaction}
+                />
+
+                <TransactionFilters
+                    filters={filters}
+                    onChange={setFilters}
+                    onReset={() => setFilters({ type: "ALL", from: "", to: "", category: "" })}
+                />
+
+                {loadingTx ? (
+                    <div className="flex justify-center py-8">
+                        <Spinner className="h-7 w-7" />
+                    </div>
+                ) : (
+                    <TransactionTable
+                        transactions={visibleTransactions}
+                        accountNames={accountNameMap}
+                        sortField={sortField}
+                        sortDirection={sortDirection}
+                        onSortChange={(field, direction) => {
+                            setSortField(field);
+                            setSortDirection(direction);
+                        }}
                     />
-                    {loadingTx ? (
-                        <Box sx={{ mt: 2, display: "flex", justifyContent: "center" }}>
-                            <CircularProgress size={28} />
-                        </Box>
-                    ) : (
-                        <TransactionTable
-                            transactions={visibleTransactions}
-                            accountNames={accountNameMap}
-                            sortField={sortField}
-                            sortDirection={sortDirection}
-                            onSortChange={handleSortChange}
-                        />
-                    )}
-                </Grid>
-            </Grid>
-        </Container>
+                )}
+            </div>
+        </div>
     );
 }

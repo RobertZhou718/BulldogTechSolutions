@@ -1,35 +1,47 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-    Box,
-    Grid,
-    CircularProgress,
-    Typography,
-    Stack,
-    Paper,
-} from "@mui/material";
 import { useMsal } from "@azure/msal-react";
-import GreetingCard from "../components/dashboard/GreetingCard.jsx";
-import AccountsPieChart from "../components/dashboard/AccountsPieChart.jsx";
-import CashFlowChart from "../components/dashboard/CashFlowChart.jsx";
-import InvestmentsChart from "../components/dashboard/InvestmentsChart.jsx";
-import { useApiClient } from "../services/apiClient.js";
+import AccountsPieChart from "@/components/dashboard/AccountsPieChart.jsx";
+import CashFlowChart from "@/components/dashboard/CashFlowChart.jsx";
+import GreetingCard from "@/components/dashboard/GreetingCard.jsx";
+import InvestmentsChart from "@/components/dashboard/InvestmentsChart.jsx";
+import MetricCard from "@/components/ui/MetricCard.jsx";
+import PageHeader from "@/components/ui/PageHeader.jsx";
+import Spinner from "@/components/ui/Spinner.jsx";
+import { formatCurrency } from "@/lib/utils";
+import { useApiClient } from "@/services/apiClient.js";
 
 export default function DashboardPage() {
-    const { getAccounts } = useApiClient();
+    const { getAccounts, getTransactions, getInvestmentOverview } = useApiClient();
     const { accounts: msalAccounts } = useMsal();
 
-    const displayName =
-        msalAccounts[0]?.name || msalAccounts[0]?.username || "Friend";
+    const displayName = msalAccounts[0]?.name || msalAccounts[0]?.username || "Friend";
 
     const [accounts, setAccounts] = useState([]);
+    const [transactions, setTransactions] = useState([]);
+    const [overview, setOverview] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
         (async () => {
             try {
-                const data = await getAccounts();
-                setAccounts(data);
+                const end = new Date();
+                const start = new Date(end);
+                start.setMonth(end.getMonth() - 5);
+                start.setDate(1);
+
+                const [accountsData, transactionsData, overviewData] = await Promise.all([
+                    getAccounts(),
+                    getTransactions({
+                        from: start.toISOString(),
+                        to: end.toISOString(),
+                    }),
+                    getInvestmentOverview(),
+                ]);
+
+                setAccounts(accountsData || []);
+                setTransactions(transactionsData || []);
+                setOverview(overviewData || null);
             } catch (e) {
                 console.error(e);
                 setError(e.message ?? "Failed to load accounts");
@@ -37,169 +49,145 @@ export default function DashboardPage() {
                 setLoading(false);
             }
         })();
-    }, [getAccounts]);
+    }, [getAccounts, getInvestmentOverview, getTransactions]);
 
-    // Static demo data for CashFlow / Investments until real endpoints are ready
-    const periods = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
-    const income = [2200, 2300, 2100, 2500, 2400, 2600];
-    const expenses = [1500, 1600, 1550, 1700, 1650, 1800];
+    const cashFlowSeries = useMemo(() => {
+        const months = Array.from({ length: 6 }, (_, index) => {
+            const date = new Date();
+            date.setMonth(date.getMonth() - (5 - index));
+            date.setDate(1);
+            return {
+                key: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`,
+                label: date.toLocaleString("en-US", { month: "short" }),
+                income: 0,
+                expense: 0,
+            };
+        });
 
-    const invDates = ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5"];
+        const monthMap = months.reduce((map, month) => {
+            map[month.key] = month;
+            return map;
+        }, {});
+
+        transactions.forEach((tx) => {
+            const occurredAt = tx.occurredAtUtc || tx.occurredAt || tx.createdAtUtc;
+            if (!occurredAt) return;
+
+            const date = new Date(occurredAt);
+            const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+            const bucket = monthMap[key];
+            if (!bucket) return;
+
+            const amount = Number(tx.amount) || 0;
+            if (tx.type === "EXPENSE") {
+                bucket.expense += amount;
+            } else if (tx.type === "INCOME") {
+                bucket.income += amount;
+            }
+        });
+
+        return months;
+    }, [transactions]);
+
+    const holdings = overview?.holdings ?? overview?.Holdings ?? [];
+    const investmentLabels = holdings.map((holding) => holding.symbol ?? holding.Symbol ?? "Holding");
     const portfolioSeries = [
-        { label: "Portfolio", data: [10000, 10120, 10200, 10350, 10400] },
+        {
+            label: "Market value",
+            data: holdings.map((holding) => Number(holding.marketValue ?? holding.MarketValue ?? 0)),
+            color: "#1570ef",
+        },
+        {
+            label: "Cost basis",
+            data: holdings.map((holding) => {
+                const quantity = Number(holding.quantity ?? holding.Quantity ?? 0);
+                const avgCost = Number(holding.avgCost ?? holding.AvgCost ?? 0);
+                return quantity * avgCost;
+            }),
+            color: "#12b76a",
+        },
     ];
 
     const totalNetWorth = useMemo(
-        () =>
-            accounts.reduce(
-                (sum, acc) => sum + (acc.currentBalance ?? 0),
-                0
-            ),
+        () => accounts.reduce((sum, acc) => sum + (acc.currentBalance ?? 0), 0),
         [accounts]
     );
 
     const latestCashFlowDelta = useMemo(() => {
-        const latestIncome = income[income.length - 1] ?? 0;
-        const latestExpense = expenses[expenses.length - 1] ?? 0;
+        const latest = cashFlowSeries[cashFlowSeries.length - 1];
+        const latestIncome = latest?.income ?? 0;
+        const latestExpense = latest?.expense ?? 0;
         return latestIncome - latestExpense;
-    }, [income, expenses]);
+    }, [cashFlowSeries]);
 
     const pieAccounts = useMemo(
         () =>
             accounts.map((acc) => ({
                 id: acc.accountId,
                 name: acc.name,
-                balance: acc.currentBalance,
+                balance: acc.currentBalance ?? 0,
             })),
         [accounts]
     );
 
-    const statCardStyles = {
-        bgcolor: "rgba(15,23,42,0.85)",
-        border: "1px solid rgba(148,163,184,0.35)",
-        borderRadius: 3,
-        px: 2.5,
-        py: 1.5,
-        minWidth: 180,
-    };
-
     if (loading) {
         return (
-            <Box sx={{ mt: 4, display: "flex", justifyContent: "center" }}>
-                <CircularProgress />
-            </Box>
+            <div className="mt-12 flex justify-center">
+                <Spinner className="h-8 w-8" />
+            </div>
         );
     }
 
     if (error) {
-        return (
-            <Typography color="error" sx={{ mt: 4 }}>
-                {error}
-            </Typography>
-        );
+        return <p className="mt-12 text-sm font-medium text-[var(--color-error-500)]">{error}</p>;
     }
 
     return (
-        <Box
-            sx={{
-                mt: 1,
-                maxWidth: 1400,
-                mx: "auto",
-                display: "flex",
-                flexDirection: "column",
-                gap: 3,
-            }}
-        >
-            <Box
-                sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: 2,
-                }}
+        <div className="space-y-8">
+            <PageHeader
+                eyebrow="Overview"
+                title={`Welcome back, ${displayName}`}
+                description="Track balances, allocation, and short-term performance from one clean workspace."
             >
-                <Box>
-                    <Typography variant="overline" color="text.secondary">
-                        Overview
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
-                        Welcome back, {displayName}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        Track your balances, allocations, and recent performance at a
-                        glance.
-                    </Typography>
-                </Box>
-
-                <Stack
-                    direction={{ xs: "column", sm: "row" }}
-                    spacing={1.5}
-                    alignItems="stretch"
-                >
-                    <Paper elevation={0} sx={statCardStyles}>
-                        <Typography variant="caption" color="text.secondary">
-                            Net worth (all accounts)
-                        </Typography>
-                        <Typography variant="h6" sx={{ mt: 0.5 }}>
-                            {totalNetWorth.toLocaleString("en-CA", {
-                                style: "currency",
-                                currency: "CAD",
-                                maximumFractionDigits: 0,
-                            })}
-                        </Typography>
-                    </Paper>
-                    <Paper elevation={0} sx={statCardStyles}>
-                        <Typography variant="caption" color="text.secondary">
-                            Linked accounts
-                        </Typography>
-                        <Typography variant="h6" sx={{ mt: 0.5 }}>
-                            {accounts.length} {accounts.length === 1 ? "account" : "accounts"}
-                        </Typography>
-                    </Paper>
-                    <Paper elevation={0} sx={statCardStyles}>
-                        <Typography variant="caption" color="text.secondary">
-                            Latest cash flow
-                        </Typography>
-                        <Typography
-                            variant="h6"
-                            sx={{
-                                mt: 0.5,
-                                color:
-                                    latestCashFlowDelta >= 0 ? "success.main" : "error.main",
-                            }}
-                        >
-                            {latestCashFlowDelta.toLocaleString("en-CA", {
-                                style: "currency",
-                                currency: "CAD",
-                                maximumFractionDigits: 0,
-                            })}
-                        </Typography>
-                    </Paper>
-                </Stack>
-            </Box>
-
-            <Grid container spacing={3} alignItems="stretch">
-                <Grid item xs={12} md={5} lg={4} sx={{ display: "flex" }}>
-                    <GreetingCard name={displayName} total={totalNetWorth} />
-                </Grid>
-                <Grid item xs={12} md={7} lg={8} sx={{ display: "flex" }}>
-                    <AccountsPieChart accounts={pieAccounts} />
-                </Grid>
-                <Grid item xs={12} md={6} sx={{ display: "flex" }}>
-                    <CashFlowChart
-                        periods={periods}
-                        income={income}
-                        expenses={expenses}
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <MetricCard
+                        label="Net worth"
+                        value={formatCurrency(totalNetWorth, "CAD", 0)}
+                        hint="All linked accounts"
                     />
-                </Grid>
-                <Grid item xs={12} md={6} sx={{ display: "flex" }}>
+                    <MetricCard
+                        label="Linked accounts"
+                        value={`${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`}
+                    />
+                    <MetricCard
+                        label="Latest cash flow"
+                        value={formatCurrency(latestCashFlowDelta, "CAD", 0)}
+                        tone={latestCashFlowDelta >= 0 ? "positive" : "negative"}
+                    />
+                </div>
+            </PageHeader>
+
+            <div className="grid gap-6 xl:grid-cols-12">
+                <div className="xl:col-span-4">
+                    <GreetingCard name={displayName} total={totalNetWorth} />
+                </div>
+                <div className="xl:col-span-8">
+                    <AccountsPieChart accounts={pieAccounts} />
+                </div>
+                <div className="xl:col-span-6">
+                    <CashFlowChart
+                        periods={cashFlowSeries.map((item) => item.label)}
+                        income={cashFlowSeries.map((item) => item.income)}
+                        expenses={cashFlowSeries.map((item) => item.expense)}
+                    />
+                </div>
+                <div className="xl:col-span-6">
                     <InvestmentsChart
-                        dates={invDates}
+                        dates={investmentLabels}
                         portfolioSeries={portfolioSeries}
                     />
-                </Grid>
-            </Grid>
-        </Box>
+                </div>
+            </div>
+        </div>
     );
 }

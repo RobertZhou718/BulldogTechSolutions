@@ -1,14 +1,7 @@
 import React from "react";
-import {
-    Box,
-    Grid,
-    MenuItem,
-    Select,
-    TextField,
-    Typography,
-    Paper,
-    Button,
-} from "@mui/material";
+import Button from "@/components/ui/Button.jsx";
+import Card from "@/components/ui/Card.jsx";
+import { Field, Input, Select } from "@/components/ui/Field.jsx";
 
 const TYPE_FILTER_OPTIONS = [
     { value: "ALL", label: "All" },
@@ -25,85 +18,61 @@ export default function TransactionFilters({ filters, onChange, onReset }) {
     };
 
     return (
-        <Paper
-            sx={{
-                p: 2,
-                mb: 2,
-                bgcolor: "rgba(15,23,42,0.9)",
-                border: "1px solid rgba(148,163,184,0.35)",
-                display: "flex",
-                flexDirection: "column",
-                gap: 1,
-                width: "100%",
-            }}
-        >
-            <Typography variant="subtitle1" gutterBottom>
+        <Card>
+            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
                 Filters
-            </Typography>
-            <Grid container spacing={2}>
-                <Grid item xs={6} md={3}>
-                    <Typography variant="caption" color="text.secondary">
-                        Type
-                    </Typography>
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
+                Refine the transaction feed
+            </h2>
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+                Slice by type, date window, or category keyword.
+            </p>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <Field label="Type">
                     <Select
-                        fullWidth
-                        size="small"
                         value={filters.type}
                         onChange={(e) => handleChange("type", e.target.value)}
                     >
-                        {TYPE_FILTER_OPTIONS.map((t) => (
-                            <MenuItem key={t.value} value={t.value}>
-                                {t.label}
-                            </MenuItem>
+                        {TYPE_FILTER_OPTIONS.map((item) => (
+                            <option key={item.value} value={item.value}>
+                                {item.label}
+                            </option>
                         ))}
                     </Select>
-                </Grid>
-                <Grid item xs={6} md={3}>
-                    <Typography variant="caption" color="text.secondary">
-                        From
-                    </Typography>
-                    <TextField
+                </Field>
+
+                <Field label="From">
+                    <Input
                         type="date"
-                        size="small"
-                        fullWidth
                         value={filters.from}
                         onChange={(e) => handleChange("from", e.target.value)}
                     />
-                </Grid>
-                <Grid item xs={6} md={3}>
-                    <Typography variant="caption" color="text.secondary">
-                        To
-                    </Typography>
-                    <TextField
+                </Field>
+
+                <Field label="To">
+                    <Input
                         type="date"
-                        size="small"
-                        fullWidth
                         value={filters.to}
                         onChange={(e) => handleChange("to", e.target.value)}
                     />
-                </Grid>
-                <Grid item xs={6} md={3}>
-                    <Typography variant="caption" color="text.secondary">
-                        Category
-                    </Typography>
-                    <TextField
-                        size="small"
-                        fullWidth
+                </Field>
+
+                <Field label="Category">
+                    <Input
                         placeholder="Any"
                         value={filters.category}
                         onChange={(e) => handleChange("category", e.target.value)}
                     />
-                </Grid>
-                <Grid
-                    item
-                    xs={12}
-                    sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}
-                >
-                    <Button size="small" onClick={onReset}>
-                        Reset filters
-                    </Button>
-                </Grid>
-            </Grid>
-        </Paper>
+                </Field>
+            </div>
+
+            <div className="mt-4 flex justify-end">
+                <Button variant="ghost" onClick={onReset}>
+                    Reset filters
+                </Button>
+            </div>
+        </Card>
     );
 }

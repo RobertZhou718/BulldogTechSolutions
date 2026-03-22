@@ -1,37 +1,30 @@
 import React from "react";
-import { Card, CardContent, Typography, Box } from "@mui/material";
-import { LineChart } from "@mui/x-charts/LineChart";
+import LineTrendChart from "@/components/charts/LineTrendChart.jsx";
+import Card from "@/components/ui/Card.jsx";
 
 export default function CashFlowChart({ periods, income, expenses }) {
     return (
-        <Card
-            sx={{
-                bgcolor: "rgba(15,23,42,0.9)",
-                border: "1px solid rgba(148,163,184,0.35)",
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-            }}
-        >
-            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1, flex: 1 }}>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    Cash flow
-                </Typography>
-                <Typography variant="h6" sx={{ mb: 1.5 }}>
-                    Recent income vs. spending
-                </Typography>
-
-                <Box sx={{ flex: 1, minHeight: 260 }}>
-                    <LineChart
-                        height={260}
-                        xAxis={[{ scaleType: "point", data: periods }]}
-                        series={[
-                            { label: "Income", data: income },
-                            { label: "Spending", data: expenses },
-                        ]}
-                    />
-                </Box>
-            </CardContent>
+        <Card className="h-full">
+            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                Cash flow
+            </p>
+            <div className="mt-2">
+                <h2 className="text-xl font-semibold text-[var(--text-main)]">
+                    Income vs. spending
+                </h2>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
+                    Recent movement across recurring income and expenses.
+                </p>
+            </div>
+            <div className="mt-6">
+                <LineTrendChart
+                    labels={periods}
+                    series={[
+                        { label: "Income", data: income, color: "#12b76a" },
+                        { label: "Spending", data: expenses, color: "#1570ef" },
+                    ]}
+                />
+            </div>
         </Card>
     );
 }

@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from "react";
 import { useMsal } from "@azure/msal-react";
 import { apiConfig } from "./authConfig";
 
@@ -6,7 +7,7 @@ export function useApiClient() {
     const account = accounts[0];
 
     // 拿 Access Token
-    async function getAccessToken() {
+    const getAccessToken = useCallback(async () => {
         if (!account) {
             throw new Error("No signed-in account");
         }
@@ -17,22 +18,27 @@ export function useApiClient() {
         });
 
         return result.accessToken;
-    }
+    }, [account, instance]);
 
     // 通用请求封装
-    async function request(path, options = {}) {
+    const request = useCallback(async (path, options = {}) => {
         const token = await getAccessToken();
+        const { responseType = "json", allowNotFound = false, ...fetchOptions } = options;
 
         const headers = {
             "Content-Type": "application/json",
-            ...(options.headers || {}),
+            ...(fetchOptions.headers || {}),
             Authorization: `Bearer ${token}`,
         };
 
         const response = await fetch(`${apiConfig.baseUrl}${path}`, {
-            ...options,
+            ...fetchOptions,
             headers,
         });
+
+        if (allowNotFound && response.status === 404) {
+            return null;
+        }
 
         if (!response.ok) {
             const text = await response.text().catch(() => "");
@@ -46,32 +52,36 @@ export function useApiClient() {
             return null;
         }
 
+        if (responseType === "text") {
+            return response.text();
+        }
+
         return response.json();
-    }
+    }, [getAccessToken]);
 
     // ===== 具体 API 封装 =====
 
     // GET /api/me  —— 检查用户是否已经 Onboarding
-    function getMe() {
+    const getMe = useCallback(() => {
         return request("/me", { method: "GET" });
-    }
+    }, [request]);
 
     // POST /api/onboarding  —— 初次 Onboarding，提交初始账户信息
     // payload: { defaultCurrency, accounts: [ { name, type, currency, initialBalance } ] }
-    function postOnboarding(payload) {
+    const postOnboarding = useCallback((payload) => {
         return request("/onboarding", {
             method: "POST",
             body: JSON.stringify(payload),
         });
-    }
+    }, [request]);
 
     // GET /api/accounts  —— 账户列表
-    function getAccounts() {
+    const getAccounts = useCallback(() => {
         return request("/accounts", { method: "GET" });
-    }
+    }, [request]);
 
     // GET /api/transactions?accountId=...&from=...&to=...
-    function getTransactions(params = {}) {
+    const getTransactions = useCallback((params = {}) => {
         const search = new URLSearchParams();
         if (params.accountId) search.set("accountId", params.accountId);
         if (params.from) search.set("from", params.from);
@@ -81,70 +91,84 @@ export function useApiClient() {
         const path = qs ? `/transactions?${qs}` : "/transactions";
 
         return request(path, { method: "GET" });
-    }
+    }, [request]);
 
     // POST /api/transactions  —— 新增一条收支
     // tx: { accountId, type: 'INCOME'|'EXPENSE', amount, currency?, category?, note?, occurredAtUtc? }
-    function createTransaction(tx) {
+    const createTransaction = useCallback((tx) => {
         return request("/transactions", {
             method: "POST",
             body: JSON.stringify(tx),
         });
-    }
+    }, [request]);
 
         // ======================
     // Investments 持仓相关
     // ======================
 
-    function getInvestments() {
+    const getInvestments = useCallback(() => {
         return request("/investments", { method: "GET" });
-    }
+    }, [request]);
 
-    function upsertInvestment(investment) {
+    const upsertInvestment = useCallback((investment) => {
         // investment: { symbol, exchange, quantity, avgCost, currency }
         return request("/investments", {
             method: "POST",
             body: JSON.stringify(investment),
         });
-    }
+    }, [request]);
 
-    function deleteInvestment(symbol) {
+    const deleteInvestment = useCallback((symbol) => {
         return request(`/investments/${encodeURIComponent(symbol)}`, {
             method: "DELETE",
         });
-    }
+    }, [request]);
 
     // ======================
     // Watchlist 自选股
     // ======================
 
-    function getWatchlist() {
+    const getWatchlist = useCallback(() => {
         return request("/investments/watchlist", { method: "GET" });
-    }
+    }, [request]);
 
-    function addToWatchlist(item) {
+    const addToWatchlist = useCallback((item) => {
         // item: { symbol, exchange }
         return request("/investments/watchlist", {
             method: "POST",
             body: JSON.stringify(item),
         });
-    }
+    }, [request]);
 
-    function removeFromWatchlist(symbol) {
+    const removeFromWatchlist = useCallback((symbol) => {
         return request(`/investments/watchlist/${encodeURIComponent(symbol)}`, {
             method: "DELETE",
         });
-    }
+    }, [request]);
 
     // ======================
     // Overview (价格 + 新闻)
     // ======================
 
-    function getInvestmentOverview() {
+    const getInvestmentOverview = useCallback(() => {
         return request("/investments/overview", { method: "GET" });
-    }
+    }, [request]);
 
-    return {
+    const sendChatMessage = useCallback((payload) => {
+        return request("/chat", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    }, [request]);
+
+    const getLatestReport = useCallback((period) => {
+        return request(`/reports/${encodeURIComponent(period)}/latest`, {
+            method: "GET",
+            allowNotFound: true,
+        });
+    }, [request]);
+
+    return useMemo(() => ({
         getMe,
         postOnboarding,
         getAccounts,
@@ -156,6 +180,23 @@ export function useApiClient() {
         getWatchlist,
         addToWatchlist,
         removeFromWatchlist,
-        getInvestmentOverview
-    };
+        getInvestmentOverview,
+        sendChatMessage,
+        getLatestReport,
+    }), [
+        addToWatchlist,
+        createTransaction,
+        deleteInvestment,
+        getAccounts,
+        getInvestmentOverview,
+        getInvestments,
+        getLatestReport,
+        getMe,
+        getTransactions,
+        getWatchlist,
+        postOnboarding,
+        removeFromWatchlist,
+        sendChatMessage,
+        upsertInvestment,
+    ]);
 }

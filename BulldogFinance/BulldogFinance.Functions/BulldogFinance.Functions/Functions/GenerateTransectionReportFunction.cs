@@ -1,6 +1,6 @@
 using Azure.Data.Tables;
-using BulldogFinance.Functions.Models;
-using BulldogFinance.Functions.Services;
+using BulldogFinance.Functions.Models.Reports;
+using BulldogFinance.Functions.Services.Reports;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using System;

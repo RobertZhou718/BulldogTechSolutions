@@ -1,99 +1,43 @@
 import React from "react";
-import {
-    Drawer,
-    Box,
-    List,
-    ListItemButton,
-    ListItemIcon,
-    ListItemText,
-    ListSubheader,
-} from "@mui/material";
-import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
-import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import ShowChartIcon from "@mui/icons-material/ShowChart";
-import { useLocation, useNavigate } from "react-router-dom";
-import { APP_BAR_HEIGHT, DRAWER_WIDTH } from "./TopBar.jsx";
+import { BarChartSquare02, Coins01, HomeLine, MessageChatCircle } from "@untitledui/icons";
+import { NavLink } from "react-router-dom";
 
 const navItems = [
-    {
-        label: "Dashboard",
-        path: "/",
-        icon: <DashboardRoundedIcon fontSize="small" />,
-    },
-    {
-        label: "Transactions",
-        path: "/transactions",
-        icon: <ReceiptLongIcon fontSize="small" />,
-    },
-    {
-        label: "Investments",
-        path: "/investments",
-        icon: <ShowChartIcon fontSize="small" />,
-    },
+    { label: "Dashboard", path: "/", icon: HomeLine },
+    { label: "Transactions", path: "/transactions", icon: Coins01 },
+    { label: "Investments", path: "/investments", icon: BarChartSquare02 },
+    { label: "Bulldog assistance", path: "/assistant", icon: MessageChatCircle },
 ];
 
 export default function SideNav() {
-    const location = useLocation();
-    const navigate = useNavigate();
-
     return (
-        <Drawer
-            variant="permanent"
-            sx={{
-                width: DRAWER_WIDTH,
-                flexShrink: 0,
-                "& .MuiDrawer-paper": {
-                    width: DRAWER_WIDTH,
-                    boxSizing: "border-box",
-                    bgcolor: "background.default",
-                    borderRight: "1px solid rgba(148,163,184,0.25)",
-                    top: APP_BAR_HEIGHT, // 👈 从 AppBar 下方开始
-                    height: `calc(100% - ${APP_BAR_HEIGHT}px)`,
-                },
-            }}
-        >
-            <Box sx={{ overflow: "auto", pt: 1 }}>
-                <List
-                    subheader={
-                        <ListSubheader
-                            component="div"
-                            disableSticky
-                            sx={{
-                                bgcolor: "transparent",
-                                color: "text.secondary",
-                                fontSize: 11,
-                                letterSpacing: 0.8,
-                            }}
-                        >
-                            OVERVIEW
-                        </ListSubheader>
-                    }
-                >
-                    {navItems.map((item) => (
-                        <ListItemButton
-                            key={item.path}
-                            selected={location.pathname === item.path}
-                            onClick={() => navigate(item.path)}
-                            sx={{
-                                borderRadius: 2,
-                                mx: 1,
-                                mb: 0.5,
-                                "&.Mui-selected": {
-                                    bgcolor: "rgba(34,197,94,0.16)",
-                                },
-                            }}
-                        >
-                            <ListItemIcon sx={{ minWidth: 32, color: "text.secondary" }}>
-                                {item.icon}
-                            </ListItemIcon>
-                            <ListItemText
-                                primary={item.label}
-                                primaryTypographyProps={{ fontSize: 14 }}
-                            />
-                        </ListItemButton>
-                    ))}
-                </List>
-            </Box>
-        </Drawer>
+        <aside className="hidden w-[280px] shrink-0 lg:block">
+            <div className="sticky top-[96px] rounded-[28px] border border-[var(--card-border)] bg-white/85 p-4 shadow-sm backdrop-blur">
+                <p className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-soft)]">
+                    Workspace
+                </p>
+                <nav className="mt-1 space-y-1">
+                    {navItems.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                            <NavLink
+                                key={item.path}
+                                to={item.path}
+                                className={({ isActive }) =>
+                                    `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition ${
+                                        isActive
+                                            ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                                            : "text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-main)]"
+                                    }`
+                                }
+                            >
+                                <Icon className="h-5 w-5" />
+                                {item.label}
+                            </NavLink>
+                        );
+                    })}
+                </nav>
+            </div>
+        </aside>
     );
 }

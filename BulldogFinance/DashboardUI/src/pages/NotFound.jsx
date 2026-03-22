@@ -1,38 +1,30 @@
 import React from "react";
-import { Box, Typography, Button } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import Button from "@/components/ui/Button.jsx";
+import Card from "@/components/ui/Card.jsx";
 
 export default function NotFoundPage() {
     const navigate = useNavigate();
 
     return (
-        <Box
-            sx={{
-                minHeight: "60vh",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                textAlign: "center",
-                gap: 2,
-            }}
-        >
-            <Typography variant="h3" fontWeight={600}>
-                404
-            </Typography>
-            <Typography variant="h6">Page not found</Typography>
-            <Typography variant="body2" color="text.secondary">
-                The page you are looking for doesn&apos;t exist. Maybe you followed an
-                outdated link.
-            </Typography>
-            <Button
-                variant="contained"
-                color="primary"
-                sx={{ mt: 1 }}
-                onClick={() => navigate("/")}
-            >
-                Back to dashboard
-            </Button>
-        </Box>
+        <div className="flex min-h-[60vh] items-center justify-center">
+            <Card className="max-w-lg text-center">
+                <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                    Error
+                </p>
+                <h1 className="mt-3 text-5xl font-semibold tracking-[-0.05em] text-[var(--text-main)]">
+                    404
+                </h1>
+                <h2 className="mt-3 text-2xl font-semibold text-[var(--text-main)]">
+                    Page not found
+                </h2>
+                <p className="mt-3 text-sm text-[var(--text-muted)]">
+                    The page you are looking for doesn&apos;t exist. Maybe you followed an outdated link.
+                </p>
+                <div className="mt-6 flex justify-center">
+                    <Button onClick={() => navigate("/")}>Back to dashboard</Button>
+                </div>
+            </Card>
+        </div>
     );
 }

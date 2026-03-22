@@ -1,41 +1,28 @@
 import React from "react";
-import { Card, CardContent, Typography } from "@mui/material";
+import Card from "@/components/ui/Card.jsx";
+import { formatCurrency } from "@/lib/utils";
 
 export default function GreetingCard({ name, total }) {
     return (
-        <Card
-            sx={{
-                bgcolor: "rgba(15,23,42,0.9)",
-                border: "1px solid rgba(148,163,184,0.35)",
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-            }}
-        >
-            <CardContent
-                sx={{ display: "flex", flexDirection: "column", gap: 0.5, flex: 1 }}
-            >
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                    Welcome back
-                </Typography>
-                <Typography variant="h5" sx={{ mb: 1 }}>
-                    Good to see you, {name || "Investor"}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Here is a quick overview of your aggregated balance across all linked
-                    accounts.
-                </Typography>
-                <Typography variant="subtitle2" color="text.secondary">
-                    Total net worth (all accounts)
-                </Typography>
-                <Typography variant="h4" sx={{ mt: 0.5 }}>
-                    {total.toLocaleString("en-CA", {
-                        style: "currency",
-                        currency: "CAD",
-                        maximumFractionDigits: 0,
-                    })}
-                </Typography>
-            </CardContent>
+        <Card className="h-full bg-[linear-gradient(160deg,rgba(21,112,239,0.08)_0%,rgba(255,255,255,0.96)_48%,rgba(18,183,106,0.06)_100%)]">
+            <span className="inline-flex rounded-full border border-[var(--card-border)] bg-white px-3 py-1 text-xs font-medium text-[var(--text-muted)]">
+                All linked accounts
+            </span>
+            <p className="mt-5 text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                Overview
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text-main)]">
+                Good to see you, {name || "Investor"}
+            </h2>
+            <p className="mt-3 text-sm text-[var(--text-muted)]">
+                Here is a quick snapshot of your aggregated balances across linked accounts.
+            </p>
+            <div className="mt-8">
+                <p className="text-sm text-[var(--text-soft)]">Total net worth</p>
+                <p className="mt-2 text-4xl font-semibold tracking-[-0.05em] text-[var(--text-main)]">
+                    {formatCurrency(total, "CAD", 0)}
+                </p>
+            </div>
         </Card>
     );
 }
