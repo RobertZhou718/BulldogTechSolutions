@@ -1,15 +1,5 @@
 import React from "react";
-import {
-    Box,
-    Paper,
-    Table,
-    TableHead,
-    TableRow,
-    TableCell,
-    TableBody,
-    TableSortLabel,
-    Typography,
-} from "@mui/material";
+import Card from "@/components/ui/Card.jsx";
 
 function formatDate(dateStr) {
     if (!dateStr) return "";
@@ -36,84 +26,86 @@ export default function TransactionTable({
     const renderAmount = (tx) => {
         const amount = tx.amount ?? 0;
         const currency = tx.currency || "CAD";
-        const formatted = amount.toLocaleString(undefined, {
+        return `${currency} ${amount.toLocaleString(undefined, {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
-        });
-        return `${currency} ${formatted}`;
+        })}`;
     };
 
     return (
-        <Paper
-            sx={{
-                p: 2,
-                bgcolor: "rgba(15,23,42,0.9)",
-                border: "1px solid rgba(148,163,184,0.35)",
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                width: "100%",
-            }}
-        >
-            <Typography variant="h6" gutterBottom>
+        <Card>
+            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                History
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
                 Transaction history
-            </Typography>
+            </h2>
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+                Sorted record of recent account activity.
+            </p>
+
             {transactions.length === 0 ? (
-                <Box sx={{ py: 4, textAlign: "center" }}>
-                    <Typography color="text.secondary">
-                        No transactions yet. Add your first one above.
-                    </Typography>
-                </Box>
+                <div className="py-12 text-center text-sm text-[var(--text-muted)]">
+                    No transactions yet. Add your first one above.
+                </div>
             ) : (
-                <Table size="small">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>
-                                <TableSortLabel
-                                    active={sortField === "date"}
-                                    direction={sortField === "date" ? sortDirection : "desc"}
-                                    onClick={() => handleSort("date")}
-                                >
-                                    Date
-                                </TableSortLabel>
-                            </TableCell>
-                            <TableCell>Account</TableCell>
-                            <TableCell>Type</TableCell>
-                            <TableCell>Category</TableCell>
-                            <TableCell>Note</TableCell>
-                            <TableCell align="right">
-                                <TableSortLabel
-                                    active={sortField === "amount"}
-                                    direction={sortField === "amount" ? sortDirection : "desc"}
-                                    onClick={() => handleSort("amount")}
-                                >
-                                    Amount
-                                </TableSortLabel>
-                            </TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {transactions.map((tx) => (
-                            <TableRow key={tx.transactionId || tx.rowKey || tx.id}>
-                                <TableCell>
-                                    {formatDate(tx.occurredAtUtc || tx.occurredAt || tx.createdAtUtc)}
-                                </TableCell>
-                            <TableCell>
-                                {accountNames?.[tx.accountId] || tx.accountName || tx.accountId}
-                            </TableCell>
-                                <TableCell>
-                                    {tx.type === "EXPENSE" ? "Expense" : "Income"}
-                                </TableCell>
-                                <TableCell>{tx.category || "-"}</TableCell>
-                                <TableCell>{tx.note || "-"}</TableCell>
-                                <TableCell align="right" sx={{ color: tx.type === "EXPENSE" ? "error.main" : "success.main" }}>
-                                    {tx.type === "EXPENSE" ? "-" : "+"} {renderAmount(tx)}
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                <div className="mt-6 overflow-x-auto">
+                    <table className="min-w-full divide-y divide-[var(--card-border)]">
+                        <thead>
+                            <tr className="bg-[var(--bg-main)] text-left text-xs font-semibold uppercase tracking-[0.06em] text-[var(--text-soft)]">
+                                <th className="px-4 py-3">
+                                    <button type="button" onClick={() => handleSort("date")}>
+                                        Date {sortField === "date" ? (sortDirection === "asc" ? "↑" : "↓") : ""}
+                                    </button>
+                                </th>
+                                <th className="px-4 py-3">Account</th>
+                                <th className="px-4 py-3">Type</th>
+                                <th className="px-4 py-3">Category</th>
+                                <th className="px-4 py-3">Note</th>
+                                <th className="px-4 py-3 text-right">
+                                    <button type="button" onClick={() => handleSort("amount")}>
+                                        Amount {sortField === "amount" ? (sortDirection === "asc" ? "↑" : "↓") : ""}
+                                    </button>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--card-border)] bg-white">
+                            {transactions.map((tx) => (
+                                <tr key={tx.transactionId || tx.rowKey || tx.id} className="text-sm">
+                                    <td className="px-4 py-4 text-[var(--text-muted)]">
+                                        {formatDate(tx.occurredAtUtc || tx.occurredAt || tx.createdAtUtc)}
+                                    </td>
+                                    <td className="px-4 py-4 text-[var(--text-main)]">
+                                        {accountNames?.[tx.accountId] || tx.accountName || tx.accountId}
+                                    </td>
+                                    <td className="px-4 py-4">
+                                        <span
+                                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+                                                tx.type === "EXPENSE"
+                                                    ? "bg-[var(--color-error-50)] text-[var(--color-error-700)]"
+                                                    : "bg-[var(--color-success-50)] text-[var(--color-success-700)]"
+                                            }`}
+                                        >
+                                            {tx.type === "EXPENSE" ? "Expense" : "Income"}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-4 text-[var(--text-muted)]">{tx.category || "-"}</td>
+                                    <td className="px-4 py-4 text-[var(--text-muted)]">{tx.note || "-"}</td>
+                                    <td
+                                        className={`px-4 py-4 text-right font-semibold ${
+                                            tx.type === "EXPENSE"
+                                                ? "text-[var(--color-error-700)]"
+                                                : "text-[var(--color-success-700)]"
+                                        }`}
+                                    >
+                                        {tx.type === "EXPENSE" ? "-" : "+"} {renderAmount(tx)}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             )}
-        </Paper>
+        </Card>
     );
 }

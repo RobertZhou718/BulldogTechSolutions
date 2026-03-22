@@ -1,16 +1,11 @@
 import React from "react";
-import {
-    AppBar,
-    Toolbar,
-    Box,
-    Typography,
-    Button,
-    Avatar,
-} from "@mui/material";
 import { useMsal } from "@azure/msal-react";
-import BulldogLogo from "../assets/BulldogFinance.png";
-export const APP_BAR_HEIGHT = 64;
-export const DRAWER_WIDTH = 260;
+import { LogOut01 } from "@untitledui/icons";
+import BulldogLogo from "@/assets/BulldogFinance.png";
+import Button from "@/components/ui/Button.jsx";
+
+export const APP_BAR_HEIGHT = 72;
+export const DRAWER_WIDTH = 280;
 
 export default function TopBar() {
     const { accounts, instance } = useMsal();
@@ -18,72 +13,40 @@ export default function TopBar() {
     const name = account?.name || account?.username || "User";
     const email = account?.username || "";
 
-    const handleSignOut = () => {
-        instance.logoutRedirect();
-    };
-
     return (
-        <AppBar
-            position="fixed"
-            elevation={0}
-            sx={{
-                height: APP_BAR_HEIGHT,
-                justifyContent: "center",
-                borderBottom: "1px solid",
-                borderColor: "divider",
-                bgcolor: "rgba(15,23,42,0.96)",
-                backdropFilter: "blur(14px)",
-            }}
-        >
-            <Toolbar
-                sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    minHeight: APP_BAR_HEIGHT,
-                }}
-            >
-                <Box display="flex" alignItems="center" gap={1.5}>
+        <header className="sticky top-0 z-40 border-b border-[var(--card-border)] bg-white/80 backdrop-blur-xl">
+            <div className="mx-auto flex h-[72px] max-w-[1600px] items-center justify-between gap-4 px-4 lg:px-6">
+                <div className="flex items-center gap-3">
                     <img
                         src={BulldogLogo}
                         alt="Bulldog Finance Logo"
-                        style={{
-                            width: 50,
-                            height: 50,
-                            borderRadius: "50%",
-                        }}
+                        className="h-11 w-11 rounded-2xl object-cover"
                     />
-                    <Typography variant="subtitle1" fontWeight={600}>
-                        Bulldog Finance
-                    </Typography>
-                </Box>
+                    <div>
+                        <p className="text-sm font-semibold text-[var(--text-main)]">
+                            Bulldog Finance
+                        </p>
+                        <p className="text-sm text-[var(--text-soft)]">Portfolio workspace</p>
+                    </div>
+                </div>
 
-                <Box display="flex" alignItems="center" gap={2}>
-                    <Box textAlign="right">
-                        <Typography variant="body2">{name}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                            {email}
-                        </Typography>
-                    </Box>
-                    <Avatar
-                        sx={{
-                            width: 32,
-                            height: 32,
-                            bgcolor: "primary.main",
-                            fontSize: 14,
-                        }}
-                    >
+                <div className="flex items-center gap-3">
+                    <span className="hidden rounded-full bg-[var(--color-success-50)] px-3 py-1 text-sm font-medium text-[var(--color-success-700)] sm:inline-flex">
+                        Live
+                    </span>
+                    <div className="hidden text-right sm:block">
+                        <p className="text-sm font-medium text-[var(--text-main)]">{name}</p>
+                        <p className="text-sm text-[var(--text-soft)]">{email}</p>
+                    </div>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-sm font-semibold text-white">
                         {name?.[0]?.toUpperCase() || "U"}
-                    </Avatar>
-                    <Button
-                        size="small"
-                        variant="outlined"
-                        color="inherit"
-                        onClick={handleSignOut}
-                    >
-                        SIGN OUT
+                    </div>
+                    <Button variant="secondary" onClick={() => instance.logoutRedirect()}>
+                        <LogOut01 className="h-4 w-4" />
+                        Sign out
                     </Button>
-                </Box>
-            </Toolbar>
-        </AppBar>
+                </div>
+            </div>
+        </header>
     );
 }

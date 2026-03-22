@@ -1,15 +1,7 @@
 import React, { useEffect, useState } from "react";
-import {
-    Box,
-    Button,
-    Grid,
-    MenuItem,
-    Paper,
-    Select,
-    TextField,
-    Typography,
-    InputAdornment,
-} from "@mui/material";
+import Button from "@/components/ui/Button.jsx";
+import Card from "@/components/ui/Card.jsx";
+import { Field, Input, Select } from "@/components/ui/Field.jsx";
 
 const TYPE_OPTIONS = [
     { value: "EXPENSE", label: "Expense" },
@@ -55,15 +47,13 @@ export default function TransactionForm({
         const numericAmount = parseFloat(amount);
         if (Number.isNaN(numericAmount) || numericAmount <= 0) return;
 
-        const occurredAtUtc = new Date(date + "T00:00:00Z").toISOString();
-
         onSubmit({
             accountId,
             type,
             amount: numericAmount,
             category,
             note: note.trim(),
-            occurredAtUtc,
+            occurredAtUtc: new Date(`${date}T00:00:00Z`).toISOString(),
             currency,
         });
 
@@ -72,130 +62,81 @@ export default function TransactionForm({
     };
 
     return (
-        <Paper
-            sx={{
-                p: 3,
-                bgcolor: "rgba(15,23,42,0.9)",
-                border: "1px solid rgba(148,163,184,0.35)",
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                width: "100%",
-            }}
-        >
-            <Typography variant="h6" gutterBottom>
+        <Card className="h-full">
+            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                Create
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
                 Add a transaction
-            </Typography>
-            <Box
-                component="form"
-                onSubmit={handleSubmit}
-                sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 2, flex: 1 }}
-            >
-                <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
-                        <Typography variant="caption" color="text.secondary">
-                            Account
-                        </Typography>
-                        <Select
-                            fullWidth
-                            size="small"
-                            value={accountId}
-                            onChange={(e) => {
-                                setAccountId(e.target.value);
-                                onAccountChange?.(e.target.value);
-                            }}
-                        >
-                            {accounts.map((acc) => (
-                                <MenuItem key={acc.accountId} value={acc.accountId}>
-                                    {acc.name}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </Grid>
-                    <Grid item xs={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
-                            Type
-                        </Typography>
-                        <Select
-                            fullWidth
-                            size="small"
-                            value={type}
-                            onChange={(e) => setType(e.target.value)}
-                        >
-                            {TYPE_OPTIONS.map((t) => (
-                                <MenuItem key={t.value} value={t.value}>
-                                    {t.label}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </Grid>
-                    <Grid item xs={6} md={3}>
-                        <Typography variant="caption" color="text.secondary">
-                            Date
-                        </Typography>
-                        <TextField
-                            type="date"
-                            size="small"
-                            fullWidth
-                            value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                        />
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                        <Typography variant="caption" color="text.secondary">
-                            Amount
-                        </Typography>
-                        <TextField
-                            fullWidth
-                            size="small"
+            </h2>
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+                Capture income and expenses against any linked account.
+            </p>
+
+            <form onSubmit={handleSubmit} className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <Field label="Account" className="xl:col-span-2">
+                    <Select
+                        value={accountId}
+                        onChange={(e) => {
+                            setAccountId(e.target.value);
+                            onAccountChange?.(e.target.value);
+                        }}
+                    >
+                        {accounts.map((acc) => (
+                            <option key={acc.accountId} value={acc.accountId}>
+                                {acc.name}
+                            </option>
+                        ))}
+                    </Select>
+                </Field>
+
+                <Field label="Type">
+                    <Select value={type} onChange={(e) => setType(e.target.value)}>
+                        {TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </Select>
+                </Field>
+
+                <Field label="Date">
+                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                </Field>
+
+                <Field label="Amount">
+                    <div className="flex overflow-hidden rounded-xl border border-[var(--card-border)] bg-white shadow-xs">
+                        <span className="flex items-center border-r border-[var(--card-border)] px-3 text-sm text-[var(--text-soft)]">
+                            {currency}
+                        </span>
+                        <input
+                            className="w-full px-3.5 py-2.5 text-sm outline-none"
                             type="number"
-                            inputProps={{ step: "0.01" }}
+                            step="0.01"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        {currency}
-                                    </InputAdornment>
-                                ),
-                            }}
                         />
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                        <Typography variant="caption" color="text.secondary">
-                            Category
-                        </Typography>
-                        <Select
-                            fullWidth
-                            size="small"
-                            value={category}
-                            onChange={(e) => setCategory(e.target.value)}
-                        >
-                            {DEFAULT_CATEGORIES.map((c) => (
-                                <MenuItem key={c} value={c}>
-                                    {c}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </Grid>
-                    <Grid item xs={12}>
-                        <Typography variant="caption" color="text.secondary">
-                            Note (optional)
-                        </Typography>
-                        <TextField
-                            fullWidth
-                            size="small"
-                            value={note}
-                            onChange={(e) => setNote(e.target.value)}
-                        />
-                    </Grid>
-                    <Grid item xs={12} sx={{ display: "flex", justifyContent: "flex-end" }}>
-                        <Button type="submit" variant="contained">
-                            Save transaction
-                        </Button>
-                    </Grid>
-                </Grid>
-            </Box>
-        </Paper>
+                    </div>
+                </Field>
+
+                <Field label="Category">
+                    <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+                        {DEFAULT_CATEGORIES.map((item) => (
+                            <option key={item} value={item}>
+                                {item}
+                            </option>
+                        ))}
+                    </Select>
+                </Field>
+
+                <Field label="Note" className="md:col-span-2 xl:col-span-2">
+                    <Input value={note} onChange={(e) => setNote(e.target.value)} />
+                </Field>
+
+                <div className="md:col-span-2 xl:col-span-4 flex justify-end">
+                    <Button type="submit">Save transaction</Button>
+                </div>
+            </form>
+        </Card>
     );
 }

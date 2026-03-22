@@ -1,17 +1,11 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
-import {
-    Box,
-    Grid,
-    Typography,
-    Alert,
-    Container,
-    Paper,
-    Stack,
-} from "@mui/material";
-import { useApiClient } from "../services/apiClient";
-import HoldingsCard from "../components/investments/HoldingsCard.jsx";
-import WatchlistCard from "../components/investments/WatchlistCard.jsx";
-import NewsCard from "../components/investments/NewsCard.jsx";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import HoldingsCard from "@/components/investments/HoldingsCard.jsx";
+import NewsCard from "@/components/investments/NewsCard.jsx";
+import WatchlistCard from "@/components/investments/WatchlistCard.jsx";
+import MetricCard from "@/components/ui/MetricCard.jsx";
+import PageHeader from "@/components/ui/PageHeader.jsx";
+import { formatCurrency } from "@/lib/utils";
+import { useApiClient } from "@/services/apiClient";
 
 export default function InvestmentsPage() {
     const {
@@ -33,11 +27,7 @@ export default function InvestmentsPage() {
         setLoading(true);
         setError("");
         try {
-            const [o, w] = await Promise.all([
-                getInvestmentOverview(),
-                getWatchlist(),
-            ]);
-
+            const [o, w] = await Promise.all([getInvestmentOverview(), getWatchlist()]);
             setOverview(o || {});
             setWatchlist(Array.isArray(w) ? w : []);
         } catch (err) {
@@ -52,232 +42,88 @@ export default function InvestmentsPage() {
         loadAll();
     }, [loadAll]);
 
-    const handleAddInvestment = async (payload) => {
-        setSaving(true);
-        setError("");
-        try {
-            await upsertInvestment(payload);
-            await loadAll();
-        } catch (err) {
-            console.error("Failed to save investment", err);
-            setError(err.message || "Failed to save investment.");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const handleDeleteInvestment = async (symbol) => {
-        setSaving(true);
-        setError("");
-        try {
-            await deleteInvestment(symbol);
-            await loadAll();
-        } catch (err) {
-            console.error("Failed to delete investment", err);
-            setError(err.message || "Failed to delete investment.");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const handleAddWatchlist = async (symbol, exchange) => {
-        setSaving(true);
-        setError("");
-        try {
-            await addToWatchlist({ symbol, exchange });
-            await loadAll();
-        } catch (err) {
-            console.error("Failed to add watchlist item", err);
-            setError(err.message || "Failed to add watchlist item.");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const handleDeleteWatchlist = async (symbol) => {
-        setSaving(true);
-        setError("");
-        try {
-            await removeFromWatchlist(symbol);
-            await loadAll();
-        } catch (err) {
-            console.error("Failed to remove watchlist item", err);
-            setError(err.message || "Failed to remove watchlist item.");
-        } finally {
-            setSaving(false);
-        }
-    };
-
     const holdings = overview?.Holdings ?? overview?.holdings ?? [];
 
     const totals = useMemo(() => {
-        const list = holdings || [];
-        const marketValue = list.reduce(
+        const marketValue = holdings.reduce(
             (sum, h) => sum + (h.MarketValue ?? h.marketValue ?? 0),
             0
         );
-        const pnl = list.reduce(
-            (sum, h) => sum + (h.UnrealizedPnL ?? h.unrealizedPnL ?? 0),
-            0
-        );
-        return {
-            marketValue,
-            pnl,
-            positions: list.length,
-        };
+        const pnl = holdings.reduce((sum, h) => sum + (h.UnrealizedPnL ?? h.unrealizedPnL ?? 0), 0);
+        return { marketValue, pnl, positions: holdings.length };
     }, [holdings]);
 
-    const statCardStyles = {
-        bgcolor: "rgba(15,23,42,0.85)",
-        border: "1px solid rgba(148,163,184,0.35)",
-        borderRadius: 3,
-        px: 2.5,
-        py: 1.5,
-        minWidth: 180,
+    const withSave = async (operation, fallbackMessage) => {
+        setSaving(true);
+        setError("");
+        try {
+            await operation();
+            await loadAll();
+        } catch (err) {
+            console.error(fallbackMessage, err);
+            setError(err.message || fallbackMessage);
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
-        <Container
-            maxWidth="lg"
-            sx={{
-                mt: 2,
-                mb: 4,
-                display: "flex",
-                flexDirection: "column",
-                gap: 3,
-            }}
-        >
-            <Box
-                sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: 2,
-                }}
+        <div className="space-y-8">
+            <PageHeader
+                eyebrow="Investments"
+                title="Portfolio overview"
+                description="Track your positions, watchlist, and market context from a single portfolio workspace."
             >
-                <Box>
-                    <Typography variant="overline" color="text.secondary">
-                        INVESTMENTS
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
-                        Portfolio overview
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        Track your positions, watchlist, and latest market news.
-                    </Typography>
-                </Box>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <MetricCard
+                        label="Total market value"
+                        value={formatCurrency(totals.marketValue, "USD", 0)}
+                    />
+                    <MetricCard
+                        label="Unrealized PnL"
+                        value={formatCurrency(totals.pnl, "USD", 0)}
+                        tone={totals.pnl >= 0 ? "positive" : "negative"}
+                    />
+                    <MetricCard label="Positions" value={totals.positions} />
+                </div>
+            </PageHeader>
 
-                <Stack
-                    direction={{ xs: "column", sm: "row" }}
-                    spacing={1.5}
-                    alignItems="stretch"
-                >
-                    <Paper elevation={0} sx={statCardStyles}>
-                        <Typography variant="caption" color="text.secondary">
-                            Total market value
-                        </Typography>
-                        <Typography variant="h6" sx={{ mt: 0.5 }}>
-                            {totals.marketValue.toLocaleString("en-CA", {
-                                style: "currency",
-                                currency: "USD",
-                                maximumFractionDigits: 0,
-                            })}
-                        </Typography>
-                    </Paper>
-                    <Paper elevation={0} sx={statCardStyles}>
-                        <Typography variant="caption" color="text.secondary">
-                            Unrealized PnL
-                        </Typography>
-                        <Typography
-                            variant="h6"
-                            sx={{
-                                mt: 0.5,
-                                color:
-                                    totals.pnl >= 0
-                                        ? "success.main"
-                                        : "error.main",
-                            }}
-                        >
-                            {totals.pnl.toLocaleString("en-CA", {
-                                style: "currency",
-                                currency: "USD",
-                                maximumFractionDigits: 0,
-                            })}
-                        </Typography>
-                    </Paper>
-                    <Paper elevation={0} sx={statCardStyles}>
-                        <Typography variant="caption" color="text.secondary">
-                            Positions
-                        </Typography>
-                        <Typography variant="h6" sx={{ mt: 0.5 }}>
-                            {totals.positions}
-                        </Typography>
-                    </Paper>
-                </Stack>
-            </Box>
+            {error ? <p className="text-sm font-medium text-[var(--color-error-500)]">{error}</p> : null}
 
-            {error && (
-                <Box mb={2}>
-                    <Alert severity="error" onClose={() => setError("")}>
-                        {error}
-                    </Alert>
-                </Box>
-            )}
+            <div className="grid gap-6 xl:grid-cols-12">
+                <div className="xl:col-span-7">
+                    <HoldingsCard
+                        holdings={holdings}
+                        loading={loading}
+                        saving={saving}
+                        onAdd={(payload) => withSave(() => upsertInvestment(payload), "Failed to save investment.")}
+                        onDelete={(symbol) => withSave(() => deleteInvestment(symbol), "Failed to delete investment.")}
+                    />
+                </div>
 
-            {/* 第一行：Investments + Watchlist；第二行右侧 News */}
-            <Grid container spacing={3} alignItems="stretch">
-                {/* 第一行：Investments */}
-                <Grid
-                    item
-                    xs={12}
-                    md={7}
-                    sx={{ display: "flex", width: "100%", minWidth: 0 }}
-                >
-                    <Box sx={{ width: "100%" }}>
-                        <HoldingsCard
-                            holdings={holdings}
-                            loading={loading}
-                            saving={saving}
-                            onAdd={handleAddInvestment}
-                            onDelete={handleDeleteInvestment}
-                        />
-                    </Box>
-                </Grid>
+                <div className="xl:col-span-5">
+                    <WatchlistCard
+                        items={watchlist}
+                        loading={loading}
+                        saving={saving}
+                        onAdd={(symbol, exchange) =>
+                            withSave(
+                                () => addToWatchlist({ symbol, exchange }),
+                                "Failed to add watchlist item."
+                            )
+                        }
+                        onDelete={(symbol) =>
+                            withSave(() => removeFromWatchlist(symbol), "Failed to remove watchlist item.")
+                        }
+                    />
+                </div>
 
-                {/* 第一行：Watchlist */}
-                <Grid
-                    item
-                    xs={12}
-                    md={5}
-                    sx={{ display: "flex", width: "100%", minWidth: 0 }}
-                >
-                    <Box sx={{ width: "100%" }}>
-                        <WatchlistCard
-                            items={watchlist}
-                            loading={loading}
-                            saving={saving}
-                            onAdd={handleAddWatchlist}
-                            onDelete={handleDeleteWatchlist}
-                        />
-                    </Box>
-                </Grid>
+                <div className="xl:col-span-7" />
 
-                {/* 第二行：左侧占位，让 News 靠右 */}
-                <Grid item xs={false} md={7} />
-
-                {/* 第二行：右侧 News */}
-                <Grid
-                    item
-                    xs={12}
-                    md={5}
-                    sx={{ display: "flex", width: "100%", minWidth: 0 }}
-                >
-                    <Box sx={{ width: "100%" }}>
-                        <NewsCard overview={overview} loading={loading} />
-                    </Box>
-                </Grid>
-            </Grid>
-        </Container>
+                <div className="xl:col-span-5">
+                    <NewsCard overview={overview} loading={loading} />
+                </div>
+            </div>
+        </div>
     );
 }

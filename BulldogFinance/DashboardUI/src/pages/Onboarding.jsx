@@ -1,22 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-    Box,
-    Button,
-    Container,
-    Divider,
-    Grid,
-    IconButton,
-    MenuItem,
-    Paper,
-    Select,
-    TextField,
-    Typography,
-    CircularProgress,
-    InputAdornment,
-} from "@mui/material";
-import { Add as AddIcon, DeleteOutline as DeleteIcon } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
-import { useApiClient } from "../services/apiClient";
+import Button from "@/components/ui/Button.jsx";
+import Card from "@/components/ui/Card.jsx";
+import { Field, Input, Select } from "@/components/ui/Field.jsx";
+import Spinner from "@/components/ui/Spinner.jsx";
+import { useApiClient } from "@/services/apiClient";
 
 const ACCOUNT_TYPES = [
     { value: "cash", label: "Cash" },
@@ -35,13 +23,11 @@ export default function OnboardingPage() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [defaultCurrency, setDefaultCurrency] = useState("CAD");
-
     const [rows, setRows] = useState([
         { id: 1, name: "Cash", type: "cash", currency: "CAD", initialBalance: "" },
         { id: 2, name: "Chequing", type: "bank", currency: "CAD", initialBalance: "" },
     ]);
 
-    // 进入页面先看 /me，已经 onboarding 的直接跳 dashboard
     useEffect(() => {
         (async () => {
             try {
@@ -50,29 +36,34 @@ export default function OnboardingPage() {
                     navigate("/dashboard", { replace: true });
                     return;
                 }
+
                 if (me?.defaultCurrency) {
                     setDefaultCurrency(me.defaultCurrency);
-                    setRows((prev) =>
-                        prev.map((r) => ({ ...r, currency: me.defaultCurrency }))
-                    );
+                    setRows((prev) => prev.map((row) => ({ ...row, currency: me.defaultCurrency })));
                 }
             } catch (e) {
                 console.error("Failed to load /me", e);
-                // 出错也不阻塞用户填写，保持默认 CAD
             } finally {
                 setLoadingMe(false);
             }
         })();
     }, [getMe, navigate]);
 
+    const totalInitial = useMemo(
+        () =>
+            rows.reduce((sum, row) => {
+                const value = parseFloat(row.initialBalance || "0");
+                return sum + (Number.isNaN(value) ? 0 : value);
+            }, 0),
+        [rows]
+    );
+
     const handleRowChange = (id, field, value) => {
-        setRows((prev) =>
-            prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
-        );
+        setRows((prev) => prev.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
     };
 
     const handleAddRow = () => {
-        const nextId = rows.length ? Math.max(...rows.map((r) => r.id)) + 1 : 1;
+        const nextId = rows.length ? Math.max(...rows.map((row) => row.id)) + 1 : 1;
         setRows((prev) => [
             ...prev,
             {
@@ -86,18 +77,9 @@ export default function OnboardingPage() {
     };
 
     const handleRemoveRow = (id) => {
-        if (rows.length === 1) return; // 至少保留一行
-        setRows((prev) => prev.filter((r) => r.id !== id));
+        if (rows.length === 1) return;
+        setRows((prev) => prev.filter((row) => row.id !== id));
     };
-
-    const totalInitial = useMemo(
-        () =>
-            rows.reduce((sum, r) => {
-                const v = parseFloat(r.initialBalance || "0");
-                return sum + (isNaN(v) ? 0 : v);
-            }, 0),
-        [rows]
-    );
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -106,13 +88,13 @@ export default function OnboardingPage() {
 
         try {
             const cleanedAccounts = rows
-                .map((r) => ({
-                    name: (r.name || "").trim(),
-                    type: r.type || "cash",
-                    currency: r.currency || defaultCurrency,
-                    initialBalance: parseFloat(r.initialBalance || "0") || 0,
+                .map((row) => ({
+                    name: (row.name || "").trim(),
+                    type: row.type || "cash",
+                    currency: row.currency || defaultCurrency,
+                    initialBalance: parseFloat(row.initialBalance || "0") || 0,
                 }))
-                .filter((a) => a.name.length > 0);
+                .filter((account) => account.name.length > 0);
 
             if (!cleanedAccounts.length) {
                 setError("Please enter at least one account.");
@@ -120,13 +102,7 @@ export default function OnboardingPage() {
                 return;
             }
 
-            const payload = {
-                defaultCurrency,
-                accounts: cleanedAccounts,
-            };
-
-            await postOnboarding(payload);
-
+            await postOnboarding({ defaultCurrency, accounts: cleanedAccounts });
             navigate("/dashboard", { replace: true });
         } catch (e) {
             console.error(e);
@@ -138,167 +114,149 @@ export default function OnboardingPage() {
 
     if (loadingMe) {
         return (
-            <Box sx={{ mt: 8, display: "flex", justifyContent: "center" }}>
-                <CircularProgress />
-            </Box>
+            <div className="mt-12 flex justify-center">
+                <Spinner className="h-8 w-8" />
+            </div>
         );
     }
 
     return (
-        <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
-            <Paper sx={{ p: 4 }}>
-                <Typography variant="h5" fontWeight={600} gutterBottom>
+        <div className="mx-auto max-w-5xl py-6">
+            <Card>
+                <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                    Onboarding
+                </p>
+                <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--text-main)]">
                     Welcome to Bulldog Finance
-                </Typography>
-                <Typography variant="body1" color="text.secondary" gutterBottom>
-                    Before we start tracking your money, let’s set up your accounts and their current
-                    balances. You can always add or edit accounts later.
-                </Typography>
+                </h1>
+                <p className="mt-3 max-w-3xl text-sm text-[var(--text-muted)]">
+                    Before we start tracking your money, let’s set up your accounts and their current balances.
+                    You can always add or edit accounts later.
+                </p>
 
-                <Box sx={{ mt: 3, mb: 2 }}>
-                    <Typography variant="subtitle2" gutterBottom>
-                        Default currency
-                    </Typography>
-                    <Select
-                        size="small"
-                        value={defaultCurrency}
-                        onChange={(e) => {
-                            const value = e.target.value;
-                            setDefaultCurrency(value);
-                            setRows((prev) =>
-                                prev.map((r) => ({ ...r, currency: r.currency || value }))
-                            );
-                        }}
-                    >
-                        {CURRENCIES.map((c) => (
-                            <MenuItem key={c} value={c}>
-                                {c}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </Box>
+                <div className="mt-6 max-w-xs">
+                    <Field label="Default currency">
+                        <Select
+                            value={defaultCurrency}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                setDefaultCurrency(value);
+                                setRows((prev) =>
+                                    prev.map((row) => ({ ...row, currency: row.currency || value }))
+                                );
+                            }}
+                        >
+                            {CURRENCIES.map((currency) => (
+                                <option key={currency} value={currency}>
+                                    {currency}
+                                </option>
+                            ))}
+                        </Select>
+                    </Field>
+                </div>
 
-                <Divider sx={{ my: 2 }} />
+                <form onSubmit={handleSubmit} className="mt-8 border-t border-[var(--card-border)] pt-8">
+                    <div className="flex items-center justify-between gap-4">
+                        <div>
+                            <h2 className="text-xl font-semibold text-[var(--text-main)]">Your accounts</h2>
+                            <p className="mt-1 text-sm text-[var(--text-muted)]">
+                                Add the balances you want the dashboard to start from.
+                            </p>
+                        </div>
+                        <Button variant="secondary" onClick={handleAddRow}>
+                            Add another account
+                        </Button>
+                    </div>
 
-                <form onSubmit={handleSubmit}>
-                    <Typography variant="subtitle1" gutterBottom>
-                        Your accounts
-                    </Typography>
-
-                    <Grid container spacing={2} sx={{ mt: 1 }}>
+                    <div className="mt-6 space-y-4">
                         {rows.map((row) => (
-                            <React.Fragment key={row.id}>
-                                <Grid item xs={12} md={4}>
-                                    <TextField
-                                        label="Account name"
-                                        fullWidth
-                                        size="small"
+                            <div
+                                key={row.id}
+                                className="grid gap-4 rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] p-4 md:grid-cols-[minmax(0,2fr)_1.25fr_0.9fr_1fr_auto]"
+                            >
+                                <Field label="Account name">
+                                    <Input
                                         value={row.name}
-                                        onChange={(e) =>
-                                            handleRowChange(row.id, "name", e.target.value)
-                                        }
+                                        onChange={(e) => handleRowChange(row.id, "name", e.target.value)}
                                     />
-                                </Grid>
-                                <Grid item xs={12} md={3}>
+                                </Field>
+
+                                <Field label="Type">
                                     <Select
-                                        size="small"
-                                        fullWidth
                                         value={row.type}
-                                        onChange={(e) =>
-                                            handleRowChange(row.id, "type", e.target.value)
-                                        }
+                                        onChange={(e) => handleRowChange(row.id, "type", e.target.value)}
                                     >
-                                        {ACCOUNT_TYPES.map((t) => (
-                                            <MenuItem key={t.value} value={t.value}>
-                                                {t.label}
-                                            </MenuItem>
+                                        {ACCOUNT_TYPES.map((type) => (
+                                            <option key={type.value} value={type.value}>
+                                                {type.label}
+                                            </option>
                                         ))}
                                     </Select>
-                                </Grid>
-                                <Grid item xs={6} md={2}>
+                                </Field>
+
+                                <Field label="Currency">
                                     <Select
-                                        size="small"
-                                        fullWidth
                                         value={row.currency || defaultCurrency}
-                                        onChange={(e) =>
-                                            handleRowChange(row.id, "currency", e.target.value)
-                                        }
+                                        onChange={(e) => handleRowChange(row.id, "currency", e.target.value)}
                                     >
-                                        {CURRENCIES.map((c) => (
-                                            <MenuItem key={c} value={c}>
-                                                {c}
-                                            </MenuItem>
+                                        {CURRENCIES.map((currency) => (
+                                            <option key={currency} value={currency}>
+                                                {currency}
+                                            </option>
                                         ))}
                                     </Select>
-                                </Grid>
-                                <Grid item xs={6} md={2}>
-                                    <TextField
-                                        label="Initial balance"
-                                        type="number"
-                                        fullWidth
-                                        size="small"
-                                        value={row.initialBalance}
-                                        onChange={(e) =>
-                                            handleRowChange(row.id, "initialBalance", e.target.value)
-                                        }
-                                        InputProps={{
-                                            startAdornment: (
-                                                <InputAdornment position="start">
-                                                    {row.currency || defaultCurrency}
-                                                </InputAdornment>
-                                            ),
-                                        }}
-                                    />
-                                </Grid>
-                                <Grid item xs={12} md={1} sx={{ display: "flex", alignItems: "center" }}>
-                                    <IconButton
-                                        aria-label="Remove account"
+                                </Field>
+
+                                <Field label="Initial balance">
+                                    <div className="flex overflow-hidden rounded-xl border border-[var(--card-border)] bg-white shadow-xs">
+                                        <span className="flex items-center border-r border-[var(--card-border)] px-3 text-sm text-[var(--text-soft)]">
+                                            {row.currency || defaultCurrency}
+                                        </span>
+                                        <input
+                                            className="w-full px-3.5 py-2.5 text-sm outline-none"
+                                            type="number"
+                                            value={row.initialBalance}
+                                            onChange={(e) =>
+                                                handleRowChange(row.id, "initialBalance", e.target.value)
+                                            }
+                                        />
+                                    </div>
+                                </Field>
+
+                                <div className="flex items-end">
+                                    <Button
+                                        variant="ghost"
+                                        className="w-full md:w-auto"
                                         onClick={() => handleRemoveRow(row.id)}
                                         disabled={rows.length === 1}
                                     >
-                                        <DeleteIcon fontSize="small" />
-                                    </IconButton>
-                                </Grid>
-                            </React.Fragment>
+                                        Remove
+                                    </Button>
+                                </div>
+                            </div>
                         ))}
-                    </Grid>
+                    </div>
 
-                    <Box sx={{ mt: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <Button
-                            type="button"
-                            variant="text"
-                            startIcon={<AddIcon />}
-                            onClick={handleAddRow}
-                        >
-                            Add another account
-                        </Button>
-                        <Typography variant="body2" color="text.secondary">
+                    <div className="mt-6 flex flex-col gap-4 border-t border-[var(--card-border)] pt-6 md:flex-row md:items-center md:justify-between">
+                        <p className="text-sm text-[var(--text-muted)]">
                             Total initial balance: {defaultCurrency}{" "}
                             {totalInitial.toLocaleString(undefined, {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2,
                             })}
-                        </Typography>
-                    </Box>
+                        </p>
 
-                    {error && (
-                        <Typography sx={{ mt: 2 }} color="error">
-                            {error}
-                        </Typography>
-                    )}
-
-                    <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
-                        <Button
-                            type="submit"
-                            variant="contained"
-                            disabled={saving}
-                        >
-                            {saving ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
-                            Save and continue
-                        </Button>
-                    </Box>
+                        <div className="flex items-center gap-3">
+                            {error ? (
+                                <p className="text-sm font-medium text-[var(--color-error-500)]">{error}</p>
+                            ) : null}
+                            <Button type="submit" disabled={saving}>
+                                {saving ? "Saving..." : "Save and continue"}
+                            </Button>
+                        </div>
+                    </div>
                 </form>
-            </Paper>
-        </Container>
+            </Card>
+        </div>
     );
 }

@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
-import { Box, CircularProgress } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import { useApiClient } from "../services/apiClient";
+import Spinner from "@/components/ui/Spinner.jsx";
+import { useApiClient } from "@/services/apiClient";
 
 export default function OnboardingGate() {
     const { getMe } = useApiClient();
@@ -11,11 +11,8 @@ export default function OnboardingGate() {
         (async () => {
             try {
                 const me = await getMe();
-                if (me?.onboardingDone) {
-                    navigate("/dashboard", { replace: true });
-                } else {
-                    navigate("/onboarding", { replace: true });
-                }
+                if (me?.onboardingDone) navigate("/dashboard", { replace: true });
+                else navigate("/onboarding", { replace: true });
             } catch (e) {
                 console.error("Failed to load /me", e);
                 navigate("/onboarding", { replace: true });
@@ -24,8 +21,8 @@ export default function OnboardingGate() {
     }, [getMe, navigate]);
 
     return (
-        <Box sx={{ mt: 8, display: "flex", justifyContent: "center" }}>
-            <CircularProgress />
-        </Box>
+        <div className="mt-12 flex justify-center">
+            <Spinner className="h-8 w-8" />
+        </div>
     );
 }
