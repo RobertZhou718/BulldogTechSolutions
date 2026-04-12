@@ -1,11 +1,14 @@
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+using Azure;
 using BulldogFinance.Functions.Helper;
+using BulldogFinance.Functions.Models.Reports;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Net;
+using System.Text.Json;
 
 namespace BulldogFinance.Functions.Functions;
 
@@ -29,7 +32,8 @@ public class GetReportLatestFunction
     public async Task<HttpResponseData> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "reports/{period}/latest")]
         HttpRequestData req,
-        string period)
+        string period,
+        CancellationToken cancellationToken)
     {
         var userId = AuthHelper.GetUserId(req);
         if (string.IsNullOrWhiteSpace(userId))
@@ -50,20 +54,59 @@ public class GetReportLatestFunction
         var blobName = $"{period}/{userId}/latest.json";
         _logger.LogInformation("GetReportLatest userId={UserId}, period={Period}, blob={BlobName}", userId, period, blobName);
 
-        var blob = _container.GetBlobClient(blobName);
-
-        if (!await blob.ExistsAsync())
+        try
         {
-            var notFound = req.CreateResponse(HttpStatusCode.NotFound);
-            await notFound.WriteStringAsync($"{period} report not found.");
-            return notFound;
+            var blob = _container.GetBlobClient(blobName);
+            BlobDownloadResult download = await blob.DownloadContentAsync(cancellationToken: cancellationToken);
+            var content = download.Content.ToString();
+            var report = JsonSerializer.Deserialize<GeneratedReport>(content, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (report is null)
+            {
+                throw new JsonException("Report blob content was empty or invalid.");
+            }
+
+            var resp = req.CreateResponse(HttpStatusCode.OK);
+            await resp.WriteAsJsonAsync(new
+            {
+                hasReport = true,
+                report,
+                message = string.Empty
+            }, cancellationToken);
+            return resp;
         }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            _logger.LogInformation(
+                "No latest {Period} report found for user {UserId}. Blob={BlobName}",
+                period,
+                userId,
+                blobName);
 
-        BlobDownloadResult download = await blob.DownloadContentAsync();
+            var ok = req.CreateResponse(HttpStatusCode.OK);
+            await ok.WriteAsJsonAsync(new
+            {
+                hasReport = false,
+                report = (GeneratedReport?)null,
+                message = $"No {period} report is available yet. Add more transaction data and try again later."
+            }, cancellationToken);
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load latest {Period} report for user {UserId}.", period, userId);
 
-        var resp = req.CreateResponse(HttpStatusCode.OK);
-        resp.Headers.Add("Content-Type", "application/json; charset=utf-8");
-        await resp.WriteStringAsync(download.Content.ToString());
-        return resp;
+            var error = req.CreateResponse(HttpStatusCode.InternalServerError);
+            await error.WriteAsJsonAsync(new
+            {
+                hasReport = false,
+                report = (GeneratedReport?)null,
+                message = $"We couldn't load your latest {period} report right now. Please try again later."
+            }, cancellationToken);
+            return error;
+        }
     }
 }

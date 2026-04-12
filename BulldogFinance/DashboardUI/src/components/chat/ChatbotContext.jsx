@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useApiClient } from "@/services/apiClient";
 
 const ChatbotContext = createContext(null);
@@ -12,13 +12,92 @@ const starterMessages = [
 ];
 
 export function ChatbotProvider({ children }) {
-    const { sendChatMessage } = useApiClient();
+    const { sendChatMessage, getChatConversations, getChatConversation } = useApiClient();
     const [messages, setMessages] = useState(starterMessages);
     const [conversationId, setConversationId] = useState("");
+    const [conversations, setConversations] = useState([]);
+    const [activeConversationTitle, setActiveConversationTitle] = useState("");
     const [draft, setDraft] = useState("");
     const [isOpen, setIsOpen] = useState(false);
     const [isSending, setIsSending] = useState(false);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [error, setError] = useState("");
+
+    useEffect(() => {
+        let cancelled = false;
+
+        (async () => {
+            try {
+                const items = await getChatConversations();
+                if (!cancelled) {
+                    setConversations(Array.isArray(items) ? items : []);
+                }
+            } catch (err) {
+                console.error("Failed to load chat conversations", err);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [getChatConversations]);
+
+    const refreshConversations = async (preferredConversationId = "") => {
+        const items = await getChatConversations();
+        const nextItems = Array.isArray(items) ? items : [];
+        setConversations(nextItems);
+
+        if (preferredConversationId) {
+            const active = nextItems.find((item) =>
+                (item?.conversationId ?? item?.ConversationId) === preferredConversationId
+            );
+            setActiveConversationTitle(active?.title ?? active?.Title ?? "");
+        }
+    };
+
+    const startNewConversation = () => {
+        setConversationId("");
+        setActiveConversationTitle("");
+        setMessages(starterMessages);
+        setDraft("");
+        setError("");
+        setIsOpen(true);
+    };
+
+    const openConversation = async (nextConversationId) => {
+        if (!nextConversationId) {
+            startNewConversation();
+            return;
+        }
+
+        setIsLoadingHistory(true);
+        setError("");
+        setIsOpen(true);
+
+        try {
+            const response = await getChatConversation(nextConversationId);
+            const responseConversationId = response?.conversationId ?? response?.ConversationId ?? nextConversationId;
+            const responseTitle = response?.title ?? response?.Title ?? "";
+            const responseMessages = Array.isArray(response?.messages ?? response?.Messages)
+                ? (response?.messages ?? response?.Messages)
+                : [];
+
+            setConversationId(responseConversationId);
+            setActiveConversationTitle(responseTitle);
+            setMessages(responseMessages.length > 0
+                ? responseMessages.map((message, index) => ({
+                    id: `${responseConversationId}-${index}`,
+                    role: message?.role ?? message?.Role ?? "assistant",
+                    text: message?.content ?? message?.Content ?? "",
+                }))
+                : starterMessages);
+        } catch (err) {
+            console.error("Failed to load conversation", err);
+            setError(err.message || "Failed to load chat history.");
+        } finally {
+            setIsLoadingHistory(false);
+        }
+    };
 
     const submitMessage = async (customMessage) => {
         const message = String(customMessage ?? draft).trim();
@@ -56,6 +135,7 @@ export function ChatbotProvider({ children }) {
                     text: reply || "No reply received.",
                 },
             ]);
+            await refreshConversations(nextConversationId);
         } catch (err) {
             console.error("Failed to send chat message", err);
             setError(err.message || "Failed to contact the finance assistant.");
@@ -66,17 +146,34 @@ export function ChatbotProvider({ children }) {
     };
 
     const value = useMemo(() => ({
+        conversations,
+        conversationId,
+        activeConversationTitle,
         messages,
         draft,
         error,
         isOpen,
         isSending,
+        isLoadingHistory,
         setDraft,
         setIsOpen,
         openChat: () => setIsOpen(true),
         closeChat: () => setIsOpen(false),
+        openConversation,
+        startNewConversation,
+        refreshConversations,
         submitMessage,
-    }), [draft, error, isOpen, isSending, messages]);
+    }), [
+        activeConversationTitle,
+        conversationId,
+        conversations,
+        draft,
+        error,
+        isLoadingHistory,
+        isOpen,
+        isSending,
+        messages,
+    ]);
 
     return <ChatbotContext.Provider value={value}>{children}</ChatbotContext.Provider>;
 }

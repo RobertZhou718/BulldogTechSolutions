@@ -41,10 +41,21 @@ export function useApiClient() {
         }
 
         if (!response.ok) {
-            const text = await response.text().catch(() => "");
-            console.error("API error", response.status, text);
+            let errorMessage = "";
+            const rawText = await response.text().catch(() => "");
+
+            if (rawText) {
+                try {
+                    const payload = JSON.parse(rawText);
+                    errorMessage = payload?.message || payload?.error || rawText;
+                } catch {
+                    errorMessage = rawText;
+                }
+            }
+
+            console.error("API error", response.status, errorMessage);
             throw new Error(
-                `API ${response.status} ${response.statusText} - ${text}`
+                errorMessage || `API ${response.status} ${response.statusText}`
             );
         }
 
@@ -161,10 +172,19 @@ export function useApiClient() {
         });
     }, [request]);
 
+    const getChatConversations = useCallback(() => {
+        return request("/chat/conversations", { method: "GET" });
+    }, [request]);
+
+    const getChatConversation = useCallback((conversationId) => {
+        return request(`/chat/conversations/${encodeURIComponent(conversationId)}`, {
+            method: "GET",
+        });
+    }, [request]);
+
     const getLatestReport = useCallback((period) => {
         return request(`/reports/${encodeURIComponent(period)}/latest`, {
             method: "GET",
-            allowNotFound: true,
         });
     }, [request]);
 
@@ -182,12 +202,16 @@ export function useApiClient() {
         removeFromWatchlist,
         getInvestmentOverview,
         sendChatMessage,
+        getChatConversations,
+        getChatConversation,
         getLatestReport,
     }), [
         addToWatchlist,
         createTransaction,
         deleteInvestment,
         getAccounts,
+        getChatConversation,
+        getChatConversations,
         getInvestmentOverview,
         getInvestments,
         getLatestReport,

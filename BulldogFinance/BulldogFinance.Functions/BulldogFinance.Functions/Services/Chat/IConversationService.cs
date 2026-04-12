@@ -14,6 +14,15 @@ namespace BulldogFinance.Functions.Services.Chat
             ChatRequest request,
             CancellationToken ct = default);
 
+        Task<IReadOnlyList<ChatConversationSummaryDto>> ListConversationsAsync(
+            string userId,
+            CancellationToken ct = default);
+
+        Task<ChatConversationDetailDto?> GetConversationAsync(
+            string userId,
+            string conversationId,
+            CancellationToken ct = default);
+
         Task AppendUserMessageAsync(
             ChatContextDto context,
             string message,
