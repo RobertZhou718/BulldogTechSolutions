@@ -125,6 +125,12 @@ var host = new HostBuilder()
 
         services.AddSingleton<IAgentTool, GetUserProfileTool>();
         services.AddSingleton<IAgentTool, GetAccountsTool>();
+        services.AddSingleton<IAgentTool, GetTransactionsTool>();
+        services.AddSingleton<IAgentTool, GetInvestmentsTool>();
+        services.AddSingleton<IAgentTool, GetInvestmentOverviewTool>();
+        services.AddSingleton<IAgentTool, GetWatchlistTool>();
+        services.AddSingleton<IAgentTool, SearchFinanceNewsTool>();
+        services.AddSingleton<IAgentTool, GeneratePortfolioReportTool>();
 
         services.AddSingleton<IReportStorage, BlobReportStorage>();
         services.AddSingleton<IReportService, ReportService>();

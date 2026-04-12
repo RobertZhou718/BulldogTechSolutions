@@ -1,22 +1,35 @@
-﻿using BulldogFinance.Functions.Models.Chat;
+using BulldogFinance.Functions.Models.Chat;
+using System.Collections.Concurrent;
 
 namespace BulldogFinance.Functions.Services.Chat
 {
     public sealed class ConversationService : IConversationService
     {
+        private readonly ConcurrentDictionary<string, ChatContextDto> _conversations = new(StringComparer.OrdinalIgnoreCase);
+
         public Task<ChatContextDto> CreateOrLoadContextAsync(
             string userId,
             ChatRequest request,
             CancellationToken ct = default)
         {
-            var context = new ChatContextDto
-            {
-                UserId = userId,
-                ConversationId = string.IsNullOrWhiteSpace(request.ConversationId)
-                    ? Guid.NewGuid().ToString("N")
-                    : request.ConversationId!,
-                LatestUserMessage = request.Message
-            };
+            ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+            ArgumentNullException.ThrowIfNull(request);
+
+            var conversationId = string.IsNullOrWhiteSpace(request.ConversationId)
+                ? Guid.NewGuid().ToString("N")
+                : request.ConversationId!;
+
+            var context = _conversations.GetOrAdd(
+                BuildConversationKey(userId, conversationId),
+                _ => new ChatContextDto
+                {
+                    UserId = userId,
+                    ConversationId = conversationId
+                });
+
+            context.UserId = userId;
+            context.ConversationId = conversationId;
+            context.LatestUserMessage = request.Message;
 
             return Task.FromResult(context);
         }
@@ -57,6 +70,11 @@ namespace BulldogFinance.Functions.Services.Chat
         {
             context.Steps.Add(step);
             return Task.CompletedTask;
+        }
+
+        private static string BuildConversationKey(string userId, string conversationId)
+        {
+            return $"{userId}:{conversationId}";
         }
     }
 }

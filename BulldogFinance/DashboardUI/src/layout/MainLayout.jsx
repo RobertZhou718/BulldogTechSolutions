@@ -9,9 +9,11 @@ export default function MainLayout({ children }) {
         <ChatbotProvider>
             <div className="min-h-screen bg-transparent text-[var(--text-main)]">
                 <TopBar />
-                <div className="mx-auto flex max-w-[1600px] gap-6 px-4 pb-24 pt-6 lg:px-6">
+                <div className="mx-auto flex max-w-[1440px] gap-8 px-4 pb-24 pt-8 lg:px-6">
                     <SideNav />
-                    <main className="min-w-0 flex-1">{children}</main>
+                    <main className="min-w-0 flex-1">
+                        <div className="space-y-8">{children}</div>
+                    </main>
                 </div>
                 <FloatingChatbot />
             </div>

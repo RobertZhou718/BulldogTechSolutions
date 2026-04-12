@@ -4,7 +4,6 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using BulldogFinance.Functions.Models;
 using BulldogFinance.Functions.Models.Investments;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -249,7 +248,9 @@ namespace BulldogFinance.Functions.Services.Investments
 
                     result.Add(new InvestmentNewsItemDto
                     {
-                        Id = item.id != 0 ? item.id.ToString() : $"{symbol}-{item.datetime}",
+                        Id = item.id.HasValue && item.id.Value != 0
+                            ? item.id.Value.ToString()
+                            : $"{symbol}-{item.datetime}",
                         Headline = item.headline ?? "",
                         Source = item.source ?? "",
                         Datetime = dt,

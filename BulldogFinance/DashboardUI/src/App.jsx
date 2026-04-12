@@ -4,7 +4,6 @@ import {
     AuthenticatedTemplate,
     UnauthenticatedTemplate,
 } from "@azure/msal-react";
-import "./App.css";
 import MainLayout from "@/layout/MainLayout.jsx";
 import AssistantPage from "@/pages/Assistant.jsx";
 import DashboardPage from "@/pages/Dashboard.jsx";
