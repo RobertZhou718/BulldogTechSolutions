@@ -4,6 +4,7 @@ using Azure.Storage.Blobs;
 using BulldogFinance.Functions.Services.Accounts;
 using BulldogFinance.Functions.Services.Chat;
 using BulldogFinance.Functions.Services.Investments;
+using BulldogFinance.Functions.Services.Plaid;
 using BulldogFinance.Functions.Services.Reports;
 using BulldogFinance.Functions.Services.Tools;
 using BulldogFinance.Functions.Services.Transactions;
@@ -108,12 +109,25 @@ var host = new HostBuilder()
             client.BaseAddress = new Uri(baseUrl);
         });
 
+        services.AddHttpClient("Plaid", (sp, client) =>
+        {
+            var config = sp.GetRequiredService<IConfiguration>();
+            var baseUrl = config["Plaid:BaseUrl"] ?? "https://production.plaid.com";
+            client.BaseAddress = new Uri(baseUrl);
+        });
+
+        services.AddDataProtection();
+
         services.AddSingleton<IUserRepository, UserRepository>();
         services.AddSingleton<IAccountRepository, AccountRepository>();
         services.AddSingleton<ITransactionRepository, TransactionRepository>();
+        services.AddSingleton<IPlaidRepository, PlaidRepository>();
 
         services.AddSingleton<IInvestmentService, InvestmentService>();
         services.AddSingleton<IInvestmentOverviewService, InvestmentOverviewService>();
+        services.AddSingleton<IPlaidTokenProtector, PlaidTokenProtector>();
+        services.AddSingleton<IPlaidClient, PlaidClient>();
+        services.AddSingleton<IPlaidSyncService, PlaidSyncService>();
 
         services.AddSingleton<IAiClient, AzureOpenAiClient>();
         services.AddSingleton(sp => (AzureOpenAiClient)sp.GetRequiredService<IAiClient>());

@@ -42,6 +42,11 @@ namespace BulldogFinance.Functions.Services.Transactions
 
             await foreach (var item in query)
             {
+                if (item.IsDeleted)
+                {
+                    continue;
+                }
+
                 if (!string.IsNullOrWhiteSpace(accountId) &&
                     !string.Equals(item.AccountId, accountId, StringComparison.OrdinalIgnoreCase))
                 {
@@ -71,6 +76,39 @@ namespace BulldogFinance.Functions.Services.Transactions
             });
 
             return result;
+        }
+
+        public async Task<TransactionEntity?> GetByExternalTransactionIdAsync(
+            string userId,
+            string externalTransactionId,
+            CancellationToken cancellationToken = default)
+        {
+            var query = _transactionsTable.QueryAsync<TransactionEntity>(
+                ent => ent.PartitionKey == userId,
+                cancellationToken: cancellationToken);
+
+            await foreach (var item in query)
+            {
+                if (string.Equals(item.ExternalTransactionId, externalTransactionId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return item;
+                }
+            }
+
+            return null;
+        }
+
+        public async Task<TransactionEntity> UpdateTransactionAsync(
+            TransactionEntity transaction,
+            CancellationToken cancellationToken = default)
+        {
+            await _transactionsTable.UpdateEntityAsync(
+                transaction,
+                transaction.ETag,
+                TableUpdateMode.Replace,
+                cancellationToken);
+
+            return transaction;
         }
     }
 }

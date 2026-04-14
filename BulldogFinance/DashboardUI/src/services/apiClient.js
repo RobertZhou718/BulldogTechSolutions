@@ -91,6 +91,13 @@ export function useApiClient() {
         return request("/accounts", { method: "GET" });
     }, [request]);
 
+    const createAccount = useCallback((payload) => {
+        return request("/accounts", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    }, [request]);
+
     // GET /api/transactions?accountId=...&from=...&to=...
     const getTransactions = useCallback((params = {}) => {
         const search = new URLSearchParams();
@@ -110,6 +117,34 @@ export function useApiClient() {
         return request("/transactions", {
             method: "POST",
             body: JSON.stringify(tx),
+        });
+    }, [request]);
+
+    const createPlaidLinkToken = useCallback((payload = {}) => {
+        return request("/plaid/link-token", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    }, [request]);
+
+    const exchangePlaidPublicToken = useCallback((payload) => {
+        return request("/plaid/exchange-public-token", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    }, [request]);
+
+    const syncPlaidTransactions = useCallback((payload = {}) => {
+        return request("/plaid/sync-transactions", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    }, [request]);
+
+    const refreshPlaidBalances = useCallback((payload = {}) => {
+        return request("/plaid/refresh-balances", {
+            method: "POST",
+            body: JSON.stringify(payload),
         });
     }, [request]);
 
@@ -192,8 +227,13 @@ export function useApiClient() {
         getMe,
         postOnboarding,
         getAccounts,
+        createAccount,
         getTransactions,
         createTransaction,
+        createPlaidLinkToken,
+        exchangePlaidPublicToken,
+        syncPlaidTransactions,
+        refreshPlaidBalances,
         getInvestments,
         upsertInvestment,
         deleteInvestment,
@@ -207,8 +247,11 @@ export function useApiClient() {
         getLatestReport,
     }), [
         addToWatchlist,
+        createPlaidLinkToken,
+        createAccount,
         createTransaction,
         deleteInvestment,
+        exchangePlaidPublicToken,
         getAccounts,
         getChatConversation,
         getChatConversations,
@@ -219,8 +262,10 @@ export function useApiClient() {
         getTransactions,
         getWatchlist,
         postOnboarding,
+        refreshPlaidBalances,
         removeFromWatchlist,
         sendChatMessage,
+        syncPlaidTransactions,
         upsertInvestment,
     ]);
 }

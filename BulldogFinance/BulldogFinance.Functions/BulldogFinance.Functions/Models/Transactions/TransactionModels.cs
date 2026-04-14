@@ -22,7 +22,12 @@ namespace BulldogFinance.Functions.Models.Transactions
         public string Currency { get; set; } = default!;
         public string? Category { get; set; }
         public string? Note { get; set; }
+        public string? MerchantName { get; set; }
+        public string? Source { get; set; }
+        public bool Pending { get; set; }
         public DateTime? OccurredAtUtc { get; set; }
+        public DateTime? AuthorizedAtUtc { get; set; }
+        public DateTime? PostedAtUtc { get; set; }
         public DateTime? CreatedAtUtc { get; set; }
     }
 

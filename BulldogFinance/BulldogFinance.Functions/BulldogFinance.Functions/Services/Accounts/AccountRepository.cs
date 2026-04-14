@@ -69,6 +69,28 @@ namespace BulldogFinance.Functions.Services.Accounts
             }
         }
 
+        public async Task<AccountEntity?> GetAccountByExternalReferenceAsync(
+            string userId,
+            string externalSource,
+            string externalAccountId,
+            CancellationToken cancellationToken = default)
+        {
+            var query = _accountsTable.QueryAsync<AccountEntity>(
+                ent => ent.PartitionKey == userId,
+                cancellationToken: cancellationToken);
+
+            await foreach (var item in query)
+            {
+                if (string.Equals(item.ExternalSource, externalSource, System.StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(item.ExternalAccountId, externalAccountId, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return item;
+                }
+            }
+
+            return null;
+        }
+
         public async Task<AccountEntity> UpdateAccountAsync(
             AccountEntity account,
             CancellationToken cancellationToken = default)

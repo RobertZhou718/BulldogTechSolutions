@@ -16,9 +16,17 @@ namespace BulldogFinance.Functions.Models.Accounts
         public string Currency { get; set; } = "CAD";
 
         public long CurrentBalanceCents { get; set; }
+        public long? AvailableBalanceCents { get; set; }
 
         public bool IsArchived { get; set; }
         public int SortOrder { get; set; }
+
+        public string? ExternalSource { get; set; }
+        public string? ExternalAccountId { get; set; }
+        public string? InstitutionName { get; set; }
+        public string? OfficialName { get; set; }
+        public string? Mask { get; set; }
+        public DateTime? LastBalanceRefreshUtc { get; set; }
 
         public DateTime? CreatedAtUtc { get; set; }
         public DateTime? UpdatedAtUtc { get; set; }
