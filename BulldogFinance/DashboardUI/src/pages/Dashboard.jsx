@@ -13,7 +13,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useApiClient } from "@/services/apiClient.js";
 
 export default function DashboardPage() {
-    const { getAccounts, getTransactions, getInvestmentOverview, createAccount } = useApiClient();
+    const { getAccounts, getTransactions, getInvestmentOverview, createAccount, deleteAccount } = useApiClient();
     const { accounts: msalAccounts } = useMsal();
 
     const displayName = msalAccounts[0]?.name || msalAccounts[0]?.username || "Friend";
@@ -69,6 +69,11 @@ export default function DashboardPage() {
     };
 
     const handlePlaidConnected = async () => {
+        await refreshDashboard();
+    };
+
+    const handleDeleteAccount = async (accountId) => {
+        await deleteAccount(accountId);
         await refreshDashboard();
     };
 
@@ -195,7 +200,7 @@ export default function DashboardPage() {
                     onCreateManualAccount={handleCreateManualAccount}
                     onPlaidConnected={handlePlaidConnected}
                 />
-                <ConnectedAccountsCard accounts={accounts} />
+                <ConnectedAccountsCard accounts={accounts} onDeleteAccount={handleDeleteAccount} />
                 <div className="xl:col-span-4">
                     <GreetingCard name={displayName} total={totalNetWorth} />
                 </div>

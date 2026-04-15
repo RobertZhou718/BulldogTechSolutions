@@ -98,6 +98,12 @@ export function useApiClient() {
         });
     }, [request]);
 
+    const deleteAccount = useCallback((accountId) => {
+        return request(`/accounts/${encodeURIComponent(accountId)}`, {
+            method: "DELETE",
+        });
+    }, [request]);
+
     // GET /api/transactions?accountId=...&from=...&to=...
     const getTransactions = useCallback((params = {}) => {
         const search = new URLSearchParams();
@@ -228,6 +234,7 @@ export function useApiClient() {
         postOnboarding,
         getAccounts,
         createAccount,
+        deleteAccount,
         getTransactions,
         createTransaction,
         createPlaidLinkToken,
@@ -250,6 +257,7 @@ export function useApiClient() {
         createPlaidLinkToken,
         createAccount,
         createTransaction,
+        deleteAccount,
         deleteInvestment,
         exchangePlaidPublicToken,
         getAccounts,

@@ -110,5 +110,32 @@ namespace BulldogFinance.Functions.Services.Transactions
 
             return transaction;
         }
+
+        public async Task MarkTransactionsDeletedByAccountIdAsync(
+            string userId,
+            string accountId,
+            CancellationToken cancellationToken = default)
+        {
+            var query = _transactionsTable.QueryAsync<TransactionEntity>(
+                ent => ent.PartitionKey == userId,
+                cancellationToken: cancellationToken);
+
+            await foreach (var item in query)
+            {
+                if (!string.Equals(item.AccountId, accountId, StringComparison.OrdinalIgnoreCase) || item.IsDeleted)
+                {
+                    continue;
+                }
+
+                item.IsDeleted = true;
+                item.UpdatedAtUtc = DateTime.UtcNow;
+
+                await _transactionsTable.UpdateEntityAsync(
+                    item,
+                    item.ETag,
+                    TableUpdateMode.Replace,
+                    cancellationToken);
+            }
+        }
     }
 }

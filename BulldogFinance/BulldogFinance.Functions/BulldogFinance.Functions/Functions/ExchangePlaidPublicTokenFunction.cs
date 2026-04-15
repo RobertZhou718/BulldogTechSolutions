@@ -94,13 +94,19 @@ namespace BulldogFinance.Functions.Functions
                 PartitionKey = userId,
                 RowKey = exchange.ItemId,
                 AccessTokenEncrypted = _tokenProtector.Protect(exchange.AccessToken),
+                InstitutionId = requestModel.InstitutionId,
+                InstitutionName = requestModel.InstitutionName,
                 Status = "ACTIVE",
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now
             };
 
             await _plaidRepository.UpsertItemAsync(itemEntity);
-            var importedAccounts = await _plaidSyncService.ImportAccountsAsync(userId, exchange.ItemId, exchange.AccessToken, null);
+            var importedAccounts = await _plaidSyncService.ImportAccountsAsync(
+                userId,
+                exchange.ItemId,
+                exchange.AccessToken,
+                requestModel.InstitutionName);
             await _plaidSyncService.RefreshBalancesAsync(userId, exchange.ItemId);
             var syncSummary = await _plaidSyncService.SyncTransactionsAsync(userId, exchange.ItemId);
 

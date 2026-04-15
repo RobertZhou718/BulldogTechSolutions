@@ -28,5 +28,15 @@ namespace BulldogFinance.Functions.Services.Plaid
         Task<PlaidAccountLinkEntity> UpsertAccountLinkAsync(
             PlaidAccountLinkEntity accountLink,
             CancellationToken cancellationToken = default);
+
+        Task DeleteItemAsync(
+            string userId,
+            string itemId,
+            CancellationToken cancellationToken = default);
+
+        Task DeleteAccountLinkAsync(
+            string userId,
+            string plaidAccountId,
+            CancellationToken cancellationToken = default);
     }
 }

@@ -124,5 +124,27 @@ namespace BulldogFinance.Functions.Services.Plaid
             await _accountLinksTable.UpsertEntityAsync(accountLink, TableUpdateMode.Replace, cancellationToken);
             return accountLink;
         }
+
+        public async Task DeleteItemAsync(
+            string userId,
+            string itemId,
+            CancellationToken cancellationToken = default)
+        {
+            await _itemsTable.DeleteEntityAsync(
+                userId,
+                itemId,
+                cancellationToken: cancellationToken);
+        }
+
+        public async Task DeleteAccountLinkAsync(
+            string userId,
+            string plaidAccountId,
+            CancellationToken cancellationToken = default)
+        {
+            await _accountLinksTable.DeleteEntityAsync(
+                userId,
+                plaidAccountId,
+                cancellationToken: cancellationToken);
+        }
     }
 }

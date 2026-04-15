@@ -142,6 +142,11 @@ namespace BulldogFinance.Functions.Services.Plaid
                     continue;
                 }
 
+                if (localAccount.IsArchived)
+                {
+                    continue;
+                }
+
                 localAccount.CurrentBalanceCents = DecimalToCents(plaidAccount.Balances.Current);
                 localAccount.AvailableBalanceCents = DecimalToCents(plaidAccount.Balances.Available);
                 localAccount.Currency = ResolveCurrency(plaidAccount.Balances);
@@ -233,10 +238,6 @@ namespace BulldogFinance.Functions.Services.Plaid
             var accessToken = _tokenProtector.Unprotect(item.AccessTokenEncrypted);
             await _plaidClient.RemoveItemAsync(accessToken, cancellationToken);
 
-            item.Status = "REMOVED";
-            item.UpdatedAtUtc = DateTime.UtcNow;
-            await _plaidRepository.UpsertItemAsync(item, cancellationToken);
-
             var links = await _plaidRepository.GetAccountLinksByItemAsync(userId, itemId, cancellationToken);
             foreach (var link in links)
             {
@@ -249,7 +250,15 @@ namespace BulldogFinance.Functions.Services.Plaid
                 account.IsArchived = true;
                 account.UpdatedAtUtc = DateTime.UtcNow;
                 await _accountRepository.UpdateAccountAsync(account, cancellationToken);
+                await _transactionRepository.MarkTransactionsDeletedByAccountIdAsync(
+                    userId,
+                    account.RowKey,
+                    cancellationToken);
+                await _accountRepository.DeleteAccountAsync(userId, account.RowKey, cancellationToken);
+                await _plaidRepository.DeleteAccountLinkAsync(userId, link.RowKey, cancellationToken);
             }
+
+            await _plaidRepository.DeleteItemAsync(userId, itemId, cancellationToken);
         }
 
         private async Task<PlaidItemEntity> GetActiveItemAsync(string userId, string itemId, CancellationToken cancellationToken)
@@ -281,6 +290,11 @@ namespace BulldogFinance.Functions.Services.Plaid
                 cancellationToken);
 
             if (localAccount == null)
+            {
+                return false;
+            }
+
+            if (localAccount.IsArchived)
             {
                 return false;
             }

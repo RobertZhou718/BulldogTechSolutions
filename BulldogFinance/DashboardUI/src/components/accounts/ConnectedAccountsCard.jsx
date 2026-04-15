@@ -1,6 +1,10 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
+import { Trash01 } from "@untitledui/icons";
+import Button from "@/components/ui/Button.jsx";
 import Card from "@/components/ui/Card.jsx";
 import { formatCurrency } from "@/lib/utils";
+
+const DEFAULT_VISIBLE_COUNT = 3;
 
 function getSourceLabel(account) {
     return account.externalSource === "Plaid" ? "Plaid" : "Manual";
@@ -19,7 +23,14 @@ function getTypeLabel(account) {
         .join(" / ");
 }
 
-export default function ConnectedAccountsCard({ accounts }) {
+export default function ConnectedAccountsCard({ accounts, onDeleteAccount }) {
+    const [expanded, setExpanded] = useState(false);
+    const hiddenCount = Math.max(accounts.length - DEFAULT_VISIBLE_COUNT, 0);
+    const visibleAccounts = useMemo(
+        () => (expanded ? accounts : accounts.slice(0, DEFAULT_VISIBLE_COUNT)),
+        [accounts, expanded]
+    );
+
     return (
         <Card className="xl:col-span-12">
             <div className="flex items-start justify-between gap-4">
@@ -37,19 +48,20 @@ export default function ConnectedAccountsCard({ accounts }) {
             </div>
 
             <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--card-border)]">
-                <div className="hidden grid-cols-[minmax(0,2.2fr)_1fr_1fr_1.2fr_1.1fr] gap-4 bg-[var(--bg-subtle)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-soft)] md:grid">
+                <div className="hidden grid-cols-[minmax(0,2.2fr)_1fr_1fr_1.2fr_1.1fr_auto] gap-4 bg-[var(--bg-subtle)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-soft)] md:grid">
                     <span>Account</span>
                     <span>Source</span>
                     <span>Institution</span>
                     <span>Available</span>
                     <span className="text-right">Current</span>
+                    <span className="text-right">Delete</span>
                 </div>
 
                 <div className="divide-y divide-[var(--card-border)]">
-                    {accounts.map((account) => (
+                    {visibleAccounts.map((account) => (
                         <div
                             key={account.accountId}
-                            className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,2.2fr)_1fr_1fr_1.2fr_1.1fr] md:items-center md:gap-4"
+                            className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,2.2fr)_1fr_1fr_1.2fr_1.1fr_auto] md:items-center md:gap-4"
                         >
                             <div>
                                 <p className="font-semibold text-[var(--text-main)]">{account.name}</p>
@@ -85,10 +97,34 @@ export default function ConnectedAccountsCard({ accounts }) {
                                 </p>
                                 <p className="mt-1 text-xs text-[var(--text-soft)]">{account.currency}</p>
                             </div>
+
+                            <div className="flex justify-start md:justify-end">
+                                <Button
+                                    variant="ghost"
+                                    className="min-h-10 min-w-10 rounded-full px-0 py-0"
+                                    onClick={() => onDeleteAccount?.(account.accountId)}
+                                    aria-label={`Delete ${account.name}`}
+                                    title={`Delete ${account.name}`}
+                                >
+                                    <Trash01 className="h-5 w-5" />
+                                </Button>
+                            </div>
                         </div>
                     ))}
                 </div>
             </div>
+
+            {hiddenCount > 0 ? (
+                <div className="mt-4 flex justify-end">
+                    <Button
+                        variant="ghost"
+                        className="min-h-10 rounded-full px-3"
+                        onClick={() => setExpanded((current) => !current)}
+                    >
+                        {expanded ? "Collapse" : `+${hiddenCount} more`}
+                    </Button>
+                </div>
+            ) : null}
         </Card>
     );
 }

@@ -52,6 +52,8 @@ namespace BulldogFinance.Functions.Models.Plaid
     public class ExchangePlaidPublicTokenRequest
     {
         public string PublicToken { get; set; } = default!;
+        public string? InstitutionId { get; set; }
+        public string? InstitutionName { get; set; }
     }
 
     public class CreatePlaidLinkTokenResponse

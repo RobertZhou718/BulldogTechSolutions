@@ -103,5 +103,16 @@ namespace BulldogFinance.Functions.Services.Accounts
 
             return account;
         }
+
+        public async Task DeleteAccountAsync(
+            string userId,
+            string accountId,
+            CancellationToken cancellationToken = default)
+        {
+            await _accountsTable.DeleteEntityAsync(
+                userId,
+                accountId,
+                cancellationToken: cancellationToken);
+        }
     }
 }

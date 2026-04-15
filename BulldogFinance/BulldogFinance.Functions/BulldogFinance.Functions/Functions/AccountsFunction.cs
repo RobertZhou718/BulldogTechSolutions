@@ -2,6 +2,7 @@ using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Accounts;
 using BulldogFinance.Functions.Models.Transactions;
 using BulldogFinance.Functions.Services.Accounts;
+using BulldogFinance.Functions.Services.Plaid;
 using BulldogFinance.Functions.Services.Transactions;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
@@ -18,6 +19,8 @@ namespace BulldogFinance.Functions.Functions
     {
         private readonly IAccountRepository _accountRepository;
         private readonly ITransactionRepository _transactionRepository;
+        private readonly IPlaidRepository _plaidRepository;
+        private readonly IPlaidSyncService _plaidSyncService;
 
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
@@ -27,10 +30,14 @@ namespace BulldogFinance.Functions.Functions
 
         public AccountsFunction(
             IAccountRepository accountRepository,
-            ITransactionRepository transactionRepository)
+            ITransactionRepository transactionRepository,
+            IPlaidRepository plaidRepository,
+            IPlaidSyncService plaidSyncService)
         {
             _accountRepository = accountRepository;
             _transactionRepository = transactionRepository;
+            _plaidRepository = plaidRepository;
+            _plaidSyncService = plaidSyncService;
         }
 
         [Function("GetAccounts")]
@@ -181,6 +188,76 @@ namespace BulldogFinance.Functions.Functions
             }, JsonOptions));
 
             return response;
+        }
+
+        [Function("DeleteAccount")]
+        public async Task<HttpResponseData> Delete(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "accounts/{accountId}")]
+            HttpRequestData req,
+            string accountId,
+            FunctionContext context)
+        {
+            var userId = AuthHelper.GetUserId(req);
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
+                await unauthorized.WriteStringAsync("Unauthorized.");
+                return unauthorized;
+            }
+
+            var account = await _accountRepository.GetAccountAsync(userId, accountId);
+            if (account == null)
+            {
+                var notFound = req.CreateResponse(HttpStatusCode.NotFound);
+                await notFound.WriteStringAsync("Account not found.");
+                return notFound;
+            }
+
+            if (string.Equals(account.ExternalSource, "Plaid", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(account.ExternalAccountId))
+            {
+                var link = await _plaidRepository.GetAccountLinkAsync(userId, account.ExternalAccountId);
+                if (link == null)
+                {
+                    account.IsArchived = true;
+                    account.UpdatedAtUtc = DateTime.UtcNow;
+                    await _accountRepository.UpdateAccountAsync(account);
+                    await _transactionRepository.MarkTransactionsDeletedByAccountIdAsync(userId, account.RowKey);
+                }
+                else
+                {
+                    var links = await _plaidRepository.GetAccountLinksByItemAsync(userId, link.ItemId);
+                    var activeLinkedAccountCount = 0;
+
+                    foreach (var relatedLink in links)
+                    {
+                        var relatedAccount = await _accountRepository.GetAccountAsync(userId, relatedLink.LocalAccountId);
+                        if (relatedAccount != null && !relatedAccount.IsArchived)
+                        {
+                            activeLinkedAccountCount++;
+                        }
+                    }
+
+                    if (activeLinkedAccountCount <= 1)
+                    {
+                        await _plaidSyncService.RemoveItemAsync(userId, link.ItemId);
+                    }
+                    else
+                    {
+                        account.IsArchived = true;
+                        account.UpdatedAtUtc = DateTime.UtcNow;
+                        await _accountRepository.UpdateAccountAsync(account);
+                        await _transactionRepository.MarkTransactionsDeletedByAccountIdAsync(userId, account.RowKey);
+                    }
+                }
+            }
+            else
+            {
+                await _transactionRepository.MarkTransactionsDeletedByAccountIdAsync(userId, account.RowKey);
+                await _accountRepository.DeleteAccountAsync(userId, account.RowKey);
+            }
+
+            return req.CreateResponse(HttpStatusCode.NoContent);
         }
 
         private static AccountDto ToDto(AccountEntity account) => new AccountDto

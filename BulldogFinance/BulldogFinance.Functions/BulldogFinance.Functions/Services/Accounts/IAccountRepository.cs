@@ -28,5 +28,10 @@ namespace BulldogFinance.Functions.Services.Accounts
         Task<AccountEntity> UpdateAccountAsync(
             AccountEntity account,
             CancellationToken cancellationToken = default);
+
+        Task DeleteAccountAsync(
+            string userId,
+            string accountId,
+            CancellationToken cancellationToken = default);
     }
 }

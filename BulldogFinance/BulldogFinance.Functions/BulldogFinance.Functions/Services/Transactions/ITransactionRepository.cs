@@ -27,5 +27,10 @@ namespace BulldogFinance.Functions.Services.Transactions
         Task<TransactionEntity> UpdateTransactionAsync(
             TransactionEntity transaction,
             CancellationToken cancellationToken = default);
+
+        Task MarkTransactionsDeletedByAccountIdAsync(
+            string userId,
+            string accountId,
+            CancellationToken cancellationToken = default);
     }
 }

@@ -39,11 +39,15 @@ export default function ConnectBankButton({ onConnected, className }) {
 
     const { open, ready } = usePlaidLink({
         token: linkToken || null,
-        onSuccess: async (publicToken) => {
+        onSuccess: async (publicToken, metadata) => {
             try {
                 setSubmitting(true);
                 setError("");
-                await exchangePlaidPublicToken({ publicToken });
+                await exchangePlaidPublicToken({
+                    publicToken,
+                    institutionId: metadata?.institution?.institution_id || null,
+                    institutionName: metadata?.institution?.name || null,
+                });
                 await onConnected?.();
             } catch (e) {
                 setError(e.message || "Failed to connect bank account.");
