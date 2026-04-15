@@ -1,63 +1,66 @@
-# 安全与合规建议
+# Security and Compliance Guidance
 
-## 1. 当前状态简评
+## 1. Current Security Posture
 
-当前服务通过 Header 提取用户 ID，可用于开发阶段，但在上线前需要升级为更严格的认证授权体系。
+The application has foundational controls but still needs production hardening:
 
-## 2. 身份与授权
+- Frontend acquires bearer tokens via MSAL.
+- Backend function auth level is currently anonymous.
+- User identity is primarily derived from request headers.
 
-## 必做
+## 2. Identity and Authorization (High Priority)
 
-- 后端验证 JWT（issuer/audience/signature）
-- 禁止依赖可伪造的调试 Header
-- 所有读取/写入接口按 `userId` 做强隔离
-- 最小权限原则：Function App / Storage / OpenAI / Finnhub 凭据分离
+Required for production:
 
-## 建议
+- Validate JWT tokens (issuer, audience, signature, expiration).
+- Remove trust in debug headers for production environments.
+- Enforce strict user-scoped authorization checks in all data access operations.
+- Separate permissions for Function App, Storage, OpenAI, and external API credentials.
 
-- 使用 APIM 或网关统一身份与限流策略
-- 管理员操作与普通用户操作分离
+## 3. Secrets and Configuration
 
-## 3. 密钥与配置管理
+- Never commit API keys or connection strings.
+- Store runtime secrets in Azure Key Vault.
+- Use environment-specific configuration for dev/staging/prod.
+- Rotate secrets on a fixed cadence and after incidents.
 
-- 禁止在代码库提交明文密钥
-- 使用 Azure Key Vault 存储 API Key / Connection String
-- 配置分环境管理（dev/staging/prod）
-- 定期轮换密钥
+## 4. Data Protection
 
-## 4. 数据安全
+- Enforce HTTPS-only ingress.
+- Keep storage encryption enabled (Azure managed encryption by default).
+- Minimize PII in logs (email, raw tokens, free-text notes).
+- Define retention rules for chat history and generated reports.
 
-- 传输层：HTTPS only
-- 存储层：启用加密（Azure 默认）
-- 日志层：禁止记录敏感字段（邮箱、token、完整交易备注）
-- 报告与聊天记录按最小可见原则存储
+## 5. Assistant and Tooling Security
 
-## 5. LLM / MCP 安全
+- Enforce allowlisted tool execution only.
+- Implement prompt-injection defenses in instruction handling.
+- Redact sensitive data before returning model output when needed.
+- Bound tool payload size and sanitize potentially unsafe content.
 
-- Prompt 注入防护
-  - 屏蔽“忽略之前规则”等注入文本
-- Tool 调用白名单
-  - 只允许预定义工具
-- 输出防护
-  - PII 脱敏
-  - 敏感内容过滤
+## 6. Compliance Readiness by Stage
 
-## 6. 合规建议（按阶段）
+### Development
 
-- 开发阶段：
-  - 建立数据分级（公开/内部/敏感）
-  - 明确日志保留周期
-- 试运行阶段：
-  - 完成 DPIA/隐私影响评估（若面向真实用户）
-- 生产阶段：
-  - 建立审计日志与访问追踪
-  - 建立安全事件响应流程
+- Define data classification levels.
+- Define logging retention and deletion behavior.
 
-## 7. 最小安全检查清单（上线前）
+### Pilot / pre-production
 
-- [ ] JWT 验签已启用
-- [ ] Key Vault 接管密钥
-- [ ] 调试 Header 在生产禁用
-- [ ] 全链路 HTTPS
-- [ ] 审计日志可追溯到 traceId
-- [ ] LLM 输出已做脱敏和引用来源标识
+- Run privacy impact review for real user data.
+- Validate access-control and auditability requirements.
+
+### Production
+
+- Maintain auditable trace IDs across requests.
+- Establish incident response and breach notification process.
+- Run periodic access reviews and secret-rotation verification.
+
+## 7. Minimum Pre-Launch Checklist
+
+- [ ] JWT validation enabled in backend pipeline
+- [ ] Debug identity headers blocked in production
+- [ ] Secrets sourced from Key Vault
+- [ ] Trace IDs visible across API and assistant flows
+- [ ] PII scrubbing in logs verified
+- [ ] Security tests for prompt injection and cross-user isolation pass

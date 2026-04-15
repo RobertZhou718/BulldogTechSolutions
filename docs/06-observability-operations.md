@@ -1,100 +1,98 @@
-# 可观测性与运维 Runbook
+# Observability and Operations Runbook
 
-## 1. 可观测性目标
+## 1. Goals
 
-确保可以回答以下问题：
+Observability should make the following questions easy to answer:
 
-1. 系统慢在哪里？
-2. 哪个接口或工具失败率最高？
-3. 某条用户回答用到了哪些数据源？
-4. AI 成本是否可控？
+1. Where is latency increasing?
+2. Which endpoint/tool is failing most often?
+3. Which data sources were used for a specific assistant response?
+4. Is model/token cost within budget?
 
-## 2. 指标体系（建议）
+## 2. Metrics Baseline
 
-## 应用层指标
+### API metrics
 
-- API QPS（按 endpoint）
+- Request count by route
 - p50/p95/p99 latency
-- 4xx / 5xx 比例
-- 超时率
+- 4xx/5xx rates
+- timeout rate
 
-## MCP/LLM 指标
+### Assistant/tool metrics
 
-- tool 调用次数/失败率（按 tool 维度）
-- tool 平均耗时
-- LLM 输入/输出 token
-- 单请求估算成本
-- fallback 触发率
+- chat request count and latency
+- tool call count/failure rate (by tool)
+- per-tool latency
+- model input/output tokens
+- estimated cost per request
 
-## 业务指标
+### Business metrics
 
-- 每日活跃用户（DAU）
-- 聊天日请求量
-- 聊天回答满意度（可通过点赞/点踩）
-- 报告生成成功率（weekly/monthly）
+- DAU/WAU
+- onboarding completion rate
+- report generation success rate (weekly/monthly)
+- assistant conversation success/fallback rate
 
-## 3. 日志规范（建议）
+## 3. Logging Standard
 
-统一 JSON 日志结构：
+Use structured JSON logs with consistent keys:
 
 ```json
 {
-  "timestamp": "2026-02-25T10:00:00Z",
+  "timestamp": "2026-04-15T12:00:00Z",
   "level": "Information",
   "traceId": "00-...",
   "userId": "u-123",
   "endpoint": "/api/chat",
-  "tool": "get_spending_breakdown",
-  "latencyMs": 120,
+  "tool": "get_transactions",
+  "latencyMs": 180,
   "status": "ok"
 }
 ```
 
-## 4. 分布式追踪
+## 4. Tracing
 
-- 为每次请求生成 `traceId`
-- `chat -> tool -> external api` 贯穿同一 trace
-- 回包中可返回 traceId，便于用户/客服定位问题
+- Generate a trace/span context at API ingress.
+- Propagate trace IDs through chat orchestration and tool execution.
+- Include trace IDs in error responses and support logs.
 
-## 5. 告警策略
+## 5. Alerting Recommendations
 
-## 关键告警
+Critical:
 
-- `/chat` 5xx > 2% 持续 5 分钟
-- MCP tool 超时率 > 5%
-- LLM 错误率 > 3%
-- 报告定时任务失败
+- `/chat` 5xx > 2% for 5 minutes
+- tool timeout rate > 5%
+- report timer job failure
+- sustained model/API upstream failures
 
-## 可选告警
+Cost/abuse:
 
-- 成本突增（超预算阈值）
-- 单用户异常请求频率（疑似滥用）
+- token usage exceeds daily budget threshold
+- abnormal per-user request burst patterns
 
-## 6. 运行手册（Runbook）
+## 6. Runbook Scenarios
 
-### 场景 A：chat 接口 500 激增
+### A. Chat 500 spike
 
-1. 查看最近部署变更
-2. 按 traceId 抽样排查失败请求
-3. 判断是 tool 失败还是 LLM 失败
-4. 触发降级：
-   - 临时关闭高耗时工具
-   - 返回“部分数据暂不可用”
+1. Check recent deployment and config changes.
+2. Filter failed requests by trace ID.
+3. Identify whether failures are model-side, tool-side, or storage-side.
+4. Apply degradation policy (disable expensive optional tools, return partial answer messaging).
 
-### 场景 B：外部数据源（Finnhub）不稳定
+### B. Finnhub or Plaid instability
 
-1. 启用缓存兜底（最近一次成功快照）
-2. 降低工具并发与调用频率
-3. 在回答中标注“实时行情源不可用，以下为缓存数据”
+1. Enable fallback/cached data paths where safe.
+2. Reduce call concurrency and retry aggressiveness.
+3. Communicate stale-data state in user-facing responses.
 
-### 场景 C：AI 成本异常
+### C. Cost anomaly
 
-1. 查看 token 消耗 Top endpoints
-2. 调整 max tokens 与 prompt 长度
-3. 限制高频用户请求速率
+1. Inspect top token-consuming routes/tools.
+2. Reduce prompt/tool payload size and max output tokens.
+3. Apply rate limits and per-user usage controls.
 
-## 7. 容量建议
+## 7. Capacity and Reliability Tips
 
-- 对 chat 请求做限流（按用户 + 全局）
-- 对热点统计结果做短时缓存（30s~120s）
-- 对新闻类工具做去重缓存
+- Add short-lived caching for expensive aggregate reads.
+- Use idempotency patterns where write retries are possible.
+- Validate timer-trigger reliability and dead-letter/retry handling for background operations.

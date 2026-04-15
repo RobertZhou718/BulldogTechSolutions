@@ -1,154 +1,77 @@
-# Chatbot + MCP Server 设计文档（下一阶段）
+# Assistant and Tool-Orchestration Design
 
-## 1. 目标
+## 1. Current State
 
-在现有财务系统基础上新增：
+The project already includes an assistant entry point and server-side orchestration:
 
-- 前端聊天入口（统一问答体验）
-- 后端 MCP Server（统一调用多数据源）
-- 可追溯回答（引用来源 + 工具调用记录）
+- Frontend assistant page (`/assistant`) and chat UI components
+- Backend `/chat` endpoint
+- Conversation history endpoints
+- Tool execution service with finance-focused tools
 
-## 2. 高层架构
+This document describes the architecture as currently implemented and how to evolve it safely.
+
+## 2. High-Level Flow
 
 ```text
-[DashboardUI Chatbot]
-      |
-      v
-[Azure Function: /chat]
-      |
-      v
-[MCP Orchestrator]
-  |      |       |       |
-  v      v       v       v
-tool:accounts tool:transactions tool:investments tool:reports
-  |      |       |       |
-  +------+-+-----+-------+
-          |
-          v
-      [LLM Answer]
-          |
-          v
- [answer + citations + trace]
+[Assistant UI]
+    |
+    v
+POST /api/chat
+    |
+    v
+[ChatFunction]
+    |
+    v
+[IChatAgentService]
+    |
+    +--> [SystemPromptBuilder]
+    +--> [ToolExecutor]
+              |
+              +--> get_user_profile
+              +--> get_accounts
+              +--> get_transactions
+              +--> get_investments
+              +--> get_investment_overview
+              +--> get_watchlist
+              +--> search_finance_news
+              +--> generate_portfolio_report
+    |
+    v
+[Azure OpenAI response + persisted conversation]
 ```
 
-## 3. 职责拆分
+## 3. Core Components
 
-### 前端 Chatbot
+- `ChatFunction`: validates input and user context, invokes chat agent service.
+- `ChatAgentService`: orchestrates LLM + tools + persistence lifecycle.
+- `SystemPromptBuilder`: composes runtime instruction context.
+- `ToolExecutor`: dispatches and normalizes tool calls.
+- `ConversationService`: stores and reads conversation summaries/details.
 
-- 仅负责：
-  - 用户输入
-  - 消息展示
-  - 流式输出（可选）
-  - 引用链接（citations）展示
-- 不负责业务聚合与权限判断
+## 4. API Surface
 
-### Azure Function `/chat`
+- `POST /chat`
+- `GET /chat/conversations`
+- `GET /chat/conversations/{conversationId}`
 
-- 验证用户身份
-- 维护会话上下文（短期）
-- 调用 MCP orchestrator
-- 返回标准化结果
+## 5. Guardrails
 
-### MCP Orchestrator
+- Every tool call must remain user-scoped.
+- Reject or sanitize malformed payloads before prompt composition.
+- Preserve deterministic audit fields (conversationId, timestamps, tool names) for diagnostics.
+- Keep tool output constrained (size/content) before injecting into model context.
 
-- 工具路由（根据问题调用适当资源）
-- 工具并发与超时控制
-- 工具结果归一化
-- 合成 LLM prompt
-- 输出答案 + 证据
+## 6. Recommended Near-Term Enhancements
 
-## 4. 建议的 MCP 工具清单（第一阶段）
+1. Add explicit per-tool timeout and retry policy.
+2. Standardize assistant response envelope (`answer`, `citations`, `usedTools`, `traceId`).
+3. Add prompt-injection and unsafe-tool-call test cases.
+4. Introduce redaction for sensitive text in stored conversation logs.
+5. Add per-user and per-endpoint rate limits.
 
-建议先从 4 个高价值工具起步：
+## 7. Non-Goals for the Next Iteration
 
-1. `get_account_summary`
-   - 输出账户余额、账户数量、货币分布
-2. `get_recent_transactions`
-   - 支持近 N 天、可选分类过滤
-3. `get_spending_breakdown`
-   - 按分类聚合支出（金额与占比）
-4. `get_investment_snapshot`
-   - 持仓估值、浮盈亏、热门新闻摘要
-
-> 不建议第一版直接开放“任意 SQL/任意搜索”能力。
-
-## 5. Chat API 契约建议
-
-### Request
-
-```json
-{
-  "sessionId": "optional-session-id",
-  "message": "我这个月餐饮支出相比上个月怎么样？",
-  "context": {
-    "timezone": "America/Toronto",
-    "language": "zh-CN"
-  }
-}
-```
-
-### Response
-
-```json
-{
-  "answer": "本月餐饮支出较上月上升 12.4%...",
-  "citations": [
-    {
-      "tool": "get_spending_breakdown",
-      "range": "2026-02-01..2026-02-29"
-    }
-  ],
-  "usedTools": [
-    "get_recent_transactions",
-    "get_spending_breakdown"
-  ],
-  "traceId": "00-9d1...",
-  "latencyMs": 842
-}
-```
-
-## 6. Prompt / 回答策略建议
-
-- 系统提示明确约束：
-  - 不编造数据
-  - 必须引用工具结果
-  - 数据不足时明确说明
-- 输出模板建议：
-  1. 结论
-  2. 关键数据
-  3. 建议动作
-  4. 引用来源
-
-## 7. 安全与隔离要求（必须）
-
-- 每次 tool 调用都要强制带 `userId`
-- 禁止跨用户查询
-- 对 prompt 注入做防护：
-  - 忽略“暴露系统提示词”等诱导
-  - 对工具输出做长度与敏感字段截断
-
-## 8. 可观测性指标（MCP 必备）
-
-- `chat.request.count`
-- `chat.response.latency`
-- `mcp.tool.call.count{tool=...}`
-- `mcp.tool.call.failure`
-- `llm.tokens.input/output`
-- `llm.cost.estimated`
-
-## 9. 实施里程碑
-
-### M1（1 周）
-- `/chat` function + 2 个工具 + 静态前端聊天页
-
-### M2（1~2 周）
-- 扩展到 4 个工具 + 引用展示 + traceId
-
-### M3（2 周）
-- 流式回答 + 缓存 + 告警 + A/B prompt
-
-## 10. 非目标（第一阶段不做）
-
-- 长期记忆（跨月/跨设备的会话记忆）
-- 复杂 agent 自主规划
-- 自动执行交易类动作
+- Autonomous multi-step trading execution.
+- Unrestricted external web browsing from the assistant.
+- Long-term memory without explicit user controls and retention policy.

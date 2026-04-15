@@ -1,60 +1,65 @@
-# 路线图（建议）
+# Roadmap
 
-## Phase 0（当前）
+## Current Baseline (as of April 2026)
 
-- ✅ 登录与 Onboarding
-- ✅ 账户与交易
-- ✅ 投资总览与自选
-- ✅ AI 周报/月报
+Implemented capabilities:
 
-## Phase 1（2~3 周）Chatbot MVP
+- Authentication-integrated SPA with onboarding flow
+- Accounts and transactions management
+- Investments + watchlist + market news overview
+- Assistant endpoint and conversation history APIs
+- Weekly/monthly generated report retrieval
+- Plaid account linking and sync endpoints
 
-目标：先可用
+## Phase 1 (Next 2–4 weeks): Production Hardening
 
-- 前端：聊天页（输入、消息流、基础错误提示）
-- 后端：`/chat` + 2~4 个 MCP 工具
-- 回包：`answer + citations + usedTools + traceId`
-- 指标：请求量、延迟、错误率、token 消耗
+Focus:
 
-交付标准：
+- Enforce JWT validation in backend
+- Remove production dependency on debug identity headers
+- Standardize error schema and trace IDs
+- Add per-user rate limiting and safer retry policies
+- Expand automated tests for assistant/tooling and Plaid flows
 
-- 用户可询问最近支出、账户概览、持仓概览
-- 每条回答可追溯工具来源
+Success criteria:
 
-## Phase 2（2~4 周）可靠性与安全加固
+- Authn/authz baseline is production-ready
+- Core endpoints have consistent error/trace behavior
+- Operational alerts and runbook are actionable
 
-目标：可上线试运行
+## Phase 2 (Next 4–8 weeks): Reliability and Data Quality
 
-- 鉴权升级（JWT 验签）
-- Prompt 注入防护
-- 限流与缓存
-- 统一错误规范
-- 运行告警与 runbook 完整
+Focus:
 
-交付标准：
+- Improve Table Storage query and partition strategy
+- Add caching for high-cost aggregate/read patterns
+- Harden external dependency fallback behavior
+- Improve chat response consistency with structured citations
 
-- 关键链路无高危安全项
-- chat 失败可降级，系统可恢复
+Success criteria:
 
-## Phase 3（4~6 周）体验与增长
+- Lower p95 latency for dashboard/assistant queries
+- Lower upstream-failure user impact
+- Clear provenance in assistant responses
 
-目标：可规模化
+## Phase 3 (8+ weeks): Product Experience Expansion
 
-- 流式回答
-- 追问上下文
-- 智能建议卡片（预算、类别趋势、异常波动）
-- 反馈闭环（点赞/点踩）
-- Prompt A/B 实验
+Focus:
 
-## Phase 4（长期）智能运营平台
+- Streaming assistant responses in UI
+- Proactive insights cards (spending drift, anomaly signals)
+- Feedback loops for assistant quality tuning
+- Better report personalization and narrative quality
 
-- 支持多数据源插件化（税务、账单、银行聚合）
-- 形成 MCP tool registry
-- 增加策略引擎（告警阈值、预算计划）
+Success criteria:
 
-## 风险与依赖
+- Increased assistant engagement and positive feedback
+- Lower repeated-support questions
+- Measurable uplift in user retention metrics
 
-- 外部数据源稳定性（Finnhub）
-- AI 成本波动
-- 身份体系与权限治理
-- 团队测试与运维能力建设
+## Key Risks and Dependencies
+
+- Upstream API reliability (Plaid/Finnhub/OpenAI)
+- Security hardening timeline and identity integration dependencies
+- Cost control for model-driven features
+- Team bandwidth for simultaneous feature and reliability work

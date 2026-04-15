@@ -1,89 +1,86 @@
-# 架构总览
+# Architecture Overview
 
-## 1. 目标与边界
+## 1. Product Scope
 
-Bulldog Finance 的目标是提供一个面向个人用户的“财富视图”应用，覆盖：
+Bulldog Finance is a full-stack personal finance application focused on:
 
-- 身份认证（Microsoft Entra / MSAL）
-- 初始账户配置（Onboarding）
-- 账户与交易管理
-- 投资持仓与市场信息聚合
-- 基于财务快照的 AI 报告
+- Microsoft Entra CIAM sign-in in the SPA
+- First-time user onboarding
+- Accounts and transactions management
+- Investments, watchlist, and market news aggregation
+- AI assistant responses and generated weekly/monthly reports
 
-## 2. 系统分层
+## 2. Current Technology Stack
 
-### 前端（DashboardUI）
+### Frontend (`BulldogFinance/DashboardUI`)
 
-- 技术：React + Vite + MUI + React Router + MSAL
-- 主要职责：
-  - 登录态控制与页面路由
-  - 调用后端 API
-  - 展示 Dashboard / Transactions / Investments / Onboarding / Login
+- React 19 + Vite 7
+- React Router 7
+- MSAL (`@azure/msal-browser`, `@azure/msal-react`) for authentication
+- Tailwind CSS 4 + React Aria component patterns
 
-### 后端（Azure Functions）
+### Backend (`BulldogFinance/BulldogFinance.Functions/BulldogFinance.Functions`)
 
-- 技术：.NET 8 + Azure Functions Isolated Worker
-- 主要职责：
-  - 暴露 REST API（me / onboarding / accounts / transactions / investments / reports）
-  - 调用服务层执行业务逻辑
-  - 定时触发周报与月报生成
+- .NET 8
+- Azure Functions v4 (isolated worker)
+- Azure Table Storage (operational entities)
+- Azure Blob Storage (report snapshots)
+- Azure OpenAI (assistant/report generation)
+- Finnhub (market quotes and company news)
+- Plaid (bank account linking, sync, and balance refresh)
 
-### 服务层（Services）
+## 3. Logical Architecture
 
-- 业务编排：InvestmentService, InvestmentOverviewService, ReportService
-- 外部集成：
-  - Finnhub（行情 / 新闻）
-  - Azure OpenAI（报告生成）
-- 存储抽象：
-  - IReportStorage
-  - IUserRepository / IAccountRepository / ITransactionRepository
+```text
+[React SPA]
+  |- MSAL login/session
+  |- Dashboard, Transactions, Investments, Assistant pages
+  v
+[Azure Functions HTTP API]
+  |- User/account/transaction/investment/report endpoints
+  |- Chat endpoints and conversation history
+  |- Plaid integration endpoints + webhook
+  v
+[Domain Services + Repositories]
+  |- business orchestration
+  |- external API clients (Plaid/Finnhub/OpenAI)
+  v
+[Storage]
+  |- Azure Table Storage
+  |- Azure Blob Storage
+```
 
-### 数据层
+## 4. Key Runtime Flows
 
-- Azure Table Storage：Users / Accounts / Transactions / Investments / Watchlist
-- Azure Blob Storage：reports（weekly/monthly latest 报告）
+### A. Sign-in and onboarding gate
 
-## 3. 核心业务流程
+1. SPA authenticates user with MSAL.
+2. `GET /me` determines onboarding status.
+3. If onboarding is incomplete, user is redirected to `/onboarding`.
+4. `POST /onboarding` creates the user profile and initial accounts/seed transactions.
 
-### 流程 A：首次用户 Onboarding
+### B. Daily finance operations
 
-1. 前端登录成功后访问 `/`，由 OnboardingGate 触发 `GET /me`
-2. 若 `onboardingDone=false`，跳转 `/onboarding`
-3. 提交初始账户列表到 `POST /onboarding`
-4. 后端创建用户档案、账户及 INIT 交易
+1. Accounts are loaded through `GET /accounts`.
+2. Transactions are created by `POST /transactions`.
+3. Account balances are updated in backend transaction/account services.
+4. Filtered history is retrieved through `GET /transactions`.
 
-### 流程 B：交易管理
+### C. Investment and market context
 
-1. 前端请求 `GET /accounts` 展示账户
-2. 新增交易时调用 `POST /transactions`
-3. 后端写入交易并同步更新账户余额
-4. 历史查询通过 `GET /transactions`（支持 accountId / from / to）
+1. Portfolio/watchlist entities are stored in Table Storage.
+2. `GET /investments/overview` merges holdings with Finnhub quote/news data.
+3. The UI renders holdings, popular symbols, and watchlist insights.
 
-### 流程 C：投资总览
+### D. Assistant and reports
 
-1. 前端请求 `GET /investments/overview`
-2. 后端读取用户持仓
-3. 调用 Finnhub 获取 quote + company-news
-4. 聚合返回 Holdings + Popular 结构
+1. `/chat` receives the user prompt and delegates to chat orchestration services.
+2. Tool execution retrieves user-scoped data (accounts, transactions, investments, watchlist, news, report generation).
+3. Weekly/monthly timers generate report artifacts and save them to Blob Storage.
+4. `GET /reports/{period}/latest` returns the latest generated report snapshot.
 
-### 流程 D：AI 报告
+## 5. Current Constraints
 
-1. Timer 触发每周/每月任务
-2. ReportService 聚合交易快照
-3. 调用 Azure OpenAI 生成 markdown
-4. 存储 latest 到 Blob
-5. 前端可通过 `GET /reports/{period}/latest` 获取最新报告
-
-## 4. 当前架构优点
-
-- 前后端边界清晰，职责明确
-- Functions + Services + Repository 分层合理
-- 已具备多数据源整合能力
-- 已有 AI 报告链路，为 Chatbot 奠定基础
-
-## 5. 当前架构限制（需在下一阶段解决）
-
-- 鉴权仍是过渡实现（Header 取 userId）
-- 交易查询存在“按用户全量扫描后内存过滤”上限
-- 缺少统一错误码与追踪标准
-- 缺少系统化文档与测试矩阵
+- Function HTTP triggers are still `AuthorizationLevel.Anonymous`; user isolation depends on request headers (`X-MS-CLIENT-PRINCIPAL-ID` / `X-Debug-UserId`) and must be hardened for production JWT validation.
+- The service is heavily Table Storage-based, so query efficiency and partition strategy should continue to be optimized as data grows.
+- Error payloads and tracing conventions are not yet fully standardized across all endpoints.
