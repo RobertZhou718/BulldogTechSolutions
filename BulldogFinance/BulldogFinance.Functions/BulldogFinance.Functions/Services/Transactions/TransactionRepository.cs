@@ -35,13 +35,18 @@ namespace BulldogFinance.Functions.Services.Transactions
         {
             var result = new List<TransactionEntity>();
 
-            // 先按 PartitionKey 过滤，剩下条件在内存中过滤（个人应用足够用）
+            // Table Storage can filter efficiently by PartitionKey; apply the remaining filters in memory for this workload.
             var query = _transactionsTable.QueryAsync<TransactionEntity>(
                 ent => ent.PartitionKey == userId,
                 cancellationToken: cancellationToken);
 
             await foreach (var item in query)
             {
+                if (item.IsDeleted)
+                {
+                    continue;
+                }
+
                 if (!string.IsNullOrWhiteSpace(accountId) &&
                     !string.Equals(item.AccountId, accountId, StringComparison.OrdinalIgnoreCase))
                 {
@@ -71,6 +76,66 @@ namespace BulldogFinance.Functions.Services.Transactions
             });
 
             return result;
+        }
+
+        public async Task<TransactionEntity?> GetByExternalTransactionIdAsync(
+            string userId,
+            string externalTransactionId,
+            CancellationToken cancellationToken = default)
+        {
+            var query = _transactionsTable.QueryAsync<TransactionEntity>(
+                ent => ent.PartitionKey == userId,
+                cancellationToken: cancellationToken);
+
+            await foreach (var item in query)
+            {
+                if (string.Equals(item.ExternalTransactionId, externalTransactionId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return item;
+                }
+            }
+
+            return null;
+        }
+
+        public async Task<TransactionEntity> UpdateTransactionAsync(
+            TransactionEntity transaction,
+            CancellationToken cancellationToken = default)
+        {
+            await _transactionsTable.UpdateEntityAsync(
+                transaction,
+                transaction.ETag,
+                TableUpdateMode.Replace,
+                cancellationToken);
+
+            return transaction;
+        }
+
+        public async Task MarkTransactionsDeletedByAccountIdAsync(
+            string userId,
+            string accountId,
+            CancellationToken cancellationToken = default)
+        {
+            var query = _transactionsTable.QueryAsync<TransactionEntity>(
+                ent => ent.PartitionKey == userId,
+                cancellationToken: cancellationToken);
+
+            await foreach (var item in query)
+            {
+                if (!string.Equals(item.AccountId, accountId, StringComparison.OrdinalIgnoreCase) || item.IsDeleted)
+                {
+                    continue;
+                }
+
+                item.IsDeleted = true;
+                item.UpdatedAtUtc = DateTime.UtcNow;
+
+                await _transactionsTable.UpdateEntityAsync(
+                    item,
+                    item.ETag,
+                    TableUpdateMode.Replace,
+                    cancellationToken);
+            }
         }
     }
 }

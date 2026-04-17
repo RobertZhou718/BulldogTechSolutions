@@ -11,9 +11,9 @@ namespace BulldogFinance.Functions.Models.Users
     public class OnboardingAccountInput
     {
         public string Name { get; set; } = default!;
-        public string Type { get; set; } = default!;      // cash / bank / credit_card ...
+        public string Type { get; set; } = default!;      // Examples: cash, bank, credit_card.
         public string? Currency { get; set; }
-        public decimal InitialBalance { get; set; }       // 前端传小数金额
+        public decimal InitialBalance { get; set; }       // The frontend sends a decimal amount.
     }
 
     public class OnboardingAccountResponse

@@ -5,7 +5,7 @@ export default function Card({ className, children }) {
     return (
         <section
             className={cn(
-                "rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 shadow-sm",
+                "rounded-[var(--radius-2xl)] border border-[var(--card-border)] bg-[var(--card-bg)] p-6 shadow-[var(--surface-shadow)] ring-1 ring-white/70 backdrop-blur-sm",
                 className
             )}
         >

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import ConnectBankButton from "@/components/plaid/ConnectBankButton.jsx";
 import Button from "@/components/ui/Button.jsx";
 import Card from "@/components/ui/Card.jsx";
 import { Field, Input, Select } from "@/components/ui/Field.jsx";
@@ -112,6 +113,10 @@ export default function OnboardingPage() {
         }
     };
 
+    const handlePlaidConnected = async () => {
+        navigate("/dashboard", { replace: true });
+    };
+
     if (loadingMe) {
         return (
             <div className="mt-12 flex justify-center">
@@ -130,9 +135,37 @@ export default function OnboardingPage() {
                     Welcome to Bulldog Finance
                 </h1>
                 <p className="mt-3 max-w-3xl text-sm text-[var(--text-muted)]">
-                    Before we start tracking your money, let’s set up your accounts and their current balances.
-                    You can always add or edit accounts later.
+                    Start by connecting a bank account with Plaid, or enter balances manually if you want to
+                    onboard without bank access. You can add more accounts later.
                 </p>
+
+                <div className="mt-6 grid gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] p-5">
+                        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                            Recommended
+                        </p>
+                        <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
+                            Connect with Plaid
+                        </h2>
+                        <p className="mt-2 text-sm text-[var(--text-muted)]">
+                            Import supported bank accounts, refresh balances, and start syncing transactions after
+                            you grant permission.
+                        </p>
+                        <ConnectBankButton className="mt-4" onConnected={handlePlaidConnected} />
+                    </div>
+
+                    <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] p-5">
+                        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--text-soft)]">
+                            Manual
+                        </p>
+                        <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
+                            Enter balances yourself
+                        </h2>
+                        <p className="mt-2 text-sm text-[var(--text-muted)]">
+                            Useful if you do not want to connect a bank yet, or if your institution is not on Plaid.
+                        </p>
+                    </div>
+                </div>
 
                 <div className="mt-6 max-w-xs">
                     <Field label="Default currency">
@@ -160,7 +193,7 @@ export default function OnboardingPage() {
                         <div>
                             <h2 className="text-xl font-semibold text-[var(--text-main)]">Your accounts</h2>
                             <p className="mt-1 text-sm text-[var(--text-muted)]">
-                                Add the balances you want the dashboard to start from.
+                                Add the balances you want the dashboard to start from if you are onboarding manually.
                             </p>
                         </div>
                         <Button variant="secondary" onClick={handleAddRow}>

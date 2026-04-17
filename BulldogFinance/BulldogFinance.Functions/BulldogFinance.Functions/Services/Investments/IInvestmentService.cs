@@ -8,7 +8,6 @@ namespace BulldogFinance.Functions.Services.Investments
 {
     public interface IInvestmentService
     {
-        // 持仓
         Task<IReadOnlyList<InvestmentDto>> GetInvestmentsForUserAsync(
             string userId,
             CancellationToken cancellationToken = default);
@@ -23,7 +22,6 @@ namespace BulldogFinance.Functions.Services.Investments
             string symbol,
             CancellationToken cancellationToken = default);
 
-        // 自选股 Watchlist
         Task<IReadOnlyList<WatchlistItemDto>> GetWatchlistAsync(
             string userId,
             CancellationToken cancellationToken = default);

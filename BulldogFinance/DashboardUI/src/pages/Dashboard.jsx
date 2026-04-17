@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useMsal } from "@azure/msal-react";
+import ConnectedAccountsCard from "@/components/accounts/ConnectedAccountsCard.jsx";
+import { useAuth } from "@/auth/core/authContext.js";
+import AccountManagementCard from "@/components/accounts/AccountManagementCard.jsx";
 import AccountsPieChart from "@/components/dashboard/AccountsPieChart.jsx";
 import CashFlowChart from "@/components/dashboard/CashFlowChart.jsx";
 import GreetingCard from "@/components/dashboard/GreetingCard.jsx";
@@ -11,10 +13,11 @@ import { formatCurrency } from "@/lib/utils";
 import { useApiClient } from "@/services/apiClient.js";
 
 export default function DashboardPage() {
-    const { getAccounts, getTransactions, getInvestmentOverview } = useApiClient();
-    const { accounts: msalAccounts } = useMsal();
+    const { getAccounts, getTransactions, getInvestmentOverview, createAccount, deleteAccount } = useApiClient();
+    const { user } = useAuth();
 
-    const displayName = msalAccounts[0]?.name || msalAccounts[0]?.username || "Friend";
+    const displayName = user?.givenName || user?.name || user?.username || "Friend";
+    const defaultCurrency = "CAD";
 
     const [accounts, setAccounts] = useState([]);
     const [transactions, setTransactions] = useState([]);
@@ -22,26 +25,30 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    const loadDashboard = async () => {
+        const end = new Date();
+        const start = new Date(end);
+        start.setMonth(end.getMonth() - 5);
+        start.setDate(1);
+
+        const [accountsData, transactionsData, overviewData] = await Promise.all([
+            getAccounts(),
+            getTransactions({
+                from: start.toISOString(),
+                to: end.toISOString(),
+            }),
+            getInvestmentOverview(),
+        ]);
+
+        setAccounts(accountsData || []);
+        setTransactions(transactionsData || []);
+        setOverview(overviewData || null);
+    };
+
     useEffect(() => {
         (async () => {
             try {
-                const end = new Date();
-                const start = new Date(end);
-                start.setMonth(end.getMonth() - 5);
-                start.setDate(1);
-
-                const [accountsData, transactionsData, overviewData] = await Promise.all([
-                    getAccounts(),
-                    getTransactions({
-                        from: start.toISOString(),
-                        to: end.toISOString(),
-                    }),
-                    getInvestmentOverview(),
-                ]);
-
-                setAccounts(accountsData || []);
-                setTransactions(transactionsData || []);
-                setOverview(overviewData || null);
+                await loadDashboard();
             } catch (e) {
                 console.error(e);
                 setError(e.message ?? "Failed to load accounts");
@@ -50,6 +57,25 @@ export default function DashboardPage() {
             }
         })();
     }, [getAccounts, getInvestmentOverview, getTransactions]);
+
+    const refreshDashboard = async () => {
+        setError(null);
+        await loadDashboard();
+    };
+
+    const handleCreateManualAccount = async (payload) => {
+        await createAccount(payload);
+        await refreshDashboard();
+    };
+
+    const handlePlaidConnected = async () => {
+        await refreshDashboard();
+    };
+
+    const handleDeleteAccount = async (accountId) => {
+        await deleteAccount(accountId);
+        await refreshDashboard();
+    };
 
     const cashFlowSeries = useMemo(() => {
         const months = Array.from({ length: 6 }, (_, index) => {
@@ -168,6 +194,13 @@ export default function DashboardPage() {
             </PageHeader>
 
             <div className="grid gap-6 xl:grid-cols-12">
+                <AccountManagementCard
+                    accounts={accounts}
+                    defaultCurrency={defaultCurrency}
+                    onCreateManualAccount={handleCreateManualAccount}
+                    onPlaidConnected={handlePlaidConnected}
+                />
+                <ConnectedAccountsCard accounts={accounts} onDeleteAccount={handleDeleteAccount} />
                 <div className="xl:col-span-4">
                     <GreetingCard name={displayName} total={totalNetWorth} />
                 </div>

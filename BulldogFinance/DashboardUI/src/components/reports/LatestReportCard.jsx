@@ -10,7 +10,10 @@ function formatPeriodLabel(period) {
 
 export default function LatestReportCard() {
     const { getLatestReport } = useApiClient();
-    const [reports, setReports] = useState({ weekly: null, monthly: null });
+    const [reports, setReports] = useState({
+        weekly: { hasReport: false, report: null, message: "" },
+        monthly: { hasReport: false, report: null, message: "" },
+    });
     const [activePeriod, setActivePeriod] = useState("weekly");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -21,25 +24,32 @@ export default function LatestReportCard() {
             setError("");
 
             try {
-                const [weekly, monthly] = await Promise.all([
+                const [weeklyResult, monthlyResult] = await Promise.allSettled([
                     getLatestReport("weekly"),
                     getLatestReport("monthly"),
                 ]);
 
+                const weekly = weeklyResult.status === "fulfilled"
+                    ? weeklyResult.value
+                    : { hasReport: false, report: null, message: weeklyResult.reason?.message || "We couldn't load your latest weekly report right now. Please try again later." };
+
+                const monthly = monthlyResult.status === "fulfilled"
+                    ? monthlyResult.value
+                    : { hasReport: false, report: null, message: monthlyResult.reason?.message || "We couldn't load your latest monthly report right now. Please try again later." };
+
                 setReports({ weekly, monthly });
-                if (!weekly && monthly) {
+                if (!weekly?.hasReport && monthly?.hasReport) {
                     setActivePeriod("monthly");
                 }
-            } catch (err) {
-                console.error("Failed to load latest reports", err);
-                setError(err.message || "Failed to load reports.");
             } finally {
                 setLoading(false);
             }
         })();
     }, [getLatestReport]);
 
-    const report = reports[activePeriod];
+    const activeReportState = reports[activePeriod];
+    const report = activeReportState?.report;
+    const emptyMessage = activeReportState?.message || `No ${activePeriod} report is available yet.`;
 
     return (
         <Card>
@@ -76,7 +86,7 @@ export default function LatestReportCard() {
                 <p className="mt-6 text-sm font-medium text-[var(--color-error-500)]">{error}</p>
             ) : !report ? (
                 <p className="mt-6 rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-4 text-sm text-[var(--text-muted)]">
-                    No {activePeriod} report is available yet.
+                    {emptyMessage}
                 </p>
             ) : (
                 <div className="mt-6 space-y-4">

@@ -1,4 +1,4 @@
-/* ===== 登录页布局 ===== */
+/* Login layout */
 
 .login-root {
   min-height: 100vh;
@@ -13,7 +13,7 @@
   }
 }
 
-/* 左侧 Hero */
+/* Hero column */
 
 .login-hero {
   position: relative;
@@ -247,7 +247,7 @@
   color: var(--text-soft);
 }
 
-/* ===== 右侧 登录卡片 ===== */
+/* Login panel */
 
 .login-panel {
   position: relative;
@@ -402,7 +402,7 @@
   color: var(--text-soft);
 }
 
-/* ===== 登录后 App Shell ===== */
+/* Post-login app shell */
 
 .app-shell {
   min-height: 100vh;

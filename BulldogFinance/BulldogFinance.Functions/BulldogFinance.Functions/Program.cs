@@ -2,8 +2,10 @@ using Azure.Data.Tables;
 using Azure.Identity;
 using Azure.Storage.Blobs;
 using BulldogFinance.Functions.Services.Accounts;
+using BulldogFinance.Functions.Services.Auth;
 using BulldogFinance.Functions.Services.Chat;
 using BulldogFinance.Functions.Services.Investments;
+using BulldogFinance.Functions.Services.Plaid;
 using BulldogFinance.Functions.Services.Reports;
 using BulldogFinance.Functions.Services.Tools;
 using BulldogFinance.Functions.Services.Transactions;
@@ -108,12 +110,43 @@ var host = new HostBuilder()
             client.BaseAddress = new Uri(baseUrl);
         });
 
+        services.AddHttpClient("Plaid", (sp, client) =>
+        {
+            var config = sp.GetRequiredService<IConfiguration>();
+            var baseUrl = config["Plaid:BaseUrl"] ?? "https://production.plaid.com";
+            client.BaseAddress = new Uri(baseUrl);
+        });
+
+        services.AddHttpClient("AuthProxy", (sp, client) =>
+        {
+            var config = sp.GetRequiredService<IConfiguration>();
+            var baseUrl = config["AuthProxy:BaseUrl"];
+            var timeoutSeconds = int.TryParse(config["AuthProxy:TimeoutSeconds"], out var parsedTimeout)
+                && parsedTimeout > 0
+                ? parsedTimeout
+                : 30;
+
+            if (!string.IsNullOrWhiteSpace(baseUrl))
+            {
+                client.BaseAddress = new Uri(baseUrl);
+            }
+
+            client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+        });
+
+        services.AddDataProtection();
+
         services.AddSingleton<IUserRepository, UserRepository>();
         services.AddSingleton<IAccountRepository, AccountRepository>();
         services.AddSingleton<ITransactionRepository, TransactionRepository>();
+        services.AddSingleton<IPlaidRepository, PlaidRepository>();
 
+        services.AddSingleton<IExternalAuthProxyService, ExternalAuthProxyService>();
         services.AddSingleton<IInvestmentService, InvestmentService>();
         services.AddSingleton<IInvestmentOverviewService, InvestmentOverviewService>();
+        services.AddSingleton<IPlaidTokenProtector, PlaidTokenProtector>();
+        services.AddSingleton<IPlaidClient, PlaidClient>();
+        services.AddSingleton<IPlaidSyncService, PlaidSyncService>();
 
         services.AddSingleton<IAiClient, AzureOpenAiClient>();
         services.AddSingleton(sp => (AzureOpenAiClient)sp.GetRequiredService<IAiClient>());
@@ -125,6 +158,12 @@ var host = new HostBuilder()
 
         services.AddSingleton<IAgentTool, GetUserProfileTool>();
         services.AddSingleton<IAgentTool, GetAccountsTool>();
+        services.AddSingleton<IAgentTool, GetTransactionsTool>();
+        services.AddSingleton<IAgentTool, GetInvestmentsTool>();
+        services.AddSingleton<IAgentTool, GetInvestmentOverviewTool>();
+        services.AddSingleton<IAgentTool, GetWatchlistTool>();
+        services.AddSingleton<IAgentTool, SearchFinanceNewsTool>();
+        services.AddSingleton<IAgentTool, GeneratePortfolioReportTool>();
 
         services.AddSingleton<IReportStorage, BlobReportStorage>();
         services.AddSingleton<IReportService, ReportService>();

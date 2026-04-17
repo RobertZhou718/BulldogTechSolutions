@@ -3,14 +3,14 @@ import React from "react";
 export default function PageHeader({ eyebrow, title, description, actions, children }) {
     return (
         <div className="space-y-6">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="flex flex-col gap-5 rounded-[var(--radius-2xl)] border border-[var(--card-border)] bg-white/70 px-6 py-6 shadow-[var(--shadow-xs)] ring-1 ring-white/70 backdrop-blur-sm xl:flex-row xl:items-end xl:justify-between">
                 <div className="max-w-3xl">
                     {eyebrow ? (
-                        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                        <p className="text-sm font-semibold text-[var(--accent)]">
                             {eyebrow}
                         </p>
                     ) : null}
-                    <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--text-main)] md:text-4xl">
+                    <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-[var(--text-main)] md:text-4xl">
                         {title}
                     </h1>
                     {description ? (
@@ -19,7 +19,7 @@ export default function PageHeader({ eyebrow, title, description, actions, child
                         </p>
                     ) : null}
                 </div>
-                {actions}
+                {actions ? <div className="w-full xl:w-auto">{actions}</div> : null}
             </div>
             {children}
         </div>

@@ -19,8 +19,19 @@ namespace BulldogFinance.Functions.Services.Accounts
             string accountId,
             CancellationToken cancellationToken = default);
 
+        Task<AccountEntity?> GetAccountByExternalReferenceAsync(
+            string userId,
+            string externalSource,
+            string externalAccountId,
+            CancellationToken cancellationToken = default);
+
         Task<AccountEntity> UpdateAccountAsync(
             AccountEntity account,
+            CancellationToken cancellationToken = default);
+
+        Task DeleteAccountAsync(
+            string userId,
+            string accountId,
             CancellationToken cancellationToken = default);
     }
 }

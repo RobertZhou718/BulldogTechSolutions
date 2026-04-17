@@ -12,11 +12,12 @@ const navItems = [
 export default function SideNav() {
     return (
         <aside className="hidden w-[280px] shrink-0 lg:block">
-            <div className="sticky top-[96px] rounded-[28px] border border-[var(--card-border)] bg-white/85 p-4 shadow-sm backdrop-blur">
-                <p className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-soft)]">
-                    Workspace
-                </p>
-                <nav className="mt-1 space-y-1">
+            <div className="sticky top-[104px] rounded-[var(--radius-2xl)] border border-[var(--card-border)] bg-white/78 p-4 shadow-[var(--surface-shadow)] ring-1 ring-white/70 backdrop-blur-sm">
+                <div className="px-3 py-2">
+                    <p className="text-xs font-semibold text-[var(--text-soft)]">Workspace</p>
+                    <p className="mt-1 text-sm text-[var(--text-muted)]">Portfolio management</p>
+                </div>
+                <nav className="mt-3 space-y-1">
                     {navItems.map((item) => {
                         const Icon = item.icon;
                         return (
@@ -24,10 +25,10 @@ export default function SideNav() {
                                 key={item.path}
                                 to={item.path}
                                 className={({ isActive }) =>
-                                    `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition ${
+                                    `flex items-center gap-3 rounded-[var(--radius-xl)] px-3 py-3 text-sm font-medium transition ${
                                         isActive
-                                            ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                                            : "text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-main)]"
+                                            ? "border border-[var(--accent-outline)] bg-[var(--accent-soft)] text-[var(--accent)] shadow-[var(--shadow-xs)]"
+                                            : "border border-transparent text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-main)]"
                                     }`
                                 }
                             >

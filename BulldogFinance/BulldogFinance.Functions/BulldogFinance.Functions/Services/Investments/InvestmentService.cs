@@ -23,16 +23,13 @@ namespace BulldogFinance.Functions.Services.Investments
         {
             _logger = logger;
 
-            // 和其它 Repository 一样，直接从 TableServiceClient 拿表
             _investmentsTable = tableServiceClient.GetTableClient("Investments");
             _watchlistTable = tableServiceClient.GetTableClient("Watchlist");
 
-            // 如果你不想在代码里自动建表，可以把下面两行注释掉
+            // Uncomment these lines if the service should create its tables at startup.
             //_investmentsTable.CreateIfNotExists();
             //_watchlistTable.CreateIfNotExists();
         }
-
-        // ========== Investments 持仓 ==========
 
         public async Task<IReadOnlyList<InvestmentDto>> GetInvestmentsForUserAsync(
             string userId,
@@ -153,8 +150,6 @@ namespace BulldogFinance.Functions.Services.Investments
                 UpdatedAtUtc = e.UpdatedAtUtc
             };
         }
-
-        // ========== Watchlist 自选股 ==========
 
         public async Task<IReadOnlyList<WatchlistItemDto>> GetWatchlistAsync(
             string userId,

@@ -13,7 +13,14 @@ const starterPrompts = [
 ];
 
 export default function AssistantPage() {
-    const { submitMessage } = useChatbot();
+    const {
+        conversations,
+        conversationId,
+        activeConversationTitle,
+        openConversation,
+        startNewConversation,
+        isLoadingHistory,
+    } = useChatbot();
 
     return (
         <div className="space-y-8">
@@ -24,65 +31,56 @@ export default function AssistantPage() {
             />
 
             <div className="grid gap-6 xl:grid-cols-12">
-                <div className="space-y-6 xl:col-span-4">
-                    <Card>
-                        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
-                            Quick start
-                        </p>
-                        <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
-                            Start with a useful question
-                        </h2>
-                        <p className="mt-2 text-sm text-[var(--text-muted)]">
-                            These prompts are tuned to the backend tools already available in Bulldog Finance.
-                        </p>
-
-                        <div className="mt-6 space-y-3">
-                            {starterPrompts.map((prompt) => (
-                                <button
-                                    key={prompt}
-                                    type="button"
-                                    onClick={() => submitMessage(prompt)}
-                                    className="w-full rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-4 text-left text-sm font-medium text-[var(--text-main)] transition hover:border-[#b2ddff] hover:bg-white"
-                                >
-                                    {prompt}
-                                </button>
-                            ))}
-                        </div>
-                    </Card>
-
-                    <Card>
-                        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
-                            What it can do
-                        </p>
-                        <div className="mt-4 space-y-4">
-                            <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-4">
-                                <p className="text-sm font-semibold text-[var(--text-main)]">Portfolio context</p>
-                                <p className="mt-1 text-sm text-[var(--text-soft)]">
-                                    Review holdings, watchlist signals, and market-related questions.
+                <div className="xl:col-span-4">
+                    <Card className="flex h-[720px] min-h-0 flex-col">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                                    Chat history
                                 </p>
+                                <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
+                                    Open a previous thread
+                                </h2>
                             </div>
-                            <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-4">
-                                <p className="text-sm font-semibold text-[var(--text-main)]">Cash flow answers</p>
-                                <p className="mt-1 text-sm text-[var(--text-soft)]">
-                                    Ask about accounts, transactions, inflows, outflows, and category patterns.
-                                </p>
-                            </div>
-                            <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-4">
-                                <p className="text-sm font-semibold text-[var(--text-main)]">Report guidance</p>
-                                <p className="mt-1 text-sm text-[var(--text-soft)]">
-                                    Turn weekly or monthly report content into follow-up actions and explanations.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="mt-6">
-                            <Button
-                                variant="secondary"
-                                className="w-full"
-                                onClick={() => submitMessage("Summarize my current financial picture.")}
-                            >
-                                Ask for a full summary
+                            <Button variant="secondary" onClick={startNewConversation}>
+                                New chat
                             </Button>
+                        </div>
+
+                        <div className="mt-6 flex-1 space-y-3 overflow-y-auto pr-1">
+                            {conversations.length === 0 ? (
+                                <p className="rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-4 text-sm text-[var(--text-muted)]">
+                                    No saved chats yet.
+                                </p>
+                            ) : (
+                                conversations.map((conversation) => {
+                                    const itemConversationId = conversation?.conversationId ?? conversation?.ConversationId ?? "";
+                                    const itemTitle = conversation?.title ?? conversation?.Title ?? "Untitled chat";
+                                    const updatedAtUtc = conversation?.updatedAtUtc ?? conversation?.UpdatedAtUtc;
+                                    const isActive = itemConversationId === conversationId;
+
+                                    return (
+                                        <button
+                                            key={itemConversationId}
+                                            type="button"
+                                            onClick={() => openConversation(itemConversationId)}
+                                            disabled={isLoadingHistory}
+                                            className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+                                                isActive
+                                                    ? "border-[#b2ddff] bg-white"
+                                                    : "border-[var(--card-border)] bg-[var(--bg-main)] hover:border-[#b2ddff] hover:bg-white"
+                                            }`}
+                                        >
+                                            <p className="text-sm font-semibold text-[var(--text-main)]">
+                                                {itemTitle}
+                                            </p>
+                                            <p className="mt-1 text-xs text-[var(--text-soft)]">
+                                                {updatedAtUtc ? `Updated ${new Date(updatedAtUtc).toLocaleString()}` : "Saved chat"}
+                                            </p>
+                                        </button>
+                                    );
+                                })
+                            )}
                         </div>
                     </Card>
                 </div>
@@ -90,9 +88,10 @@ export default function AssistantPage() {
                 <div className="xl:col-span-8">
                     <ChatbotPanel
                         embedded
-                        className="min-h-[720px]"
-                        title="Ask Bulldog Finance"
+                        className="h-[720px]"
+                        title={activeConversationTitle || "Ask Bulldog Finance"}
                         description="Chat with your assistant about recent account movement, portfolio changes, and report takeaways."
+                        prompts={starterPrompts}
                     />
                 </div>
             </div>

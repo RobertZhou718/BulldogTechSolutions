@@ -33,7 +33,7 @@ namespace BulldogFinance.Functions.Services.Accounts
         {
             var result = new List<AccountEntity>();
 
-            // 只按 PartitionKey 过滤，IsArchived 在内存中过滤即可
+            // Table Storage can filter efficiently by PartitionKey; apply the archived check in memory for this workload.
             var query = _accountsTable.QueryAsync<AccountEntity>(
                 ent => ent.PartitionKey == userId,
                 cancellationToken: cancellationToken);
@@ -69,6 +69,28 @@ namespace BulldogFinance.Functions.Services.Accounts
             }
         }
 
+        public async Task<AccountEntity?> GetAccountByExternalReferenceAsync(
+            string userId,
+            string externalSource,
+            string externalAccountId,
+            CancellationToken cancellationToken = default)
+        {
+            var query = _accountsTable.QueryAsync<AccountEntity>(
+                ent => ent.PartitionKey == userId,
+                cancellationToken: cancellationToken);
+
+            await foreach (var item in query)
+            {
+                if (string.Equals(item.ExternalSource, externalSource, System.StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(item.ExternalAccountId, externalAccountId, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return item;
+                }
+            }
+
+            return null;
+        }
+
         public async Task<AccountEntity> UpdateAccountAsync(
             AccountEntity account,
             CancellationToken cancellationToken = default)
@@ -80,6 +102,17 @@ namespace BulldogFinance.Functions.Services.Accounts
                 cancellationToken);
 
             return account;
+        }
+
+        public async Task DeleteAccountAsync(
+            string userId,
+            string accountId,
+            CancellationToken cancellationToken = default)
+        {
+            await _accountsTable.DeleteEntityAsync(
+                userId,
+                accountId,
+                cancellationToken: cancellationToken);
         }
     }
 }

@@ -1,26 +1,19 @@
 import { useCallback, useMemo } from "react";
-import { useMsal } from "@azure/msal-react";
-import { apiConfig } from "./authConfig";
+import { apiConfig } from "@/auth/config/nativeAuthConfig.js";
+import { getStoredAccessToken } from "@/auth/core/tokenStore.js";
 
 export function useApiClient() {
-    const { instance, accounts } = useMsal();
-    const account = accounts[0];
-
-    // 拿 Access Token
     const getAccessToken = useCallback(async () => {
-        if (!account) {
-            throw new Error("No signed-in account");
+        const accessToken = getStoredAccessToken();
+
+        if (!accessToken) {
+            throw new Error("No signed-in access token");
         }
 
-        const result = await instance.acquireTokenSilent({
-            account,
-            scopes: apiConfig.scopes,
-        });
+        return accessToken;
+    }, []);
 
-        return result.accessToken;
-    }, [account, instance]);
-
-    // 通用请求封装
+    // Centralized request helper that attaches the access token and normalizes API errors.
     const request = useCallback(async (path, options = {}) => {
         const token = await getAccessToken();
         const { responseType = "json", allowNotFound = false, ...fetchOptions } = options;
@@ -41,10 +34,21 @@ export function useApiClient() {
         }
 
         if (!response.ok) {
-            const text = await response.text().catch(() => "");
-            console.error("API error", response.status, text);
+            let errorMessage = "";
+            const rawText = await response.text().catch(() => "");
+
+            if (rawText) {
+                try {
+                    const payload = JSON.parse(rawText);
+                    errorMessage = payload?.message || payload?.error || rawText;
+                } catch {
+                    errorMessage = rawText;
+                }
+            }
+
+            console.error("API error", response.status, errorMessage);
             throw new Error(
-                `API ${response.status} ${response.statusText} - ${text}`
+                errorMessage || `API ${response.status} ${response.statusText}`
             );
         }
 
@@ -59,15 +63,11 @@ export function useApiClient() {
         return response.json();
     }, [getAccessToken]);
 
-    // ===== 具体 API 封装 =====
-
-    // GET /api/me  —— 检查用户是否已经 Onboarding
+    // User and account APIs.
     const getMe = useCallback(() => {
         return request("/me", { method: "GET" });
     }, [request]);
 
-    // POST /api/onboarding  —— 初次 Onboarding，提交初始账户信息
-    // payload: { defaultCurrency, accounts: [ { name, type, currency, initialBalance } ] }
     const postOnboarding = useCallback((payload) => {
         return request("/onboarding", {
             method: "POST",
@@ -75,12 +75,24 @@ export function useApiClient() {
         });
     }, [request]);
 
-    // GET /api/accounts  —— 账户列表
     const getAccounts = useCallback(() => {
         return request("/accounts", { method: "GET" });
     }, [request]);
 
-    // GET /api/transactions?accountId=...&from=...&to=...
+    const createAccount = useCallback((payload) => {
+        return request("/accounts", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    }, [request]);
+
+    const deleteAccount = useCallback((accountId) => {
+        return request(`/accounts/${encodeURIComponent(accountId)}`, {
+            method: "DELETE",
+        });
+    }, [request]);
+
+    // Transaction APIs.
     const getTransactions = useCallback((params = {}) => {
         const search = new URLSearchParams();
         if (params.accountId) search.set("accountId", params.accountId);
@@ -93,8 +105,6 @@ export function useApiClient() {
         return request(path, { method: "GET" });
     }, [request]);
 
-    // POST /api/transactions  —— 新增一条收支
-    // tx: { accountId, type: 'INCOME'|'EXPENSE', amount, currency?, category?, note?, occurredAtUtc? }
     const createTransaction = useCallback((tx) => {
         return request("/transactions", {
             method: "POST",
@@ -102,16 +112,41 @@ export function useApiClient() {
         });
     }, [request]);
 
-        // ======================
-    // Investments 持仓相关
-    // ======================
+    // Plaid APIs.
+    const createPlaidLinkToken = useCallback((payload = {}) => {
+        return request("/plaid/link-token", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    }, [request]);
 
+    const exchangePlaidPublicToken = useCallback((payload) => {
+        return request("/plaid/exchange-public-token", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    }, [request]);
+
+    const syncPlaidTransactions = useCallback((payload = {}) => {
+        return request("/plaid/sync-transactions", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    }, [request]);
+
+    const refreshPlaidBalances = useCallback((payload = {}) => {
+        return request("/plaid/refresh-balances", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    }, [request]);
+
+    // Investment APIs.
     const getInvestments = useCallback(() => {
         return request("/investments", { method: "GET" });
     }, [request]);
 
     const upsertInvestment = useCallback((investment) => {
-        // investment: { symbol, exchange, quantity, avgCost, currency }
         return request("/investments", {
             method: "POST",
             body: JSON.stringify(investment),
@@ -124,16 +159,12 @@ export function useApiClient() {
         });
     }, [request]);
 
-    // ======================
-    // Watchlist 自选股
-    // ======================
-
+    // Watchlist APIs.
     const getWatchlist = useCallback(() => {
         return request("/investments/watchlist", { method: "GET" });
     }, [request]);
 
     const addToWatchlist = useCallback((item) => {
-        // item: { symbol, exchange }
         return request("/investments/watchlist", {
             method: "POST",
             body: JSON.stringify(item),
@@ -146,10 +177,7 @@ export function useApiClient() {
         });
     }, [request]);
 
-    // ======================
-    // Overview (价格 + 新闻)
-    // ======================
-
+    // Investment overview APIs.
     const getInvestmentOverview = useCallback(() => {
         return request("/investments/overview", { method: "GET" });
     }, [request]);
@@ -161,10 +189,19 @@ export function useApiClient() {
         });
     }, [request]);
 
+    const getChatConversations = useCallback(() => {
+        return request("/chat/conversations", { method: "GET" });
+    }, [request]);
+
+    const getChatConversation = useCallback((conversationId) => {
+        return request(`/chat/conversations/${encodeURIComponent(conversationId)}`, {
+            method: "GET",
+        });
+    }, [request]);
+
     const getLatestReport = useCallback((period) => {
         return request(`/reports/${encodeURIComponent(period)}/latest`, {
             method: "GET",
-            allowNotFound: true,
         });
     }, [request]);
 
@@ -172,8 +209,14 @@ export function useApiClient() {
         getMe,
         postOnboarding,
         getAccounts,
+        createAccount,
+        deleteAccount,
         getTransactions,
         createTransaction,
+        createPlaidLinkToken,
+        exchangePlaidPublicToken,
+        syncPlaidTransactions,
+        refreshPlaidBalances,
         getInvestments,
         upsertInvestment,
         deleteInvestment,
@@ -182,12 +225,20 @@ export function useApiClient() {
         removeFromWatchlist,
         getInvestmentOverview,
         sendChatMessage,
+        getChatConversations,
+        getChatConversation,
         getLatestReport,
     }), [
         addToWatchlist,
+        createPlaidLinkToken,
+        createAccount,
         createTransaction,
+        deleteAccount,
         deleteInvestment,
+        exchangePlaidPublicToken,
         getAccounts,
+        getChatConversation,
+        getChatConversations,
         getInvestmentOverview,
         getInvestments,
         getLatestReport,
@@ -195,8 +246,10 @@ export function useApiClient() {
         getTransactions,
         getWatchlist,
         postOnboarding,
+        refreshPlaidBalances,
         removeFromWatchlist,
         sendChatMessage,
+        syncPlaidTransactions,
         upsertInvestment,
     ]);
 }

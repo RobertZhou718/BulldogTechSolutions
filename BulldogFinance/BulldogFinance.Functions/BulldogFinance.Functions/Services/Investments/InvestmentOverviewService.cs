@@ -4,7 +4,6 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using BulldogFinance.Functions.Models;
 using BulldogFinance.Functions.Models.Investments;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -53,7 +52,6 @@ namespace BulldogFinance.Functions.Services.Investments
 
             var overview = new InvestmentOverviewDto();
 
-            // 1) 从 InvestmentService 拿持仓
             var holdings = await _investmentService.GetInvestmentsForUserAsync(userId, cancellationToken);
 
             var today = DateTime.UtcNow.Date;
@@ -63,7 +61,7 @@ namespace BulldogFinance.Functions.Services.Investments
 
             if (holdings.Count > 0)
             {
-                // 对当前用户持仓做聚合
+                // Deduplicate held symbols and cap external requests per user.
                 var symbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var h in holdings)
                 {
@@ -129,7 +127,7 @@ namespace BulldogFinance.Functions.Services.Investments
             }
             else
             {
-                // 2) 没有持仓，用 PopularSymbols
+                // Fall back to configured symbols when the user has no holdings yet.
                 var popularStr = _configuration["Finnhub:PopularSymbols"]
                                  ?? "AAPL,MSFT,NVDA,TSLA,GOOGL,AMZN";
 
@@ -179,7 +177,6 @@ namespace BulldogFinance.Functions.Services.Investments
             return defaultValue;
         }
 
-        // === /quote ===
         private async Task<(double price, double changePercent)> GetQuoteAsync(
             HttpClient client,
             string apiKey,
@@ -211,7 +208,6 @@ namespace BulldogFinance.Functions.Services.Investments
             }
         }
 
-        // === /company-news ===
         private async Task<List<InvestmentNewsItemDto>> GetNewsAsync(
             HttpClient client,
             string apiKey,
@@ -249,7 +245,9 @@ namespace BulldogFinance.Functions.Services.Investments
 
                     result.Add(new InvestmentNewsItemDto
                     {
-                        Id = item.id != 0 ? item.id.ToString() : $"{symbol}-{item.datetime}",
+                        Id = item.id.HasValue && item.id.Value != 0
+                            ? item.id.Value.ToString()
+                            : $"{symbol}-{item.datetime}",
                         Headline = item.headline ?? "",
                         Source = item.source ?? "",
                         Datetime = dt,
@@ -267,7 +265,6 @@ namespace BulldogFinance.Functions.Services.Investments
             return result;
         }
 
-        // === 内部类型 ===
         private class FinnhubQuoteResponse
         {
             public double c { get; set; }   // current price

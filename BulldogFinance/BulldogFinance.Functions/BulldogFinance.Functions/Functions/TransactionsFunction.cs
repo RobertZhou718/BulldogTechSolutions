@@ -120,6 +120,7 @@ namespace BulldogFinance.Functions.Functions
                 Currency = currency,
                 Category = requestModel.Category,
                 Note = requestModel.Note,
+                Source = "Manual",
                 OccurredAtUtc = occurredAt,
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now,
@@ -173,7 +174,6 @@ namespace BulldogFinance.Functions.Functions
             HttpRequestData req,
     FunctionContext context)
         {
-            // 1. userId（先用 header 模拟）
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
             {
@@ -182,12 +182,11 @@ namespace BulldogFinance.Functions.Functions
                 return unauthorized;
             }
 
-            // 2. 解析查询字符串：accountId, from, to
             string? accountId = null;
             DateTime? fromUtc = null;
             DateTime? toUtc = null;
 
-            var query = req.Url.Query; // 形如 "?accountId=xxx&from=2025-11-01&to=2025-11-30"
+            var query = req.Url.Query;
             if (!string.IsNullOrWhiteSpace(query))
             {
                 var trimmed = query.TrimStart('?');
@@ -209,7 +208,6 @@ namespace BulldogFinance.Functions.Functions
                     {
                         if (DateTime.TryParse(value, out var parsed))
                         {
-                            // 假设前端传 UTC 时间
                             fromUtc = DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
                         }
                     }
@@ -223,7 +221,6 @@ namespace BulldogFinance.Functions.Functions
                 }
             }
 
-            // 3. 仓储查询
             var entities = await _transactionRepository.GetTransactionsAsync(
                 userId,
                 accountId,
@@ -242,7 +239,12 @@ namespace BulldogFinance.Functions.Functions
                     Currency = t.Currency,
                     Category = t.Category,
                     Note = t.Note,
+                    MerchantName = t.MerchantName,
+                    Source = t.Source,
+                    Pending = t.Pending,
                     OccurredAtUtc = occurred,
+                    AuthorizedAtUtc = t.AuthorizedAtUtc,
+                    PostedAtUtc = t.PostedAtUtc,
                     CreatedAtUtc = t.CreatedAtUtc
                 };
             }).ToList();
