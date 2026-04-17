@@ -5,12 +5,12 @@ namespace BulldogFinance.Functions.Models.Transactions
     public class TransactionCreateRequest
     {
         public string AccountId { get; set; } = default!;
-        public string Type { get; set; } = default!;       // INCOME / EXPENSE
-        public decimal Amount { get; set; }               // 正值金额
-        public string? Currency { get; set; }             // 一般留空，用账户币种
+        public string Type { get; set; } = default!;       // Expected values: INCOME or EXPENSE.
+        public decimal Amount { get; set; }                // Positive amount.
+        public string? Currency { get; set; }              // Usually omitted to use the account currency.
         public string? Category { get; set; }
         public string? Note { get; set; }
-        public DateTime? OccurredAtUtc { get; set; }      // 不传就用当前时间
+        public DateTime? OccurredAtUtc { get; set; }       // Defaults to the current time when omitted.
     }
 
     public class TransactionDto

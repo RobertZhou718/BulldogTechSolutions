@@ -33,7 +33,7 @@ namespace BulldogFinance.Functions.Services.Accounts
         {
             var result = new List<AccountEntity>();
 
-            // 只按 PartitionKey 过滤，IsArchived 在内存中过滤即可
+            // Table Storage can filter efficiently by PartitionKey; apply the archived check in memory for this workload.
             var query = _accountsTable.QueryAsync<AccountEntity>(
                 ent => ent.PartitionKey == userId,
                 cancellationToken: cancellationToken);

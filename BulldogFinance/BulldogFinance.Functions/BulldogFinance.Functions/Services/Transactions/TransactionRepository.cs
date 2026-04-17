@@ -35,7 +35,7 @@ namespace BulldogFinance.Functions.Services.Transactions
         {
             var result = new List<TransactionEntity>();
 
-            // 先按 PartitionKey 过滤，剩下条件在内存中过滤（个人应用足够用）
+            // Table Storage can filter efficiently by PartitionKey; apply the remaining filters in memory for this workload.
             var query = _transactionsTable.QueryAsync<TransactionEntity>(
                 ent => ent.PartitionKey == userId,
                 cancellationToken: cancellationToken);

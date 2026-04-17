@@ -1,26 +1,19 @@
 import { useCallback, useMemo } from "react";
-import { useMsal } from "@azure/msal-react";
-import { apiConfig } from "./authConfig";
+import { apiConfig } from "@/auth/config/nativeAuthConfig.js";
+import { getStoredAccessToken } from "@/auth/core/tokenStore.js";
 
 export function useApiClient() {
-    const { instance, accounts } = useMsal();
-    const account = accounts[0];
-
-    // 拿 Access Token
     const getAccessToken = useCallback(async () => {
-        if (!account) {
-            throw new Error("No signed-in account");
+        const accessToken = getStoredAccessToken();
+
+        if (!accessToken) {
+            throw new Error("No signed-in access token");
         }
 
-        const result = await instance.acquireTokenSilent({
-            account,
-            scopes: apiConfig.scopes,
-        });
+        return accessToken;
+    }, []);
 
-        return result.accessToken;
-    }, [account, instance]);
-
-    // 通用请求封装
+    // Centralized request helper that attaches the access token and normalizes API errors.
     const request = useCallback(async (path, options = {}) => {
         const token = await getAccessToken();
         const { responseType = "json", allowNotFound = false, ...fetchOptions } = options;
@@ -70,15 +63,11 @@ export function useApiClient() {
         return response.json();
     }, [getAccessToken]);
 
-    // ===== 具体 API 封装 =====
-
-    // GET /api/me  —— 检查用户是否已经 Onboarding
+    // User and account APIs.
     const getMe = useCallback(() => {
         return request("/me", { method: "GET" });
     }, [request]);
 
-    // POST /api/onboarding  —— 初次 Onboarding，提交初始账户信息
-    // payload: { defaultCurrency, accounts: [ { name, type, currency, initialBalance } ] }
     const postOnboarding = useCallback((payload) => {
         return request("/onboarding", {
             method: "POST",
@@ -86,7 +75,6 @@ export function useApiClient() {
         });
     }, [request]);
 
-    // GET /api/accounts  —— 账户列表
     const getAccounts = useCallback(() => {
         return request("/accounts", { method: "GET" });
     }, [request]);
@@ -104,7 +92,7 @@ export function useApiClient() {
         });
     }, [request]);
 
-    // GET /api/transactions?accountId=...&from=...&to=...
+    // Transaction APIs.
     const getTransactions = useCallback((params = {}) => {
         const search = new URLSearchParams();
         if (params.accountId) search.set("accountId", params.accountId);
@@ -117,8 +105,6 @@ export function useApiClient() {
         return request(path, { method: "GET" });
     }, [request]);
 
-    // POST /api/transactions  —— 新增一条收支
-    // tx: { accountId, type: 'INCOME'|'EXPENSE', amount, currency?, category?, note?, occurredAtUtc? }
     const createTransaction = useCallback((tx) => {
         return request("/transactions", {
             method: "POST",
@@ -126,6 +112,7 @@ export function useApiClient() {
         });
     }, [request]);
 
+    // Plaid APIs.
     const createPlaidLinkToken = useCallback((payload = {}) => {
         return request("/plaid/link-token", {
             method: "POST",
@@ -154,16 +141,12 @@ export function useApiClient() {
         });
     }, [request]);
 
-        // ======================
-    // Investments 持仓相关
-    // ======================
-
+    // Investment APIs.
     const getInvestments = useCallback(() => {
         return request("/investments", { method: "GET" });
     }, [request]);
 
     const upsertInvestment = useCallback((investment) => {
-        // investment: { symbol, exchange, quantity, avgCost, currency }
         return request("/investments", {
             method: "POST",
             body: JSON.stringify(investment),
@@ -176,16 +159,12 @@ export function useApiClient() {
         });
     }, [request]);
 
-    // ======================
-    // Watchlist 自选股
-    // ======================
-
+    // Watchlist APIs.
     const getWatchlist = useCallback(() => {
         return request("/investments/watchlist", { method: "GET" });
     }, [request]);
 
     const addToWatchlist = useCallback((item) => {
-        // item: { symbol, exchange }
         return request("/investments/watchlist", {
             method: "POST",
             body: JSON.stringify(item),
@@ -198,10 +177,7 @@ export function useApiClient() {
         });
     }, [request]);
 
-    // ======================
-    // Overview (价格 + 新闻)
-    // ======================
-
+    // Investment overview APIs.
     const getInvestmentOverview = useCallback(() => {
         return request("/investments/overview", { method: "GET" });
     }, [request]);

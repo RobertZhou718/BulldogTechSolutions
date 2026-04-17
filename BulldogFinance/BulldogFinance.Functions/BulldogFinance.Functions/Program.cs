@@ -2,6 +2,7 @@ using Azure.Data.Tables;
 using Azure.Identity;
 using Azure.Storage.Blobs;
 using BulldogFinance.Functions.Services.Accounts;
+using BulldogFinance.Functions.Services.Auth;
 using BulldogFinance.Functions.Services.Chat;
 using BulldogFinance.Functions.Services.Investments;
 using BulldogFinance.Functions.Services.Plaid;
@@ -116,6 +117,23 @@ var host = new HostBuilder()
             client.BaseAddress = new Uri(baseUrl);
         });
 
+        services.AddHttpClient("AuthProxy", (sp, client) =>
+        {
+            var config = sp.GetRequiredService<IConfiguration>();
+            var baseUrl = config["AuthProxy:BaseUrl"];
+            var timeoutSeconds = int.TryParse(config["AuthProxy:TimeoutSeconds"], out var parsedTimeout)
+                && parsedTimeout > 0
+                ? parsedTimeout
+                : 30;
+
+            if (!string.IsNullOrWhiteSpace(baseUrl))
+            {
+                client.BaseAddress = new Uri(baseUrl);
+            }
+
+            client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+        });
+
         services.AddDataProtection();
 
         services.AddSingleton<IUserRepository, UserRepository>();
@@ -123,6 +141,7 @@ var host = new HostBuilder()
         services.AddSingleton<ITransactionRepository, TransactionRepository>();
         services.AddSingleton<IPlaidRepository, PlaidRepository>();
 
+        services.AddSingleton<IExternalAuthProxyService, ExternalAuthProxyService>();
         services.AddSingleton<IInvestmentService, InvestmentService>();
         services.AddSingleton<IInvestmentOverviewService, InvestmentOverviewService>();
         services.AddSingleton<IPlaidTokenProtector, PlaidTokenProtector>();

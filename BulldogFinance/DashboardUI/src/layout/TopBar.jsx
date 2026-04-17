@@ -1,6 +1,6 @@
 import React from "react";
-import { useMsal } from "@azure/msal-react";
 import { LogOut01 } from "@untitledui/icons";
+import { useAuth } from "@/auth/core/authContext.js";
 import BulldogLogo from "@/assets/BulldogFinance.png";
 import Button from "@/components/ui/Button.jsx";
 
@@ -8,10 +8,10 @@ export const APP_BAR_HEIGHT = 72;
 export const DRAWER_WIDTH = 280;
 
 export default function TopBar() {
-    const { accounts, instance } = useMsal();
-    const account = accounts[0];
-    const name = account?.name || account?.username || "User";
-    const email = account?.username || "";
+    const { isLoading, signOut, user } = useAuth();
+    const name = user?.name || user?.username || "User";
+    const email = user?.email || user?.username || "";
+    const initials = user?.initials || name?.[0]?.toUpperCase() || "U";
 
     return (
         <header className="sticky top-0 z-40 border-b border-[var(--card-border)] bg-white/80 backdrop-blur-xl">
@@ -39,9 +39,9 @@ export default function TopBar() {
                         <p className="text-sm text-[var(--text-soft)]">{email}</p>
                     </div>
                     <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--accent-outline)] bg-[var(--accent)] text-sm font-semibold text-white shadow-[var(--shadow-xs)]">
-                        {name?.[0]?.toUpperCase() || "U"}
+                        {initials}
                     </div>
-                    <Button variant="secondary" onClick={() => instance.logoutRedirect()}>
+                    <Button variant="secondary" onClick={() => void signOut()} disabled={isLoading}>
                         <LogOut01 className="h-4 w-4" />
                         Sign out
                     </Button>

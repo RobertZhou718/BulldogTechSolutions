@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "@azure/msal-browser": "^4.26.1",
-    "@azure/msal-react": "^3.0.21",
     "@tailwindcss/vite": "^4.2.2",
     "@untitledui/icons": "^0.0.21",
     "react": "^19.2.0",

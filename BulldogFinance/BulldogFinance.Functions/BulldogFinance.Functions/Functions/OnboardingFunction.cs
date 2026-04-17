@@ -43,7 +43,7 @@ namespace BulldogFinance.Functions.Functions
             HttpRequestData req,
             FunctionContext context)
         {
-            // 1. 获取 userId —— 目前仍用 header 模拟，之后换成 token 的 sub
+            // The current auth flow still reads the user id from headers until token subject wiring is in place.
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
             {
@@ -52,7 +52,6 @@ namespace BulldogFinance.Functions.Functions
                 return unauthorized;
             }
 
-            // 2. 读取 body
             string body;
             using (var reader = new StreamReader(req.Body))
             {
@@ -89,7 +88,6 @@ namespace BulldogFinance.Functions.Functions
                 ? "CAD"
                 : request.DefaultCurrency!.Trim().ToUpperInvariant();
 
-            // 3. 检查用户是否已经完成 onboarding
             var existingUser = await _userRepository.GetUserAsync(userId);
             if (existingUser?.OnboardingDone == true)
             {
@@ -105,14 +103,13 @@ namespace BulldogFinance.Functions.Functions
                 DefaultCurrency = defaultCurrency
             };
 
-            // 4. 为每个账户创建 Account + INIT Transaction
             int sortOrder = 0;
 
             foreach (var acc in request.Accounts)
             {
                 if (string.IsNullOrWhiteSpace(acc.Name))
                 {
-                    continue; // 简单跳过空名称
+                    continue;
                 }
 
                 var accountId = Guid.NewGuid().ToString("N");
@@ -120,7 +117,7 @@ namespace BulldogFinance.Functions.Functions
                     ? defaultCurrency
                     : acc.Currency!.Trim().ToUpperInvariant();
 
-                // 金额转为分（long）
+                // Store balances as whole cents to match the persisted account and transaction schema.
                 var amountCents = (long)decimal.Round(
                     acc.InitialBalance * 100m,
                     0,
@@ -142,7 +139,7 @@ namespace BulldogFinance.Functions.Functions
 
                 await _accountRepository.CreateAccountAsync(accountEntity);
 
-                // INIT 交易（如果初始金额不是 0）
+                // Seed the opening balance with a system-generated INIT transaction.
                 if (amountCents != 0)
                 {
                     var transactionId = Guid.NewGuid().ToString("N");
@@ -177,7 +174,6 @@ namespace BulldogFinance.Functions.Functions
                 });
             }
 
-            // 5. 写入 / 更新 Users 表
             var userEntity = existingUser ?? new UserEntity
             {
                 PartitionKey = userId,
@@ -191,7 +187,6 @@ namespace BulldogFinance.Functions.Functions
 
             await _userRepository.UpsertUserAsync(userEntity);
 
-            // 6. 返回响应
             var response = req.CreateResponse(HttpStatusCode.OK);
             response.Headers.Add("Content-Type", "application/json; charset=utf-8");
 

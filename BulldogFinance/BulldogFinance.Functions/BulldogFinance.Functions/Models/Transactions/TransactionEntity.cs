@@ -11,8 +11,8 @@ namespace BulldogFinance.Functions.Models.Transactions
         public DateTimeOffset? Timestamp { get; set; }
         public ETag ETag { get; set; }
 
-        public string AccountId { get; set; } = default!;  // 对应 Accounts.RowKey
-        public string Type { get; set; } = default!;       // INCOME / EXPENSE / INIT
+        public string AccountId { get; set; } = default!;  // Matches Accounts.RowKey.
+        public string Type { get; set; } = default!;       // Values such as INCOME, EXPENSE, or INIT.
 
         public long AmountCents { get; set; }
         public string Currency { get; set; } = "CAD";

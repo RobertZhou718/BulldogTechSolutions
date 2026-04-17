@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ConnectedAccountsCard from "@/components/accounts/ConnectedAccountsCard.jsx";
-import { useMsal } from "@azure/msal-react";
+import { useAuth } from "@/auth/core/authContext.js";
 import AccountManagementCard from "@/components/accounts/AccountManagementCard.jsx";
 import AccountsPieChart from "@/components/dashboard/AccountsPieChart.jsx";
 import CashFlowChart from "@/components/dashboard/CashFlowChart.jsx";
@@ -14,9 +14,9 @@ import { useApiClient } from "@/services/apiClient.js";
 
 export default function DashboardPage() {
     const { getAccounts, getTransactions, getInvestmentOverview, createAccount, deleteAccount } = useApiClient();
-    const { accounts: msalAccounts } = useMsal();
+    const { user } = useAuth();
 
-    const displayName = msalAccounts[0]?.name || msalAccounts[0]?.username || "Friend";
+    const displayName = user?.givenName || user?.name || user?.username || "Friend";
     const defaultCurrency = "CAD";
 
     const [accounts, setAccounts] = useState([]);

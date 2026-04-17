@@ -6,13 +6,11 @@ namespace BulldogFinance.Functions.Models.Investments
 {
     public class InvestmentEntity : ITableEntity
     {
-        // ITableEntity
         public string PartitionKey { get; set; } = default!;  // userId
         public string RowKey { get; set; } = default!;        // symbol (e.g. "AAPL")
         public DateTimeOffset? Timestamp { get; set; }
         public ETag ETag { get; set; }
 
-        // 业务字段
         public string Symbol { get; set; } = default!;
         public string Exchange { get; set; } = "US";
         public double Quantity { get; set; }
