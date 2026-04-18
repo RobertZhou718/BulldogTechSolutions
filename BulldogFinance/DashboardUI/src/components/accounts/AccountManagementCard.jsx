@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import ConnectBankButton from "@/components/plaid/ConnectBankButton.jsx";
+import ConnectBankButton from "@/components/dashboard/plaid/ConnectBankButton.jsx";
 import Button from "@/components/ui/Button.jsx";
 import Card from "@/components/ui/Card.jsx";
 import { Field, Input, Select } from "@/components/ui/Field.jsx";
