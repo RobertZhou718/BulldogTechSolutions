@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import Button from "@/components/ui/Button.jsx";
 import Card from "@/components/ui/Card.jsx";
 import { Field, Input, Select } from "@/components/ui/Field.jsx";
@@ -24,18 +24,12 @@ export default function TransactionForm({
     onAccountChange,
     onSubmit,
 }) {
-    const [accountId, setAccountId] = useState(selectedAccountId || "");
     const [type, setType] = useState("EXPENSE");
     const [amount, setAmount] = useState("");
     const [category, setCategory] = useState("General");
     const [note, setNote] = useState("");
     const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-
-    useEffect(() => {
-        if (selectedAccountId && selectedAccountId !== accountId) {
-            setAccountId(selectedAccountId);
-        }
-    }, [selectedAccountId, accountId]);
+    const accountId = selectedAccountId || accounts[0]?.accountId || "";
 
     const currentAccount = accounts.find((a) => a.accountId === accountId);
     const currency = currentAccount?.currency || "CAD";
@@ -77,10 +71,7 @@ export default function TransactionForm({
                 <Field label="Account" className="xl:col-span-2">
                     <Select
                         value={accountId}
-                        onChange={(e) => {
-                            setAccountId(e.target.value);
-                            onAccountChange?.(e.target.value);
-                        }}
+                        onChange={(e) => onAccountChange?.(e.target.value)}
                     >
                         {accounts.map((acc) => (
                             <option key={acc.accountId} value={acc.accountId}>

@@ -1,18 +1,20 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
 import PublicOnlyRoute from "@/auth/core/PublicOnlyRoute.jsx";
 import RequireAuth from "@/auth/core/RequireAuth.jsx";
-import MainLayout from "@/layout/MainLayout.jsx";
-import AssistantPage from "@/pages/Assistant.jsx";
-import DashboardPage from "@/pages/Dashboard.jsx";
-import InvestmentsPage from "@/pages/Investments.jsx";
-import NotFoundPage from "@/pages/NotFound.jsx";
-import OnboardingGate from "@/pages/OnboardingGate.jsx";
-import OnboardingPage from "@/pages/Onboarding.jsx";
-import TransactionsPage from "@/pages/Transactions.jsx";
-import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage.jsx";
-import LoginPage from "@/pages/auth/LoginPage.jsx";
-import SignupPage from "@/pages/auth/SignupPage.jsx";
+import Spinner from "@/components/ui/Spinner.jsx";
+
+const MainLayout = lazy(() => import("@/layout/MainLayout.jsx"));
+const AssistantPage = lazy(() => import("@/pages/Assistant.jsx"));
+const DashboardPage = lazy(() => import("@/pages/Dashboard.jsx"));
+const InvestmentsPage = lazy(() => import("@/pages/Investments.jsx"));
+const NotFoundPage = lazy(() => import("@/pages/NotFound.jsx"));
+const OnboardingGate = lazy(() => import("@/pages/OnboardingGate.jsx"));
+const OnboardingPage = lazy(() => import("@/pages/Onboarding.jsx"));
+const TransactionsPage = lazy(() => import("@/pages/Transactions.jsx"));
+const ForgotPasswordPage = lazy(() => import("@/pages/auth/ForgotPasswordPage.jsx"));
+const LoginPage = lazy(() => import("@/pages/auth/LoginPage.jsx"));
+const SignupPage = lazy(() => import("@/pages/auth/SignupPage.jsx"));
 
 function ProtectedShell() {
     return (
@@ -25,25 +27,33 @@ function ProtectedShell() {
 export default function App() {
     return (
         <BrowserRouter>
-            <Routes>
-                <Route element={<PublicOnlyRoute />}>
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="/signup" element={<SignupPage />} />
-                    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                </Route>
-
-                <Route element={<RequireAuth />}>
-                    <Route element={<ProtectedShell />}>
-                        <Route path="/" element={<OnboardingGate />} />
-                        <Route path="/onboarding" element={<OnboardingPage />} />
-                        <Route path="/dashboard" element={<DashboardPage />} />
-                        <Route path="/transactions" element={<TransactionsPage />} />
-                        <Route path="/investments" element={<InvestmentsPage />} />
-                        <Route path="/assistant" element={<AssistantPage />} />
-                        <Route path="*" element={<NotFoundPage />} />
+            <Suspense
+                fallback={(
+                    <div className="flex min-h-screen items-center justify-center">
+                        <Spinner className="h-8 w-8" />
+                    </div>
+                )}
+            >
+                <Routes>
+                    <Route element={<PublicOnlyRoute />}>
+                        <Route path="/login" element={<LoginPage />} />
+                        <Route path="/signup" element={<SignupPage />} />
+                        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                     </Route>
-                </Route>
-            </Routes>
+
+                    <Route element={<RequireAuth />}>
+                        <Route element={<ProtectedShell />}>
+                            <Route path="/" element={<OnboardingGate />} />
+                            <Route path="/onboarding" element={<OnboardingPage />} />
+                            <Route path="/dashboard" element={<DashboardPage />} />
+                            <Route path="/transactions" element={<TransactionsPage />} />
+                            <Route path="/investments" element={<InvestmentsPage />} />
+                            <Route path="/assistant" element={<AssistantPage />} />
+                            <Route path="*" element={<NotFoundPage />} />
+                        </Route>
+                    </Route>
+                </Routes>
+            </Suspense>
         </BrowserRouter>
     );
 }

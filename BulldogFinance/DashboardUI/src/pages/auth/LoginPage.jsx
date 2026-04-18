@@ -62,35 +62,45 @@ export default function LoginPage() {
 
     return (
         <AuthLayout
-            title="Log in"
-            subtitle="Sign in with your Bulldog Finance email and password or continue with Google."
+            title="Welcome back"
+            subtitle="Sign in to Bulldog Finance with your email and password, or continue with Google."
         >
             <div className="space-y-6">
                 <AuthTabs active="login" />
 
-                <form className="space-y-5" onSubmit={handlePasswordSignIn}>
-                    <EmailField
-                        value={form.email}
-                        onChange={handleFieldChange}
-                    />
-
-                    <div className="space-y-2">
-                        <PasswordField
-                            value={form.password}
+                <form className="space-y-6" onSubmit={handlePasswordSignIn}>
+                    <div className="space-y-4">
+                        <EmailField
+                            value={form.email}
                             onChange={handleFieldChange}
                         />
-                        <div className="flex justify-end">
-                            <Link
-                                to="/forgot-password"
-                                className="text-sm font-semibold text-[var(--accent)]"
-                            >
-                                Forgot password?
-                            </Link>
+
+                        <div className="space-y-2">
+                            <PasswordField
+                                value={form.password}
+                                onChange={handleFieldChange}
+                            />
+                            <div className="flex items-center justify-between gap-4">
+                                <label className="inline-flex items-center gap-2 text-sm text-[var(--color-gray-600)]">
+                                    <input
+                                        type="checkbox"
+                                        defaultChecked
+                                        className="h-4 w-4 rounded border-[var(--color-gray-300)] text-[var(--accent)] focus:ring-[var(--focus-ring)]"
+                                    />
+                                    Keep me signed in
+                                </label>
+                                <Link
+                                    to="/forgot-password"
+                                    className="text-sm font-semibold text-[var(--accent)]"
+                                >
+                                    Forgot password?
+                                </Link>
+                            </div>
                         </div>
                     </div>
 
                     {error ? (
-                        <div className="rounded-[12px] border border-[#fecdca] bg-[#fef3f2] px-4 py-3 text-sm text-[#b42318]">
+                        <div className="rounded-[12px] border border-[var(--color-error-100)] bg-[var(--color-error-50)] px-4 py-3 text-sm text-[var(--color-error-700)]">
                             {error}
                         </div>
                     ) : null}
@@ -98,26 +108,37 @@ export default function LoginPage() {
                     <div className="space-y-3">
                         <Button
                             type="submit"
-                            className="min-h-11 w-full rounded-[10px] shadow-none"
+                            className="min-h-11 w-full rounded-[10px] shadow-[var(--shadow-sm)]"
                             disabled={isLoading}
                         >
                             Sign in
                         </Button>
+
+                        <div className="relative py-1">
+                            <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t border-[var(--color-gray-200)]" />
+                            </div>
+                            <span className="relative mx-auto flex w-fit bg-white px-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-gray-500)]">
+                                Or
+                            </span>
+                        </div>
 
                         <GoogleButton
                             type="button"
                             onClick={handleGoogleSignIn}
                             disabled={isLoading}
                         >
-                            Sign in with Google
+                            Continue with Google
                         </GoogleButton>
                     </div>
                 </form>
 
-                <p className="text-xs leading-5 text-[var(--text-soft)]">
-                    Native auth is powered by Microsoft Entra External ID. Google uses the
-                    External ID social provider popup flow.
-                </p>
+                <div className="rounded-[12px] border border-[var(--color-brand-200)] bg-[var(--color-brand-25)] px-4 py-3">
+                    <p className="text-xs leading-5 text-[var(--color-brand-800)]">
+                        Protected by Microsoft Entra External ID. Google sign-in uses the
+                        secure External ID social provider flow.
+                    </p>
+                </div>
             </div>
         </AuthLayout>
     );

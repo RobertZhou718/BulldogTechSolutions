@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ConnectedAccountsCard from "@/components/accounts/ConnectedAccountsCard.jsx";
 import { useAuth } from "@/auth/core/authContext.js";
 import AccountManagementCard from "@/components/accounts/AccountManagementCard.jsx";
@@ -9,8 +9,15 @@ import InvestmentsChart from "@/components/dashboard/InvestmentsChart.jsx";
 import MetricCard from "@/components/ui/MetricCard.jsx";
 import PageHeader from "@/components/ui/PageHeader.jsx";
 import Spinner from "@/components/ui/Spinner.jsx";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrencyBreakdown } from "@/lib/utils";
 import { useApiClient } from "@/services/apiClient.js";
+
+const CASH_FLOW_PALETTE = [
+    { income: "#12b76a", expense: "#1570ef" },
+    { income: "#f79009", expense: "#93370d" },
+    { income: "#7a5af8", expense: "#5925dc" },
+    { income: "#36bffa", expense: "#026aa2" },
+];
 
 export default function DashboardPage() {
     const { getAccounts, getTransactions, getInvestmentOverview, createAccount, deleteAccount } = useApiClient();
@@ -25,7 +32,7 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const loadDashboard = async () => {
+    const loadDashboard = useCallback(async () => {
         const end = new Date();
         const start = new Date(end);
         start.setMonth(end.getMonth() - 5);
@@ -43,7 +50,7 @@ export default function DashboardPage() {
         setAccounts(accountsData || []);
         setTransactions(transactionsData || []);
         setOverview(overviewData || null);
-    };
+    }, [getAccounts, getInvestmentOverview, getTransactions]);
 
     useEffect(() => {
         (async () => {
@@ -56,7 +63,7 @@ export default function DashboardPage() {
                 setLoading(false);
             }
         })();
-    }, [getAccounts, getInvestmentOverview, getTransactions]);
+    }, [loadDashboard]);
 
     const refreshDashboard = async () => {
         setError(null);
@@ -77,7 +84,7 @@ export default function DashboardPage() {
         await refreshDashboard();
     };
 
-    const cashFlowSeries = useMemo(() => {
+    const cashFlowData = useMemo(() => {
         const months = Array.from({ length: 6 }, (_, index) => {
             const date = new Date();
             date.setMonth(date.getMonth() - (5 - index));
@@ -89,11 +96,8 @@ export default function DashboardPage() {
                 expense: 0,
             };
         });
-
-        const monthMap = months.reduce((map, month) => {
-            map[month.key] = month;
-            return map;
-        }, {});
+        const emptyMonths = months.map((month) => ({ ...month }));
+        const monthMapsByCurrency = new Map();
 
         transactions.forEach((tx) => {
             const occurredAt = tx.occurredAtUtc || tx.occurredAt || tx.createdAtUtc;
@@ -101,7 +105,19 @@ export default function DashboardPage() {
 
             const date = new Date(occurredAt);
             const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-            const bucket = monthMap[key];
+            const currency = tx.currency || defaultCurrency;
+
+            if (!monthMapsByCurrency.has(currency)) {
+                monthMapsByCurrency.set(
+                    currency,
+                    emptyMonths.reduce((map, month) => {
+                        map[month.key] = { ...month };
+                        return map;
+                    }, {})
+                );
+            }
+
+            const bucket = monthMapsByCurrency.get(currency)?.[key];
             if (!bucket) return;
 
             const amount = Number(tx.amount) || 0;
@@ -112,8 +128,23 @@ export default function DashboardPage() {
             }
         });
 
-        return months;
-    }, [transactions]);
+        const currencies = Array.from(monthMapsByCurrency.entries()).map(([currency, monthMap]) => ({
+            currency,
+            months: months.map((month) => monthMap[month.key] ?? { ...month }),
+        }));
+
+        if (currencies.length === 0) {
+            currencies.push({
+                currency: defaultCurrency,
+                months: emptyMonths,
+            });
+        }
+
+        return {
+            periods: months.map((month) => month.label),
+            currencies,
+        };
+    }, [defaultCurrency, transactions]);
 
     const holdings = overview?.holdings ?? overview?.Holdings ?? [];
     const investmentLabels = holdings.map((holding) => holding.symbol ?? holding.Symbol ?? "Holding");
@@ -134,26 +165,72 @@ export default function DashboardPage() {
         },
     ];
 
-    const totalNetWorth = useMemo(
-        () => accounts.reduce((sum, acc) => sum + (acc.currentBalance ?? 0), 0),
-        [accounts]
+    const accountCurrencyTotals = useMemo(() => {
+        const totals = new Map();
+
+        accounts.forEach((account) => {
+            const currency = account.currency || defaultCurrency;
+            totals.set(currency, (totals.get(currency) || 0) + (account.currentBalance ?? 0));
+        });
+
+        return Array.from(totals, ([currency, amount]) => ({ currency, amount }));
+    }, [accounts, defaultCurrency]);
+    const hasMixedAccountCurrencies = accountCurrencyTotals.length > 1;
+    const netWorthLabel = useMemo(
+        () => formatCurrencyBreakdown(accountCurrencyTotals, 0),
+        [accountCurrencyTotals]
     );
-
-    const latestCashFlowDelta = useMemo(() => {
-        const latest = cashFlowSeries[cashFlowSeries.length - 1];
-        const latestIncome = latest?.income ?? 0;
-        const latestExpense = latest?.expense ?? 0;
-        return latestIncome - latestExpense;
-    }, [cashFlowSeries]);
-
-    const pieAccounts = useMemo(
+    const hasMixedCashFlowCurrencies = cashFlowData.currencies.length > 1;
+    const latestCashFlowEntries = useMemo(
         () =>
-            accounts.map((acc) => ({
-                id: acc.accountId,
-                name: acc.name,
-                balance: acc.currentBalance ?? 0,
-            })),
-        [accounts]
+            cashFlowData.currencies.map(({ currency, months }) => {
+                const latest = months[months.length - 1];
+                return {
+                    currency,
+                    amount: (latest?.income ?? 0) - (latest?.expense ?? 0),
+                };
+            }),
+        [cashFlowData.currencies]
+    );
+    const latestCashFlowLabel = useMemo(
+        () => formatCurrencyBreakdown(latestCashFlowEntries, 0),
+        [latestCashFlowEntries]
+    );
+    const latestCashFlowPrimaryDelta = latestCashFlowEntries[0]?.amount ?? 0;
+    const cashFlowChartSeries = useMemo(
+        () =>
+            cashFlowData.currencies.flatMap(({ currency, months }, index) => {
+                const palette = CASH_FLOW_PALETTE[index % CASH_FLOW_PALETTE.length];
+                const suffix = hasMixedCashFlowCurrencies ? ` (${currency})` : "";
+
+                return [
+                    {
+                        label: `Income${suffix}`,
+                        data: months.map((month) => month.income),
+                        color: palette.income,
+                    },
+                    {
+                        label: `Spending${suffix}`,
+                        data: months.map((month) => month.expense),
+                        color: palette.expense,
+                    },
+                ];
+            }),
+        [cashFlowData.currencies, hasMixedCashFlowCurrencies]
+    );
+    const allocationItems = useMemo(
+        () => (
+            hasMixedAccountCurrencies
+                ? accountCurrencyTotals.map(({ currency, amount }) => ({
+                    label: currency,
+                    value: formatCurrencyBreakdown([{ currency, amount }], 0),
+                }))
+                : accounts.map((account) => ({
+                    label: account.name,
+                    value: account.currentBalance ?? 0,
+                }))
+        ),
+        [accountCurrencyTotals, accounts, hasMixedAccountCurrencies]
     );
 
     if (loading) {
@@ -178,8 +255,8 @@ export default function DashboardPage() {
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                     <MetricCard
                         label="Net worth"
-                        value={formatCurrency(totalNetWorth, "CAD", 0)}
-                        hint="All linked accounts"
+                        value={netWorthLabel}
+                        hint={hasMixedAccountCurrencies ? "Grouped by currency; no FX conversion applied" : "All linked accounts"}
                     />
                     <MetricCard
                         label="Linked accounts"
@@ -187,8 +264,9 @@ export default function DashboardPage() {
                     />
                     <MetricCard
                         label="Latest cash flow"
-                        value={formatCurrency(latestCashFlowDelta, "CAD", 0)}
-                        tone={latestCashFlowDelta >= 0 ? "positive" : "negative"}
+                        value={latestCashFlowLabel}
+                        tone={hasMixedCashFlowCurrencies ? "default" : (latestCashFlowPrimaryDelta >= 0 ? "positive" : "negative")}
+                        hint={hasMixedCashFlowCurrencies ? "Grouped by currency; no FX conversion applied" : undefined}
                     />
                 </div>
             </PageHeader>
@@ -202,16 +280,29 @@ export default function DashboardPage() {
                 />
                 <ConnectedAccountsCard accounts={accounts} onDeleteAccount={handleDeleteAccount} />
                 <div className="xl:col-span-4">
-                    <GreetingCard name={displayName} total={totalNetWorth} />
+                    <GreetingCard
+                        isMultiCurrency={hasMixedAccountCurrencies}
+                        name={displayName}
+                        totalLabel={netWorthLabel}
+                    />
                 </div>
                 <div className="xl:col-span-8">
-                    <AccountsPieChart accounts={pieAccounts} />
+                    <AccountsPieChart
+                        items={allocationItems}
+                        title={hasMixedAccountCurrencies ? "Balances by currency" : "Account composition"}
+                        description={hasMixedAccountCurrencies
+                            ? "Balances are grouped by currency because no FX conversion is applied."
+                            : "Balance split across your connected accounts."}
+                        renderAsList={hasMixedAccountCurrencies}
+                    />
                 </div>
                 <div className="xl:col-span-6">
                     <CashFlowChart
-                        periods={cashFlowSeries.map((item) => item.label)}
-                        income={cashFlowSeries.map((item) => item.income)}
-                        expenses={cashFlowSeries.map((item) => item.expense)}
+                        periods={cashFlowData.periods}
+                        series={cashFlowChartSeries}
+                        description={hasMixedCashFlowCurrencies
+                            ? "Monthly income and spending grouped by currency without FX conversion."
+                            : "Recent movement across recurring income and expenses."}
                     />
                 </div>
                 <div className="xl:col-span-6">

@@ -1,7 +1,6 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useApiClient } from "@/services/apiClient";
-
-const ChatbotContext = createContext(null);
+import { ChatbotContext } from "./chatbotContext.js";
 
 const starterMessages = [
     {
@@ -42,7 +41,7 @@ export function ChatbotProvider({ children }) {
         };
     }, [getChatConversations]);
 
-    const refreshConversations = async (preferredConversationId = "") => {
+    const refreshConversations = useCallback(async (preferredConversationId = "") => {
         const items = await getChatConversations();
         const nextItems = Array.isArray(items) ? items : [];
         setConversations(nextItems);
@@ -53,18 +52,18 @@ export function ChatbotProvider({ children }) {
             );
             setActiveConversationTitle(active?.title ?? active?.Title ?? "");
         }
-    };
+    }, [getChatConversations]);
 
-    const startNewConversation = () => {
+    const startNewConversation = useCallback(() => {
         setConversationId("");
         setActiveConversationTitle("");
         setMessages(starterMessages);
         setDraft("");
         setError("");
         setIsOpen(true);
-    };
+    }, []);
 
-    const openConversation = async (nextConversationId) => {
+    const openConversation = useCallback(async (nextConversationId) => {
         if (!nextConversationId) {
             startNewConversation();
             return;
@@ -97,9 +96,9 @@ export function ChatbotProvider({ children }) {
         } finally {
             setIsLoadingHistory(false);
         }
-    };
+    }, [getChatConversation, startNewConversation]);
 
-    const submitMessage = async (customMessage) => {
+    const submitMessage = useCallback(async (customMessage) => {
         const message = String(customMessage ?? draft).trim();
         if (!message || isSending) {
             return;
@@ -143,7 +142,7 @@ export function ChatbotProvider({ children }) {
             setIsSending(false);
             setIsOpen(true);
         }
-    };
+    }, [conversationId, draft, isSending, refreshConversations, sendChatMessage]);
 
     const value = useMemo(() => ({
         conversations,
@@ -173,16 +172,11 @@ export function ChatbotProvider({ children }) {
         isOpen,
         isSending,
         messages,
+        openConversation,
+        refreshConversations,
+        startNewConversation,
+        submitMessage,
     ]);
 
     return <ChatbotContext.Provider value={value}>{children}</ChatbotContext.Provider>;
-}
-
-export function useChatbot() {
-    const context = useContext(ChatbotContext);
-    if (!context) {
-        throw new Error("useChatbot must be used within ChatbotProvider");
-    }
-
-    return context;
 }

@@ -42,7 +42,10 @@ export default function InvestmentsPage() {
         loadAll();
     }, [loadAll]);
 
-    const holdings = overview?.Holdings ?? overview?.holdings ?? [];
+    const holdings = useMemo(
+        () => overview?.Holdings ?? overview?.holdings ?? [],
+        [overview]
+    );
 
     const totals = useMemo(() => {
         const marketValue = holdings.reduce(

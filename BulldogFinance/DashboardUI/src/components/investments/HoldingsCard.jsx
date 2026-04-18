@@ -18,8 +18,7 @@ export default function HoldingsCard({
         avgCost: "",
         currency: "USD",
     });
-
-    const list = holdings || [];
+    const list = useMemo(() => holdings || [], [holdings]);
 
     const totals = useMemo(() => {
         const totalMarketValue = list.reduce(

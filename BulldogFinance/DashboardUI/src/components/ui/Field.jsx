@@ -4,39 +4,56 @@ import { cn } from "@/lib/utils";
 export function Field({ label, hint, error, children, className }) {
     return (
         <label className={cn("flex flex-col gap-1.5", className)}>
-            {label ? <span className="text-sm font-medium text-[var(--text-muted)]">{label}</span> : null}
+            {label ? (
+                <span className="text-sm font-medium text-[var(--color-gray-700)]">{label}</span>
+            ) : null}
             {children}
             {error ? (
-                <span className="text-sm text-[var(--color-error-500)]">{error}</span>
+                <span className="text-sm text-[var(--color-error-700)]">{error}</span>
             ) : hint ? (
-                <span className="text-sm text-[var(--text-soft)]">{hint}</span>
+                <span className="text-sm text-[var(--color-gray-500)]">{hint}</span>
             ) : null}
         </label>
     );
 }
 
-export function Input(props) {
+export function Input({ className, size = "md", ...props }) {
+    const sizeClassName = size === "sm" ? "px-3 py-2" : "px-3.5 py-2.5";
+
     return (
         <input
-            className="w-full rounded-[var(--radius-lg)] border border-[var(--card-border)] bg-[var(--card-bg-strong)] px-3.5 py-2.5 text-sm text-[var(--text-main)] shadow-[var(--shadow-xs)] outline-none transition placeholder:text-[var(--text-soft)] hover:border-[var(--card-border-strong)] focus:border-[var(--color-brand-300)] focus:ring-4 focus:ring-[var(--focus-ring)]"
+            className={cn(
+                "w-full rounded-lg bg-white text-sm text-[var(--color-gray-900)] shadow-[var(--shadow-xs)] ring-1 ring-inset ring-[var(--color-gray-300)] outline-none transition duration-100 ease-linear placeholder:text-[var(--color-gray-500)] hover:ring-[var(--color-gray-400)] focus:ring-2 focus:ring-[var(--color-brand-500)] disabled:cursor-not-allowed disabled:bg-[var(--color-gray-100)] disabled:text-[var(--color-gray-400)] disabled:ring-[var(--color-gray-300)]",
+                sizeClassName,
+                className
+            )}
             {...props}
         />
     );
 }
 
-export function Select(props) {
+export function Select({ className, size = "md", ...props }) {
+    const sizeClassName = size === "sm" ? "px-3 py-2" : "px-3.5 py-2.5";
+
     return (
         <select
-            className="w-full rounded-[var(--radius-lg)] border border-[var(--card-border)] bg-[var(--card-bg-strong)] px-3.5 py-2.5 text-sm text-[var(--text-main)] shadow-[var(--shadow-xs)] outline-none transition hover:border-[var(--card-border-strong)] focus:border-[var(--color-brand-300)] focus:ring-4 focus:ring-[var(--focus-ring)]"
+            className={cn(
+                "w-full rounded-lg bg-white text-sm text-[var(--color-gray-900)] shadow-[var(--shadow-xs)] ring-1 ring-inset ring-[var(--color-gray-300)] outline-none transition duration-100 ease-linear hover:ring-[var(--color-gray-400)] focus:ring-2 focus:ring-[var(--color-brand-500)] disabled:cursor-not-allowed disabled:bg-[var(--color-gray-100)] disabled:text-[var(--color-gray-400)] disabled:ring-[var(--color-gray-300)]",
+                sizeClassName,
+                className
+            )}
             {...props}
         />
     );
 }
 
-export function Textarea(props) {
+export function Textarea({ className, ...props }) {
     return (
         <textarea
-            className="w-full rounded-[var(--radius-lg)] border border-[var(--card-border)] bg-[var(--card-bg-strong)] px-3.5 py-2.5 text-sm text-[var(--text-main)] shadow-[var(--shadow-xs)] outline-none transition placeholder:text-[var(--text-soft)] hover:border-[var(--card-border-strong)] focus:border-[var(--color-brand-300)] focus:ring-4 focus:ring-[var(--focus-ring)]"
+            className={cn(
+                "w-full rounded-lg bg-white px-3.5 py-2.5 text-sm text-[var(--color-gray-900)] shadow-[var(--shadow-xs)] ring-1 ring-inset ring-[var(--color-gray-300)] outline-none transition duration-100 ease-linear placeholder:text-[var(--color-gray-500)] hover:ring-[var(--color-gray-400)] focus:ring-2 focus:ring-[var(--color-brand-500)] disabled:cursor-not-allowed disabled:bg-[var(--color-gray-100)] disabled:text-[var(--color-gray-400)] disabled:ring-[var(--color-gray-300)]",
+                className
+            )}
             {...props}
         />
     );

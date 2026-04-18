@@ -32,17 +32,22 @@ namespace BulldogFinance.Functions.Services.Accounts
             CancellationToken cancellationToken = default)
         {
             var result = new List<AccountEntity>();
+            var filterParts = new List<string>
+            {
+                TableClient.CreateQueryFilter($"PartitionKey eq {userId}")
+            };
 
-            // Table Storage can filter efficiently by PartitionKey; apply the archived check in memory for this workload.
+            if (!includeArchived)
+            {
+                filterParts.Add(TableClient.CreateQueryFilter($"IsArchived eq {false}"));
+            }
+
             var query = _accountsTable.QueryAsync<AccountEntity>(
-                ent => ent.PartitionKey == userId,
+                filter: string.Join(" and ", filterParts),
                 cancellationToken: cancellationToken);
 
             await foreach (var item in query)
             {
-                if (!includeArchived && item.IsArchived)
-                    continue;
-
                 result.Add(item);
             }
 
@@ -75,17 +80,20 @@ namespace BulldogFinance.Functions.Services.Accounts
             string externalAccountId,
             CancellationToken cancellationToken = default)
         {
+            var filter = string.Join(" and ", new[]
+            {
+                TableClient.CreateQueryFilter($"PartitionKey eq {userId}"),
+                TableClient.CreateQueryFilter($"ExternalSource eq {externalSource}"),
+                TableClient.CreateQueryFilter($"ExternalAccountId eq {externalAccountId}")
+            });
+
             var query = _accountsTable.QueryAsync<AccountEntity>(
-                ent => ent.PartitionKey == userId,
+                filter: filter,
                 cancellationToken: cancellationToken);
 
             await foreach (var item in query)
             {
-                if (string.Equals(item.ExternalSource, externalSource, System.StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(item.ExternalAccountId, externalAccountId, System.StringComparison.OrdinalIgnoreCase))
-                {
-                    return item;
-                }
+                return item;
             }
 
             return null;

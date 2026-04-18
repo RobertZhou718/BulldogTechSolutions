@@ -2,7 +2,7 @@ import React from "react";
 import Card from "@/components/ui/Card.jsx";
 import Button from "@/components/ui/Button.jsx";
 import { Input } from "@/components/ui/Field.jsx";
-import { useChatbot } from "./ChatbotContext.jsx";
+import { useChatbot } from "./chatbotContext.js";
 import chatbotAvatar from "@/assets/BulldogFinance.png";
 
 export default function ChatbotPanel({

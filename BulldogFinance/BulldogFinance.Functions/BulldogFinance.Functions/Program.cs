@@ -10,9 +10,11 @@ using BulldogFinance.Functions.Services.Reports;
 using BulldogFinance.Functions.Services.Tools;
 using BulldogFinance.Functions.Services.Transactions;
 using BulldogFinance.Functions.Services.Users;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.IO;
 
 var host = new HostBuilder()
     .ConfigureFunctionsWebApplication()
@@ -134,7 +136,15 @@ var host = new HostBuilder()
             client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
         });
 
-        services.AddDataProtection();
+        var dataProtectionBuilder = services
+            .AddDataProtection()
+            .SetApplicationName("BulldogFinance.Functions");
+
+        var dataProtectionKeysDirectory = configuration["DataProtection:KeysDirectory"];
+        if (!string.IsNullOrWhiteSpace(dataProtectionKeysDirectory))
+        {
+            dataProtectionBuilder.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysDirectory));
+        }
 
         services.AddSingleton<IUserRepository, UserRepository>();
         services.AddSingleton<IAccountRepository, AccountRepository>();
