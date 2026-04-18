@@ -11,17 +11,21 @@ namespace BulldogFinance.Functions.Services.Plaid
     {
         private const string PlaidItemsTableName = "PlaidItems";
         private const string PlaidAccountLinksTableName = "PlaidAccountLinks";
+        private const string PlaidItemLookupTableName = "PlaidItemLookup";
 
         private readonly TableClient _itemsTable;
         private readonly TableClient _accountLinksTable;
+        private readonly TableClient _itemLookupTable;
 
         public PlaidRepository(TableServiceClient tableServiceClient)
         {
             _itemsTable = tableServiceClient.GetTableClient(PlaidItemsTableName);
             _accountLinksTable = tableServiceClient.GetTableClient(PlaidAccountLinksTableName);
+            _itemLookupTable = tableServiceClient.GetTableClient(PlaidItemLookupTableName);
 
             _itemsTable.CreateIfNotExists();
             _accountLinksTable.CreateIfNotExists();
+            _itemLookupTable.CreateIfNotExists();
         }
 
         public async Task<PlaidItemEntity?> GetItemAsync(string userId, string itemId, CancellationToken cancellationToken = default)
@@ -43,12 +47,35 @@ namespace BulldogFinance.Functions.Services.Plaid
 
         public async Task<PlaidItemEntity?> GetItemByItemIdAsync(string itemId, CancellationToken cancellationToken = default)
         {
+            try
+            {
+                var lookup = await _itemLookupTable.GetEntityAsync<PlaidItemLookupEntity>(
+                    PlaidItemLookupEntity.LookupPartitionKey,
+                    itemId,
+                    cancellationToken: cancellationToken);
+
+                var indexedItem = await GetItemAsync(lookup.Value.UserId, itemId, cancellationToken);
+                if (indexedItem != null)
+                {
+                    return indexedItem;
+                }
+
+                await _itemLookupTable.DeleteEntityAsync(
+                    PlaidItemLookupEntity.LookupPartitionKey,
+                    itemId,
+                    cancellationToken: cancellationToken);
+            }
+            catch (RequestFailedException ex) when (ex.Status == 404)
+            {
+            }
+
             var query = _itemsTable.QueryAsync<PlaidItemEntity>(
                 ent => ent.RowKey == itemId,
                 cancellationToken: cancellationToken);
 
             await foreach (var item in query)
             {
+                await UpsertLookupAsync(item, cancellationToken);
                 return item;
             }
 
@@ -73,6 +100,7 @@ namespace BulldogFinance.Functions.Services.Plaid
         public async Task<PlaidItemEntity> UpsertItemAsync(PlaidItemEntity item, CancellationToken cancellationToken = default)
         {
             await _itemsTable.UpsertEntityAsync(item, TableUpdateMode.Replace, cancellationToken);
+            await UpsertLookupAsync(item, cancellationToken);
             return item;
         }
 
@@ -102,16 +130,19 @@ namespace BulldogFinance.Functions.Services.Plaid
             CancellationToken cancellationToken = default)
         {
             var result = new List<PlaidAccountLinkEntity>();
+            var filter = string.Join(" and ", new[]
+            {
+                TableClient.CreateQueryFilter($"PartitionKey eq {userId}"),
+                TableClient.CreateQueryFilter($"ItemId eq {itemId}")
+            });
+
             var query = _accountLinksTable.QueryAsync<PlaidAccountLinkEntity>(
-                ent => ent.PartitionKey == userId,
+                filter: filter,
                 cancellationToken: cancellationToken);
 
             await foreach (var item in query)
             {
-                if (item.ItemId == itemId)
-                {
-                    result.Add(item);
-                }
+                result.Add(item);
             }
 
             return result;
@@ -134,6 +165,17 @@ namespace BulldogFinance.Functions.Services.Plaid
                 userId,
                 itemId,
                 cancellationToken: cancellationToken);
+
+            try
+            {
+                await _itemLookupTable.DeleteEntityAsync(
+                    PlaidItemLookupEntity.LookupPartitionKey,
+                    itemId,
+                    cancellationToken: cancellationToken);
+            }
+            catch (RequestFailedException ex) when (ex.Status == 404)
+            {
+            }
         }
 
         public async Task DeleteAccountLinkAsync(
@@ -145,6 +187,18 @@ namespace BulldogFinance.Functions.Services.Plaid
                 userId,
                 plaidAccountId,
                 cancellationToken: cancellationToken);
+        }
+
+        private Task UpsertLookupAsync(PlaidItemEntity item, CancellationToken cancellationToken)
+        {
+            return _itemLookupTable.UpsertEntityAsync(new PlaidItemLookupEntity
+            {
+                PartitionKey = PlaidItemLookupEntity.LookupPartitionKey,
+                RowKey = item.RowKey,
+                UserId = item.PartitionKey,
+                ItemId = item.RowKey,
+                UpdatedAtUtc = item.UpdatedAtUtc ?? item.CreatedAtUtc ?? System.DateTime.UtcNow
+            }, TableUpdateMode.Replace, cancellationToken);
         }
     }
 }

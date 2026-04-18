@@ -2,6 +2,7 @@
 using BulldogFinance.Functions.Models.Transactions;
 using BulldogFinance.Functions.Services.Accounts;
 using BulldogFinance.Functions.Services.Transactions;
+using Azure;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using System;
@@ -35,8 +36,7 @@ namespace BulldogFinance.Functions.Functions
         [Function("CreateTransaction")]
         public async Task<HttpResponseData> Create(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "transactions")]
-            HttpRequestData req,
-            FunctionContext context)
+            HttpRequestData req)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
@@ -130,17 +130,8 @@ namespace BulldogFinance.Functions.Functions
 
             await _transactionRepository.CreateTransactionAsync(transactionEntity);
 
-            if (typeUpper == "INCOME")
-            {
-                account.CurrentBalanceCents += amountCents;
-            }
-            else
-            {
-                account.CurrentBalanceCents -= amountCents;
-            }
-
-            account.UpdatedAtUtc = now;
-            await _accountRepository.UpdateAccountAsync(account);
+            var balanceDelta = typeUpper == "INCOME" ? amountCents : -amountCents;
+            account = await ApplyBalanceDeltaWithRetryAsync(userId, account.RowKey, balanceDelta, now);
 
             var dto = new TransactionDto
             {
@@ -168,11 +159,41 @@ namespace BulldogFinance.Functions.Functions
             return response;
         }
 
+        private async Task<BulldogFinance.Functions.Models.Accounts.AccountEntity> ApplyBalanceDeltaWithRetryAsync(
+            string userId,
+            string accountId,
+            long balanceDeltaCents,
+            DateTime updatedAtUtc)
+        {
+            const int maxAttempts = 3;
+
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                var currentAccount = await _accountRepository.GetAccountAsync(userId, accountId);
+                if (currentAccount == null || currentAccount.IsArchived)
+                {
+                    throw new InvalidOperationException("Account not found or archived.");
+                }
+
+                currentAccount.CurrentBalanceCents += balanceDeltaCents;
+                currentAccount.UpdatedAtUtc = updatedAtUtc;
+
+                try
+                {
+                    return await _accountRepository.UpdateAccountAsync(currentAccount);
+                }
+                catch (RequestFailedException ex) when (ex.Status is 409 or 412 && attempt < maxAttempts)
+                {
+                }
+            }
+
+            throw new InvalidOperationException("The account balance could not be updated due to a concurrency conflict.");
+        }
+
         [Function("GetTransactions")]
         public async Task<HttpResponseData> Get(
-    [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "transactions")]
-            HttpRequestData req,
-    FunctionContext context)
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "transactions")]
+            HttpRequestData req)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))

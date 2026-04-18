@@ -1,6 +1,6 @@
 import React from "react";
 import ChatbotPanel from "@/components/chat/ChatbotPanel.jsx";
-import { useChatbot } from "@/components/chat/ChatbotContext.jsx";
+import { useChatbot } from "@/components/chat/chatbotContext.js";
 import Card from "@/components/ui/Card.jsx";
 import PageHeader from "@/components/ui/PageHeader.jsx";
 import Button from "@/components/ui/Button.jsx";

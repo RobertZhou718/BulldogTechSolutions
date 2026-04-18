@@ -102,20 +102,14 @@ export default function AuthProvider({ children }) {
                     console.error("Failed to restore auth session", error);
 
                     if (isActive) {
-                        setAuthState((current) => ({
-                            ...current,
-                            isLoading: false,
-                        }));
+                        clearSession();
                     }
                 }
             } catch (error) {
                 console.error("Failed to initialize auth provider", error);
 
                 if (isActive) {
-                    setAuthState((current) => ({
-                        ...current,
-                        isLoading: false,
-                    }));
+                    clearSession();
                 }
             }
         };

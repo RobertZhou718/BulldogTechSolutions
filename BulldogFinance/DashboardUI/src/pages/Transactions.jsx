@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import TransactionFilters from "@/components/transactions/TransactionFilters.jsx";
 import TransactionForm from "@/components/transactions/TransactionForm.jsx";
 import TransactionTable from "@/components/transactions/TransactionTable.jsx";
@@ -7,7 +7,7 @@ import EmptyState from "@/components/ui/EmptyState.jsx";
 import MetricCard from "@/components/ui/MetricCard.jsx";
 import PageHeader from "@/components/ui/PageHeader.jsx";
 import Spinner from "@/components/ui/Spinner.jsx";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrencyBreakdown } from "@/lib/utils";
 import { useApiClient } from "@/services/apiClient";
 import { Field, Select } from "@/components/ui/Field.jsx";
 
@@ -24,6 +24,41 @@ export default function TransactionsPage() {
     const [filters, setFilters] = useState({ type: "ALL", from: "", to: "", category: "" });
     const [sortField, setSortField] = useState("date");
     const [sortDirection, setSortDirection] = useState("desc");
+    const buildTransactionQueryParams = useCallback(() => {
+        const params = {};
+
+        if (historyAccountId !== "ALL") {
+            params.accountId = historyAccountId;
+        }
+
+        if (filters.from) {
+            params.from = new Date(`${filters.from}T00:00:00Z`).toISOString();
+        }
+
+        if (filters.to) {
+            params.to = new Date(`${filters.to}T23:59:59Z`).toISOString();
+        }
+
+        return params;
+    }, [filters.from, filters.to, historyAccountId]);
+    const loadTransactions = useCallback(async () => {
+        if (!historyAccountId) {
+            return;
+        }
+
+        setLoadingTx(true);
+        setError("");
+
+        try {
+            const data = await getTransactions(buildTransactionQueryParams());
+            setTransactions(data || []);
+        } catch (e) {
+            console.error(e);
+            setError(e.message || "Failed to load transactions.");
+        } finally {
+            setLoadingTx(false);
+        }
+    }, [buildTransactionQueryParams, getTransactions, historyAccountId]);
 
     useEffect(() => {
         (async () => {
@@ -44,27 +79,8 @@ export default function TransactionsPage() {
     }, [getAccounts]);
 
     useEffect(() => {
-        if (!historyAccountId) return;
-
-        (async () => {
-            setLoadingTx(true);
-            setError("");
-            try {
-                const params = {};
-                if (historyAccountId !== "ALL") params.accountId = historyAccountId;
-                if (filters.from) params.from = new Date(`${filters.from}T00:00:00Z`).toISOString();
-                if (filters.to) params.to = new Date(`${filters.to}T23:59:59Z`).toISOString();
-
-                const data = await getTransactions(params);
-                setTransactions(data || []);
-            } catch (e) {
-                console.error(e);
-                setError(e.message || "Failed to load transactions.");
-            } finally {
-                setLoadingTx(false);
-            }
-        })();
-    }, [historyAccountId, filters.from, filters.to, getTransactions]);
+        void loadTransactions();
+    }, [loadTransactions]);
 
     const visibleTransactions = useMemo(() => {
         let list = [...transactions];
@@ -101,18 +117,45 @@ export default function TransactionsPage() {
     const currency = viewAccount?.currency || formAccount?.currency || "CAD";
 
     const summary = useMemo(() => {
-        const totals = visibleTransactions.reduce(
-            (acc, tx) => {
-                const amount = Number(tx.amount) || 0;
-                if (tx.type === "EXPENSE") acc.expense += amount;
-                else acc.income += amount;
-                return acc;
-            },
-            { income: 0, expense: 0 }
-        );
+        const totalsByCurrency = new Map();
 
-        return { ...totals, net: totals.income - totals.expense, count: visibleTransactions.length };
-    }, [visibleTransactions]);
+        visibleTransactions.forEach((tx) => {
+            const transactionCurrency = tx.currency || currency || "CAD";
+            const existing = totalsByCurrency.get(transactionCurrency) || { income: 0, expense: 0 };
+            const amount = Number(tx.amount) || 0;
+
+            if (tx.type === "EXPENSE") {
+                existing.expense += amount;
+            } else {
+                existing.income += amount;
+            }
+
+            totalsByCurrency.set(transactionCurrency, existing);
+        });
+
+        const totals = Array.from(totalsByCurrency, ([entryCurrency, values]) => ({
+            currency: entryCurrency,
+            income: values.income,
+            expense: values.expense,
+            net: values.income - values.expense,
+        }));
+
+        return { totals, count: visibleTransactions.length };
+    }, [currency, visibleTransactions]);
+    const hasMixedSummaryCurrencies = summary.totals.length > 1;
+    const netFlowLabel = useMemo(
+        () => formatCurrencyBreakdown(summary.totals.map(({ currency: entryCurrency, net }) => ({ currency: entryCurrency, amount: net })), 0),
+        [summary.totals]
+    );
+    const incomeLabel = useMemo(
+        () => formatCurrencyBreakdown(summary.totals.map(({ currency: entryCurrency, income }) => ({ currency: entryCurrency, amount: income })), 0),
+        [summary.totals]
+    );
+    const expenseLabel = useMemo(
+        () => formatCurrencyBreakdown(summary.totals.map(({ currency: entryCurrency, expense }) => ({ currency: entryCurrency, amount: expense })), 0),
+        [summary.totals]
+    );
+    const primaryNetTotal = summary.totals[0]?.net ?? 0;
 
     const accountNameMap = useMemo(
         () =>
@@ -126,14 +169,7 @@ export default function TransactionsPage() {
     const handleCreateTransaction = async (txInput) => {
         try {
             await createTransaction(txInput);
-
-            const params = {};
-            if (historyAccountId !== "ALL") params.accountId = historyAccountId;
-            if (filters.from) params.from = new Date(`${filters.from}T00:00:00Z`).toISOString();
-            if (filters.to) params.to = new Date(`${filters.to}T23:59:59Z`).toISOString();
-
-            const data = await getTransactions(params);
-            setTransactions(data || []);
+            await loadTransactions();
         } catch (e) {
             console.error(e);
             setError(e.message || "Failed to create transaction.");
@@ -184,11 +220,12 @@ export default function TransactionsPage() {
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <MetricCard
                         label="Net flow"
-                        value={formatCurrency(summary.net, currency, 0)}
-                        tone={summary.net >= 0 ? "positive" : "negative"}
+                        value={netFlowLabel}
+                        tone={hasMixedSummaryCurrencies ? "default" : (primaryNetTotal >= 0 ? "positive" : "negative")}
+                        hint={hasMixedSummaryCurrencies ? "Grouped by currency; no FX conversion applied" : undefined}
                     />
-                    <MetricCard label="Inflows" value={formatCurrency(summary.income, currency, 0)} />
-                    <MetricCard label="Outflows" value={formatCurrency(summary.expense, currency, 0)} />
+                    <MetricCard label="Inflows" value={incomeLabel} />
+                    <MetricCard label="Outflows" value={expenseLabel} />
                     <MetricCard label="Items shown" value={summary.count} />
                 </div>
             </PageHeader>

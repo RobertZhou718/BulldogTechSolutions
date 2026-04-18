@@ -43,6 +43,20 @@ namespace BulldogFinance.Functions.Models.Plaid
         public DateTime? UpdatedAtUtc { get; set; }
     }
 
+    public class PlaidItemLookupEntity : ITableEntity
+    {
+        public const string LookupPartitionKey = "ITEM";
+
+        public string PartitionKey { get; set; } = LookupPartitionKey;
+        public string RowKey { get; set; } = default!;
+        public DateTimeOffset? Timestamp { get; set; }
+        public ETag ETag { get; set; }
+
+        public string UserId { get; set; } = default!;
+        public string ItemId { get; set; } = default!;
+        public DateTime? UpdatedAtUtc { get; set; }
+    }
+
     public class CreatePlaidLinkTokenRequest
     {
         public string[]? CountryCodes { get; set; }

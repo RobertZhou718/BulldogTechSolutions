@@ -10,6 +10,9 @@ namespace BulldogFinance.Functions.Helper
 {
     public static class AuthHelper
     {
+        private const string DebugUserIdHeaderName = "X-Debug-UserId";
+        private const string AllowDebugHeaderSetting = "Auth__AllowDebugUserIdHeader";
+
         public static string? GetUserId(HttpRequestData req)
         {
             if (req.Headers.TryGetValues("X-MS-CLIENT-PRINCIPAL-ID", out var principalIds))
@@ -21,7 +24,12 @@ namespace BulldogFinance.Functions.Helper
                 }
             }
 
-            if (req.Headers.TryGetValues("X-Debug-UserId", out var debugIds))
+            if (!AllowDebugUserIdHeader())
+            {
+                return null;
+            }
+
+            if (req.Headers.TryGetValues(DebugUserIdHeaderName, out var debugIds))
             {
                 var id = debugIds.FirstOrDefault();
                 if (!string.IsNullOrWhiteSpace(id))
@@ -31,6 +39,12 @@ namespace BulldogFinance.Functions.Helper
             }
 
             return null;
+        }
+
+        private static bool AllowDebugUserIdHeader()
+        {
+            var configured = Environment.GetEnvironmentVariable(AllowDebugHeaderSetting);
+            return bool.TryParse(configured, out var enabled) && enabled;
         }
     }
 }

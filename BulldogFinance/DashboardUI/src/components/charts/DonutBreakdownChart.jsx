@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from "react";
+import BreakdownList from "@/components/ui/BreakdownList.jsx";
+import { BREAKDOWN_COLORS } from "@/components/ui/breakdownColors.js";
 
 const DEFAULT_VISIBLE_COUNT = 3;
 
@@ -17,27 +19,89 @@ function describeArc(cx, cy, radius, startAngle, endAngle) {
     return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`;
 }
 
-const colors = ["#1570ef", "#12b76a", "#f79009", "#7a5af8", "#f04438", "#12b76a"];
-
 export default function DonutBreakdownChart({ items }) {
     const [expanded, setExpanded] = useState(false);
-    const normalizedItems = items.map((item) => {
-        const rawValue = Number(item.value || 0);
-        return {
-            ...item,
-            rawValue,
-            drawableValue: Math.max(rawValue, 0),
-            isNegative: rawValue < 0,
-        };
-    });
-
-    const total = normalizedItems.reduce((sum, item) => sum + item.drawableValue, 0) || 1;
+    const normalizedItems = useMemo(
+        () =>
+            items.map((item) => {
+                const rawValue = Number(item.value || 0);
+                return {
+                    ...item,
+                    rawValue,
+                    drawableValue: Math.max(rawValue, 0),
+                    isNegative: rawValue < 0,
+                };
+            }),
+        [items]
+    );
+    const total = useMemo(
+        () => normalizedItems.reduce((sum, item) => sum + item.drawableValue, 0) || 1,
+        [normalizedItems]
+    );
     const hiddenCount = Math.max(normalizedItems.length - DEFAULT_VISIBLE_COUNT, 0);
     const visibleItems = useMemo(
-        () => (expanded ? normalizedItems : normalizedItems.slice(0, DEFAULT_VISIBLE_COUNT)),
+        () => (expanded ? normalizedItems : normalizedItems.slice(0, DEFAULT_VISIBLE_COUNT)).map((item, index) => ({ item, index })),
         [expanded, normalizedItems]
     );
-    let currentAngle = 0;
+    const slices = useMemo(
+        () =>
+            normalizedItems.reduce(
+                (state, item, index) => {
+                    if (item.drawableValue <= 0) {
+                        return {
+                            startAngle: state.startAngle,
+                            slices: [
+                                ...state.slices,
+                                {
+                                    item,
+                                    index,
+                                    path: null,
+                                },
+                            ],
+                        };
+                    }
+
+                    const sweepAngle = (item.drawableValue / total) * 360;
+                    const path = describeArc(
+                        110,
+                        110,
+                        70,
+                        state.startAngle,
+                        state.startAngle + sweepAngle
+                    );
+
+                    return {
+                        startAngle: state.startAngle + sweepAngle,
+                        slices: [
+                            ...state.slices,
+                            {
+                                item,
+                                index,
+                                path,
+                            },
+                        ],
+                    };
+                },
+                { startAngle: 0, slices: [] }
+            ).slices,
+        [normalizedItems, total]
+    );
+    const breakdownItems = useMemo(
+        () =>
+            visibleItems.map(({ item, index }) => ({
+                id: item.label,
+                label: item.label,
+                description: item.isNegative
+                    ? "Liability balance"
+                    : `${((item.drawableValue / total) * 100).toFixed(1)}% of total`,
+                value: item.rawValue.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                }),
+                color: BREAKDOWN_COLORS[index % BREAKDOWN_COLORS.length],
+            })),
+        [total, visibleItems]
+    );
 
     return (
         <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-center">
@@ -50,20 +114,16 @@ export default function DonutBreakdownChart({ items }) {
                     strokeWidth="24"
                     fill="none"
                 />
-                {normalizedItems.map((item, index) => {
-                    if (item.drawableValue <= 0) {
+                {slices.map(({ item, index, path }) => {
+                    if (!path) {
                         return null;
                     }
-
-                    const slice = (item.drawableValue / total) * 360;
-                    const path = describeArc(110, 110, 70, currentAngle, currentAngle + slice);
-                    currentAngle += slice;
 
                     return (
                         <path
                             key={item.label}
                             d={path}
-                            stroke={colors[index % colors.length]}
+                            stroke={BREAKDOWN_COLORS[index % BREAKDOWN_COLORS.length]}
                             strokeWidth="24"
                             fill="none"
                             strokeLinecap="round"
@@ -87,41 +147,7 @@ export default function DonutBreakdownChart({ items }) {
             </svg>
 
             <div>
-                <div className="space-y-3">
-                    {visibleItems.map((item) => {
-                        const index = normalizedItems.findIndex((candidate) => candidate.label === item.label);
-
-                        return (
-                            <div
-                                key={item.label}
-                                className="flex items-center justify-between rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-3"
-                            >
-                                <div className="flex items-center gap-3">
-                                    <span
-                                        className="h-3 w-3 rounded-full"
-                                        style={{ backgroundColor: colors[index % colors.length] }}
-                                    />
-                                    <div>
-                                        <p className="text-sm font-medium text-[var(--text-main)]">
-                                            {item.label}
-                                        </p>
-                                        <p className="text-sm text-[var(--text-soft)]">
-                                            {item.isNegative
-                                                ? "Liability balance"
-                                                : `${((item.drawableValue / total) * 100).toFixed(1)}% of total`}
-                                        </p>
-                                    </div>
-                                </div>
-                                <p className="text-sm font-semibold text-[var(--text-main)]">
-                                    {item.rawValue.toLocaleString(undefined, {
-                                        minimumFractionDigits: 2,
-                                        maximumFractionDigits: 2,
-                                    })}
-                                </p>
-                            </div>
-                        );
-                    })}
-                </div>
+                <BreakdownList items={breakdownItems} />
 
                 {hiddenCount > 0 ? (
                     <div className="mt-4 flex justify-end">

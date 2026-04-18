@@ -1,9 +1,27 @@
 import { useCallback, useMemo } from "react";
 import { apiConfig } from "@/auth/config/nativeAuthConfig.js";
-import { getStoredAccessToken } from "@/auth/core/tokenStore.js";
+import {
+    getStoredAccessToken,
+    getStoredAuthSession,
+    saveStoredAuthSession,
+} from "@/auth/core/tokenStore.js";
+import {
+    buildSessionFromAccountData,
+    getCurrentAccountData,
+} from "@/auth/native/nativeClient.js";
 
 export function useApiClient() {
     const getAccessToken = useCallback(async () => {
+        const accountData = await getCurrentAccountData().catch(() => null);
+        if (accountData && apiConfig.scopes.length > 0) {
+            const refreshedSession = await buildSessionFromAccountData(
+                accountData,
+                getStoredAuthSession()?.authMethod || "native"
+            );
+            saveStoredAuthSession(refreshedSession);
+            return refreshedSession.accessToken;
+        }
+
         const accessToken = getStoredAccessToken();
 
         if (!accessToken) {
