@@ -6,6 +6,7 @@ const clientId = env.VITE_SPA_CLIENT_ID?.trim() || "";
 const redirectUri = env.VITE_REDIRECT_URI?.trim() || "";
 const apiBaseUrl = env.VITE_API_BASE_URL?.trim() || "";
 const apiClientId = env.VITE_API_CLIENT_ID?.trim() || "";
+const authApiProxyUrl = env.VITE_AUTH_API_PROXY_URL?.trim() || "";
 
 const authorityHost = tenantSubdomain ? `${tenantSubdomain}.ciamlogin.com` : "";
 const authority = authorityHost && tenantId ? `https://${authorityHost}/${tenantId}` : "";
@@ -19,9 +20,21 @@ function getBrowserOrigin() {
     return "http://localhost";
 }
 
-function resolveNativeAuthProxyUrl(baseUrl) {
-    const backendOrigin = baseUrl
-        ? new URL(baseUrl, getBrowserOrigin()).origin
+function normalizeUrl(url) {
+    return url.endsWith("/") ? url.slice(0, -1) : url;
+}
+
+function resolveNativeAuthProxyUrl({ explicitProxyUrl, authorityUrl, apiUrl }) {
+    if (explicitProxyUrl) {
+        return normalizeUrl(new URL(explicitProxyUrl, getBrowserOrigin()).toString());
+    }
+
+    if (authorityUrl) {
+        return normalizeUrl(authorityUrl);
+    }
+
+    const backendOrigin = apiUrl
+        ? new URL(apiUrl, getBrowserOrigin()).origin
         : getBrowserOrigin();
 
     return new URL("/api/native-auth", backendOrigin).toString();
@@ -49,7 +62,11 @@ export function ensureNativeAuthConfig() {
 export const nativeAuthConfig = {
     customAuth: {
         challengeTypes: ["password", "oob", "redirect"],
-        authApiProxyUrl: resolveNativeAuthProxyUrl(apiBaseUrl),
+        authApiProxyUrl: resolveNativeAuthProxyUrl({
+            explicitProxyUrl: authApiProxyUrl,
+            authorityUrl: authority,
+            apiUrl: apiBaseUrl,
+        }),
     },
     auth: {
         clientId,
