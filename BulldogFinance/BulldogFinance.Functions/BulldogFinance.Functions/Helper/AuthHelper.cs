@@ -1,20 +1,24 @@
-﻿using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace BulldogFinance.Functions.Helper
 {
     public static class AuthHelper
     {
+        public const string AuthenticatedPrincipalContextKey = "AuthenticatedPrincipal";
+        public const string AuthenticatedUserIdContextKey = "AuthenticatedUserId";
+
         private const string DebugUserIdHeaderName = "X-Debug-UserId";
         private const string AllowDebugHeaderSetting = "Auth__AllowDebugUserIdHeader";
 
         public static string? GetUserId(HttpRequestData req)
         {
+            if (req.FunctionContext.Items.TryGetValue(AuthenticatedUserIdContextKey, out var authenticatedUserId)
+                && authenticatedUserId is string userId
+                && !string.IsNullOrWhiteSpace(userId))
+            {
+                return userId;
+            }
+
             if (req.Headers.TryGetValues("X-MS-CLIENT-PRINCIPAL-ID", out var principalIds))
             {
                 var id = principalIds.FirstOrDefault();

@@ -1,79 +1,53 @@
-import { apiConfig } from "@/auth/config/nativeAuthConfig.js";
-
-function normalizeBaseUrl(url) {
-    return (url || "").replace(/\/+$/, "");
-}
-
-function extractErrorMessage(payload, fallbackMessage) {
-    return (
-        payload?.error?.message ||
-        payload?.error?.errorDescription ||
-        payload?.message ||
-        fallbackMessage
-    );
-}
-
-function toSessionUser(user, email) {
-    const normalizedEmail = user?.email || email;
-    const name = user?.displayName || normalizedEmail || "User";
-
-    return {
-        id: user?.id || "",
-        name,
-        email: normalizedEmail,
-        username: normalizedEmail,
-        givenName: user?.givenName || "",
-        surname: user?.surname || "",
-    };
-}
+import { authScopes } from "@/auth/config/nativeAuthConfig.js";
+import {
+    buildSessionFromAccountData,
+    getAuthErrorMessage,
+    getNativeAuthClient,
+} from "./nativeClient.js";
 
 export async function signInWithPassword({ email, password }) {
-    const trimmedEmail = email?.trim() || "";
-    const baseUrl = normalizeBaseUrl(apiConfig.baseUrl);
-
-    if (!baseUrl) {
-        throw new Error("Missing API base URL configuration.");
-    }
-
-    const response = await fetch(`${baseUrl}/auth/native/signin`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            email: trimmedEmail,
-            password,
-        }),
+    const username = email?.trim() || "";
+    const authClient = await getNativeAuthClient();
+    const result = await authClient.signIn({
+        username,
+        password,
+        scopes: authScopes,
     });
 
-    const raw = await response.text().catch(() => "");
-    let payload = null;
-
-    if (raw) {
-        try {
-            payload = JSON.parse(raw);
-        } catch {
-            payload = null;
-        }
-    }
-
-    if (!response.ok || !payload?.success) {
+    if (result.isFailed()) {
         throw new Error(
-            extractErrorMessage(payload, "Unable to complete the password sign-in flow.")
+            getAuthErrorMessage(result.error, "Unable to complete the password sign-in flow.")
         );
     }
 
-    if (!payload?.accessToken) {
+    if (typeof result.isCodeRequired === "function" && result.isCodeRequired()) {
         throw new Error(
-            payload?.nextStep
-                ? `Sign-in requires an additional step: ${payload.nextStep}.`
-                : "The sign-in flow completed without an access token."
+            "This tenant requires an extra verification code to finish sign-in. Extend the login flow to handle sign-in challenges."
         );
     }
 
-    return {
-        accessToken: payload.accessToken,
-        authMethod: "native_function",
-        user: toSessionUser(payload.user, trimmedEmail),
-    };
+    if (typeof result.isPasswordRequired === "function" && result.isPasswordRequired()) {
+        throw new Error("The password sign-in flow did not complete after the password step.");
+    }
+
+    if (
+        typeof result.isAuthMethodRegistrationRequired === "function" &&
+        result.isAuthMethodRegistrationRequired()
+    ) {
+        throw new Error(
+            "The tenant requires authentication method registration before sign-in can finish."
+        );
+    }
+
+    if (typeof result.isMfaRequired === "function" && result.isMfaRequired()) {
+        throw new Error(
+            "The tenant requires MFA before sign-in can finish. Handle the MFA challenge in the custom sign-in flow."
+        );
+    }
+
+    if (!result.isCompleted()) {
+        throw new Error("Unexpected sign-in state returned by the native auth SDK.");
+    }
+
+    return buildSessionFromAccountData(result.data, "native");
 }
