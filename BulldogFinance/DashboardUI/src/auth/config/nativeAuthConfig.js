@@ -24,13 +24,9 @@ function normalizeUrl(url) {
     return url.endsWith("/") ? url.slice(0, -1) : url;
 }
 
-function resolveNativeAuthProxyUrl({ explicitProxyUrl, authorityUrl, apiUrl }) {
+function resolveNativeAuthProxyUrl({ explicitProxyUrl, apiUrl }) {
     if (explicitProxyUrl) {
         return normalizeUrl(new URL(explicitProxyUrl, getBrowserOrigin()).toString());
-    }
-
-    if (authorityUrl) {
-        return normalizeUrl(authorityUrl);
     }
 
     const backendOrigin = apiUrl
@@ -64,7 +60,6 @@ export const nativeAuthConfig = {
         challengeTypes: ["password", "oob", "redirect"],
         authApiProxyUrl: resolveNativeAuthProxyUrl({
             explicitProxyUrl: authApiProxyUrl,
-            authorityUrl: authority,
             apiUrl: apiBaseUrl,
         }),
     },

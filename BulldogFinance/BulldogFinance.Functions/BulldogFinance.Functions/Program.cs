@@ -157,6 +157,7 @@ var host = new HostBuilder()
 
         services.AddSingleton<IExternalAuthProxyService, ExternalAuthProxyService>();
         services.AddSingleton<IAuthTokenValidator, AuthTokenValidator>();
+        services.AddSingleton<INativeAuthApiProxyService, NativeAuthApiProxyService>();
         services.AddSingleton<IInvestmentService, InvestmentService>();
         services.AddSingleton<IInvestmentOverviewService, InvestmentOverviewService>();
         services.AddSingleton<IPlaidTokenProtector, PlaidTokenProtector>();
