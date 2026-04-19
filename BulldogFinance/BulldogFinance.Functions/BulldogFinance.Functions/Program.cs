@@ -1,6 +1,7 @@
 using Azure.Data.Tables;
 using Azure.Identity;
 using Azure.Storage.Blobs;
+using BulldogFinance.Functions.Middleware;
 using BulldogFinance.Functions.Services.Accounts;
 using BulldogFinance.Functions.Services.Auth;
 using BulldogFinance.Functions.Services.Chat;
@@ -17,7 +18,10 @@ using Microsoft.Extensions.Hosting;
 using System.IO;
 
 var host = new HostBuilder()
-    .ConfigureFunctionsWebApplication()
+    .ConfigureFunctionsWebApplication(builder =>
+    {
+        builder.UseMiddleware<BearerTokenAuthenticationMiddleware>();
+    })
     .ConfigureAppConfiguration((context, config) =>
     {
         config
@@ -152,6 +156,7 @@ var host = new HostBuilder()
         services.AddSingleton<IPlaidRepository, PlaidRepository>();
 
         services.AddSingleton<IExternalAuthProxyService, ExternalAuthProxyService>();
+        services.AddSingleton<IAuthTokenValidator, AuthTokenValidator>();
         services.AddSingleton<IInvestmentService, InvestmentService>();
         services.AddSingleton<IInvestmentOverviewService, InvestmentOverviewService>();
         services.AddSingleton<IPlaidTokenProtector, PlaidTokenProtector>();
