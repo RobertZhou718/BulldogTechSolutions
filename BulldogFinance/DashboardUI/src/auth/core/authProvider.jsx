@@ -85,6 +85,20 @@ export default function AuthProvider({ children }) {
                 }
 
                 if (!accountData) {
+                    if (
+                        bootstrappedSession?.accessToken &&
+                        bootstrappedSession?.authMethod === "native_function"
+                    ) {
+                        setAuthState({
+                            isAuthenticated: true,
+                            isLoading: false,
+                            user: bootstrappedSession.user,
+                            accessToken: bootstrappedSession.accessToken,
+                            authMethod: bootstrappedSession.authMethod,
+                        });
+                        return;
+                    }
+
                     clearSession();
                     return;
                 }

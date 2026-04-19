@@ -1,77 +1,79 @@
-import { authScopes } from "@/auth/config/nativeAuthConfig.js";
-import {
-    buildSessionFromAccountData,
-    getAuthErrorMessage,
-    getNativeAuthClient,
-} from "./nativeClient.js";
+import { apiConfig } from "@/auth/config/nativeAuthConfig.js";
 
-function throwUnsupportedStep(message) {
-    throw new Error(message);
+function normalizeBaseUrl(url) {
+    return (url || "").replace(/\/+$/, "");
+}
+
+function extractErrorMessage(payload, fallbackMessage) {
+    return (
+        payload?.error?.message ||
+        payload?.error?.errorDescription ||
+        payload?.message ||
+        fallbackMessage
+    );
+}
+
+function toSessionUser(user, email) {
+    const normalizedEmail = user?.email || email;
+    const name = user?.displayName || normalizedEmail || "User";
+
+    return {
+        id: user?.id || "",
+        name,
+        email: normalizedEmail,
+        username: normalizedEmail,
+        givenName: user?.givenName || "",
+        surname: user?.surname || "",
+    };
 }
 
 export async function signInWithPassword({ email, password }) {
-    const authClient = await getNativeAuthClient();
-    const signInResult = await authClient.signIn({
-        username: email.trim(),
-        scopes: authScopes,
+    const trimmedEmail = email?.trim() || "";
+    const baseUrl = normalizeBaseUrl(apiConfig.baseUrl);
+
+    if (!baseUrl) {
+        throw new Error("Missing API base URL configuration.");
+    }
+
+    const response = await fetch(`${baseUrl}/auth/native/signin`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            email: trimmedEmail,
+            password,
+        }),
     });
 
-    if (signInResult.isFailed()) {
+    const raw = await response.text().catch(() => "");
+    let payload = null;
+
+    if (raw) {
+        try {
+            payload = JSON.parse(raw);
+        } catch {
+            payload = null;
+        }
+    }
+
+    if (!response.ok || !payload?.success) {
         throw new Error(
-            getAuthErrorMessage(signInResult.error, "Unable to start the sign-in flow.")
+            extractErrorMessage(payload, "Unable to complete the password sign-in flow.")
         );
     }
 
-    if (signInResult.isPasswordRequired()) {
-        const submitResult = await signInResult.state.submitPassword(password);
-
-        if (submitResult.isFailed()) {
-            throw new Error(
-                getAuthErrorMessage(
-                    submitResult.error,
-                    "Unable to complete the password sign-in flow."
-                )
-            );
-        }
-
-        if (typeof submitResult.isAuthMethodRegistrationRequired === "function" && submitResult.isAuthMethodRegistrationRequired()) {
-            throwUnsupportedStep(
-                "The tenant requires authentication method registration before sign-in can finish."
-            );
-        }
-
-        if (typeof submitResult.isMfaRequired === "function" && submitResult.isMfaRequired()) {
-            throwUnsupportedStep(
-                "The tenant requires MFA after password sign-in. Complete MFA in the tenant configuration flow before using this screen."
-            );
-        }
-
-        if (submitResult.isCompleted()) {
-            return buildSessionFromAccountData(submitResult.data, "native");
-        }
-    }
-
-    if (signInResult.isCompleted()) {
-        return buildSessionFromAccountData(signInResult.data, "native");
-    }
-
-    if (signInResult.isCodeRequired()) {
-        throwUnsupportedStep(
-            "The tenant returned an email-code sign-in challenge. This screen expects email and password sign-in."
+    if (!payload?.accessToken) {
+        throw new Error(
+            payload?.nextStep
+                ? `Sign-in requires an additional step: ${payload.nextStep}.`
+                : "The sign-in flow completed without an access token."
         );
     }
 
-    if (typeof signInResult.isAuthMethodRegistrationRequired === "function" && signInResult.isAuthMethodRegistrationRequired()) {
-        throwUnsupportedStep(
-            "The tenant requires authentication method registration before sign-in can finish."
-        );
-    }
-
-    if (typeof signInResult.isMfaRequired === "function" && signInResult.isMfaRequired()) {
-        throwUnsupportedStep(
-            "The tenant requires MFA after password sign-in. Complete MFA in the tenant configuration flow before using this screen."
-        );
-    }
-
-    throw new Error("Unexpected sign-in state returned by the native auth SDK.");
+    return {
+        accessToken: payload.accessToken,
+        authMethod: "native_function",
+        user: toSessionUser(payload.user, trimmedEmail),
+    };
 }
