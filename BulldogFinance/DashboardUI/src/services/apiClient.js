@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { apiConfig } from "@/auth/config/nativeAuthConfig.js";
+import { useAuth } from "@/auth/core/authContext.js";
 import {
     getStoredAccessToken,
     getStoredAuthSession,
@@ -11,6 +12,8 @@ import {
 } from "@/auth/native/nativeClient.js";
 
 export function useApiClient() {
+    const { signOut } = useAuth();
+
     const getAccessToken = useCallback(async () => {
         const accountData = await getCurrentAccountData().catch(() => null);
         if (accountData && apiConfig.scopes.length > 0) {
@@ -51,6 +54,11 @@ export function useApiClient() {
             return null;
         }
 
+        if (response.status === 401) {
+            signOut();
+            throw new Error("Session expired. Please sign in again.");
+        }
+
         if (!response.ok) {
             let errorMessage = "";
             const rawText = await response.text().catch(() => "");
@@ -79,7 +87,7 @@ export function useApiClient() {
         }
 
         return response.json();
-    }, [getAccessToken]);
+    }, [getAccessToken, signOut]);
 
     // User and account APIs.
     const getMe = useCallback(() => {

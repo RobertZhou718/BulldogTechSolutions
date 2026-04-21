@@ -11,16 +11,16 @@ export default function PublicOnlyRoute() {
         hasInitialized.current = true;
     }
 
-    if (isAuthenticated) {
-        return <Navigate to="/" replace />;
-    }
-
     if (isLoading && !hasInitialized.current) {
         return (
             <div className="flex min-h-screen items-center justify-center">
                 <Spinner className="h-8 w-8" />
             </div>
         );
+    }
+
+    if (isAuthenticated) {
+        return <Navigate to="/" replace />;
     }
 
     return <Outlet />;

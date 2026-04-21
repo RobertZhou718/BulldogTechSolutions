@@ -14,6 +14,8 @@ export default function OnboardingGate() {
                 if (me?.onboardingDone) navigate("/dashboard", { replace: true });
                 else navigate("/onboarding", { replace: true });
             } catch (e) {
+                // 401 is handled by apiClient (calls signOut), RequireAuth redirects to /login.
+                if (e?.message?.includes("Session expired")) return;
                 console.error("Failed to load /me", e);
                 navigate("/onboarding", { replace: true });
             }

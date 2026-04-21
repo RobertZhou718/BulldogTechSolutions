@@ -23,13 +23,13 @@ export default function FloatingChatbot() {
     return (
         <>
             {isOpen ? (
-                <div className="fixed bottom-24 right-4 z-40 w-[min(420px,calc(100vw-2rem))] lg:right-6">
-                    <div className="mb-3 flex justify-end">
+                <div className="fixed bottom-24 right-4 z-40 flex h-[600px] max-h-[calc(100vh-8rem)] w-[min(420px,calc(100vw-2rem))] flex-col lg:right-6">
+                    <div className="mb-3 flex shrink-0 justify-end">
                         <Button variant="secondary" onClick={closeChat}>
                             Close
                         </Button>
                     </div>
-                    <ChatbotPanel />
+                    <ChatbotPanel className="min-h-0 flex-1" />
                 </div>
             ) : null}
 
