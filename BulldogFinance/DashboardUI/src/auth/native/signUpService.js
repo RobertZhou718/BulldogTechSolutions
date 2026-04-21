@@ -56,12 +56,12 @@ async function continueToSession(completedState) {
 }
 
 async function normalizeSignUpResult(result, fallbackMessage) {
-    console.debug("[signUp] result keys:", Object.keys(result));
-    console.debug("[signUp] isFailed:", result.isFailed?.());
-    console.debug("[signUp] isCodeRequired:", result.isCodeRequired?.());
-    console.debug("[signUp] isPasswordRequired:", result.isPasswordRequired?.());
-    console.debug("[signUp] isAttributesRequired:", result.isAttributesRequired?.());
-    console.debug("[signUp] isCompleted:", result.isCompleted?.());
+    console.log("[signUp] result keys:", Object.keys(result));
+    console.log("[signUp] isFailed:", result.isFailed?.());
+    console.log("[signUp] isCodeRequired:", result.isCodeRequired?.());
+    console.log("[signUp] isPasswordRequired:", result.isPasswordRequired?.());
+    console.log("[signUp] isAttributesRequired:", result.isAttributesRequired?.());
+    console.log("[signUp] isCompleted:", result.isCompleted?.());
 
     if (result.isFailed()) {
         console.error("[signUp] failed error:", result.error);
