@@ -13,7 +13,6 @@ export async function signInWithGoogle() {
             authority: nativeAuthConfig.auth.authority,
             scopes: authScopes,
             redirectUri: nativeAuthConfig.auth.redirectUri,
-            prompt: "login",
             domainHint: googleProviderHint,
         });
     } catch (error) {

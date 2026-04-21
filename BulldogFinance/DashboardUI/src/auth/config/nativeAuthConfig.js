@@ -83,5 +83,5 @@ export const apiConfig = {
     scopes: apiScope ? [apiScope] : [],
 };
 
-export const authScopes = ["openid", "profile", "email", apiScope].filter(Boolean);
+export const authScopes = ["openid", "profile", "offline_access", "email", apiScope].filter(Boolean);
 export const googleProviderHint = "Google";
