@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using BulldogFinance.Functions.Models.Tools;
+﻿using BulldogFinance.Functions.Models.Tools;
 using BulldogFinance.Functions.Models.Users;
 using BulldogFinance.Functions.Services.Users;
 

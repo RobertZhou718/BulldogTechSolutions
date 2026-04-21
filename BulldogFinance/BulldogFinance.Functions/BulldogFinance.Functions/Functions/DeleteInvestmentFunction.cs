@@ -1,5 +1,4 @@
 ﻿using System.Net;
-using System.Threading.Tasks;
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Services.Investments;
 using Microsoft.Azure.Functions.Worker;
@@ -30,11 +29,7 @@ namespace BulldogFinance.Functions.Functions
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
-            {
-                var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
-                await unauthorized.WriteStringAsync("Unauthorized.");
-                return unauthorized;
-            }
+                return await ApiResponse.UnauthorizedAsync(req);
 
             _logger.LogInformation("DeleteInvestment for user {UserId}, symbol {Symbol}",
                 userId, symbol);

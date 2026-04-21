@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using BulldogFinance.Functions.Models.Accounts;
 using BulldogFinance.Functions.Models.Plaid;
 
@@ -32,6 +29,10 @@ namespace BulldogFinance.Functions.Services.Plaid
         Task RemoveItemAsync(
             string userId,
             string itemId,
+            CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<BulldogFinance.Functions.Models.Plaid.PlaidItemEntity>> GetActiveItemsAsync(
+            string userId,
             CancellationToken cancellationToken = default);
     }
 }

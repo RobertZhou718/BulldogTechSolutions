@@ -32,23 +32,11 @@ namespace BulldogFinance.Functions.Functions
 
                 var userId = AuthHelper.GetUserId(req);
                 if (string.IsNullOrWhiteSpace(userId))
-                {
-                    var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
-                    await unauthorized.WriteStringAsync("Unauthorized.");
-                    return unauthorized;
-                }
+                    return await ApiResponse.UnauthorizedAsync(req, cancellationToken);
 
                 var request = await req.ReadFromJsonAsync<ChatRequest>(cancellationToken: cancellationToken);
                 if (request is null || string.IsNullOrWhiteSpace(request.Message))
-                {
-                    var badRequest = req.CreateResponse(HttpStatusCode.BadRequest);
-                    await badRequest.WriteAsJsonAsync(new
-                    {
-                        error = "Request body must contain a non-empty message."
-                    }, cancellationToken);
-
-                    return badRequest;
-                }
+                    return await ApiResponse.BadRequestAsync(req, "Request body must contain a non-empty message.", cancellationToken);
 
                 var response = await _chatAgentService.ChatAsync(
                     userId,
@@ -64,13 +52,7 @@ namespace BulldogFinance.Functions.Functions
             {
                 _logger.LogError(ex, "Chat request failed.");
 
-                var error = req.CreateResponse(HttpStatusCode.InternalServerError);
-                await error.WriteAsJsonAsync(new
-                {
-                    error = "An unexpected error occurred while processing the chat request."
-                }, cancellationToken);
-
-                return error;
+                return await ApiResponse.InternalErrorAsync(req, "An unexpected error occurred while processing the chat request.", cancellationToken);
             }
         }
     }

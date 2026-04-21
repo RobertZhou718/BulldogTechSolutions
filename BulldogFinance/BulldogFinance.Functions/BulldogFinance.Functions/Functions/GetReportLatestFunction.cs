@@ -37,19 +37,11 @@ public class GetReportLatestFunction
     {
         var userId = AuthHelper.GetUserId(req);
         if (string.IsNullOrWhiteSpace(userId))
-        {
-            var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
-            await unauthorized.WriteStringAsync("Unauthorized.");
-            return unauthorized;
-        }
+            return await ApiResponse.UnauthorizedAsync(req, cancellationToken);
 
         period = (period ?? "").Trim().ToLowerInvariant();
         if (period != "weekly" && period != "monthly")
-        {
-            var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-            await bad.WriteStringAsync("Invalid period. Use 'weekly' or 'monthly'.");
-            return bad;
-        }
+            return await ApiResponse.BadRequestAsync(req, "Invalid period. Use 'weekly' or 'monthly'.", cancellationToken);
 
         var blobName = $"{period}/{userId}/latest.json";
         _logger.LogInformation("GetReportLatest userId={UserId}, period={Period}, blob={BlobName}", userId, period, blobName);

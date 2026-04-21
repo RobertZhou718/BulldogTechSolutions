@@ -1,9 +1,4 @@
-﻿// Services/InvestmentService.cs
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Azure;
+﻿using Azure;
 using Azure.Data.Tables;
 using BulldogFinance.Functions.Models.Investments;
 using BulldogFinance.Functions.Models.Watchlist;
@@ -26,9 +21,6 @@ namespace BulldogFinance.Functions.Services.Investments
             _investmentsTable = tableServiceClient.GetTableClient("Investments");
             _watchlistTable = tableServiceClient.GetTableClient("Watchlist");
 
-            // Uncomment these lines if the service should create its tables at startup.
-            //_investmentsTable.CreateIfNotExists();
-            //_watchlistTable.CreateIfNotExists();
         }
 
         public async Task<IReadOnlyList<InvestmentDto>> GetInvestmentsForUserAsync(

@@ -1,8 +1,4 @@
-﻿// Models/InvestmentHoldingOverviewDto.cs
-using System;
-using System.Collections.Generic;
-
-namespace BulldogFinance.Functions.Models.Investments
+﻿namespace BulldogFinance.Functions.Models.Investments
 {
     public class InvestmentHoldingOverviewDto
     {

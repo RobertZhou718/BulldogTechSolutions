@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using BulldogFinance.Functions.Models.Plaid;
 
 namespace BulldogFinance.Functions.Services.Plaid

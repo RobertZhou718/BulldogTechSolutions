@@ -7,12 +7,8 @@ using BulldogFinance.Functions.Services.Transactions;
 using BulldogFinance.Functions.Services.Users;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
-using System;
-using System.IO;
-using System.Linq;
 using System.Net;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace BulldogFinance.Functions.Functions
 {
@@ -43,14 +39,9 @@ namespace BulldogFinance.Functions.Functions
             HttpRequestData req,
             FunctionContext context)
         {
-            // The current auth flow still reads the user id from headers until token subject wiring is in place.
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
-            {
-                var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
-                await unauthorized.WriteStringAsync("Unauthorized.");
-                return unauthorized;
-            }
+                return await ApiResponse.UnauthorizedAsync(req);
 
             string body;
             using (var reader = new StreamReader(req.Body))
@@ -59,11 +50,7 @@ namespace BulldogFinance.Functions.Functions
             }
 
             if (string.IsNullOrWhiteSpace(body))
-            {
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("Request body is empty.");
-                return bad;
-            }
+                return await ApiResponse.BadRequestAsync(req, "Request body is empty.");
 
             OnboardingRequest? request;
             try
@@ -72,17 +59,11 @@ namespace BulldogFinance.Functions.Functions
             }
             catch (JsonException)
             {
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("Invalid JSON.");
-                return bad;
+                return await ApiResponse.BadRequestAsync(req, "Invalid JSON.");
             }
 
             if (request == null || request.Accounts == null || request.Accounts.Count == 0)
-            {
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("At least one account is required.");
-                return bad;
-            }
+                return await ApiResponse.BadRequestAsync(req, "At least one account is required.");
 
             var defaultCurrency = string.IsNullOrWhiteSpace(request.DefaultCurrency)
                 ? "CAD"
@@ -90,11 +71,7 @@ namespace BulldogFinance.Functions.Functions
 
             var existingUser = await _userRepository.GetUserAsync(userId);
             if (existingUser?.OnboardingDone == true)
-            {
-                var conflict = req.CreateResponse(HttpStatusCode.Conflict);
-                await conflict.WriteStringAsync("Onboarding already completed for this user.");
-                return conflict;
-            }
+                return await ApiResponse.ConflictAsync(req, "Onboarding already completed for this user.");
 
             var now = DateTime.UtcNow;
             var responseModel = new OnboardingResponse

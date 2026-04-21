@@ -5,13 +5,9 @@ using BulldogFinance.Functions.Models.Tools;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using OpenAI.Chat;
-using System;
 using System.ClientModel;
-using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace BulldogFinance.Functions.Services.Chat
 {

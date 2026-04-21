@@ -23,22 +23,11 @@ namespace BulldogFinance.Functions.Functions
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
-            {
-                var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
-                await unauthorized.WriteStringAsync("Unauthorized.");
-                return unauthorized;
-            }
+                return await ApiResponse.UnauthorizedAsync(req, cancellationToken);
 
             var conversation = await _conversationService.GetConversationAsync(userId, conversationId, cancellationToken);
             if (conversation is null)
-            {
-                var notFound = req.CreateResponse(HttpStatusCode.NotFound);
-                await notFound.WriteAsJsonAsync(new
-                {
-                    error = "Conversation not found."
-                }, cancellationToken);
-                return notFound;
-            }
+                return await ApiResponse.NotFoundAsync(req, "Conversation not found.", cancellationToken);
 
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteAsJsonAsync(conversation, cancellationToken);

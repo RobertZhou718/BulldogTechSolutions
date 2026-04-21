@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using BulldogFinance.Functions.Models.Transactions;
+﻿using BulldogFinance.Functions.Models.Transactions;
 
 namespace BulldogFinance.Functions.Services.Transactions
 {

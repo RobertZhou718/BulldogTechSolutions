@@ -1,7 +1,5 @@
-using System.IO;
 using System.Net;
 using System.Text.Json;
-using System.Threading.Tasks;
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Services.Plaid;
 using Microsoft.Azure.Functions.Worker;
@@ -28,11 +26,7 @@ namespace BulldogFinance.Functions.Functions
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
-            {
-                var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
-                await unauthorized.WriteStringAsync("Unauthorized.");
-                return unauthorized;
-            }
+                return await ApiResponse.UnauthorizedAsync(req);
 
             string? itemId = null;
             using (var reader = new StreamReader(req.Body))

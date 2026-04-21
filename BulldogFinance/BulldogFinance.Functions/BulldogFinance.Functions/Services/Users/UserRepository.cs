@@ -1,6 +1,4 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
-using Azure;
+﻿using Azure;
 using Azure.Data.Tables;
 using BulldogFinance.Functions.Models.Users;
 

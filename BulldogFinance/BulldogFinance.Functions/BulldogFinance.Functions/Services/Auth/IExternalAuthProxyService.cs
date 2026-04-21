@@ -1,6 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace BulldogFinance.Functions.Services.Auth
 {
     public interface IExternalAuthProxyService

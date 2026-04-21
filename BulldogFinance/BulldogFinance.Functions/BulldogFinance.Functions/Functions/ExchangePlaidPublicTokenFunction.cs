@@ -1,8 +1,5 @@
-using System;
-using System.IO;
 using System.Net;
 using System.Text.Json;
-using System.Threading.Tasks;
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Plaid;
 using BulldogFinance.Functions.Models.Users;
@@ -10,6 +7,7 @@ using BulldogFinance.Functions.Services.Plaid;
 using BulldogFinance.Functions.Services.Users;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Extensions.Logging;
 
 namespace BulldogFinance.Functions.Functions
 {
@@ -26,19 +24,22 @@ namespace BulldogFinance.Functions.Functions
         private readonly IPlaidSyncService _plaidSyncService;
         private readonly IPlaidTokenProtector _tokenProtector;
         private readonly IUserRepository _userRepository;
+        private readonly ILogger<ExchangePlaidPublicTokenFunction> _logger;
 
         public ExchangePlaidPublicTokenFunction(
             IPlaidClient plaidClient,
             IPlaidRepository plaidRepository,
             IPlaidSyncService plaidSyncService,
             IPlaidTokenProtector tokenProtector,
-            IUserRepository userRepository)
+            IUserRepository userRepository,
+            ILogger<ExchangePlaidPublicTokenFunction> logger)
         {
             _plaidClient = plaidClient;
             _plaidRepository = plaidRepository;
             _plaidSyncService = plaidSyncService;
             _tokenProtector = tokenProtector;
             _userRepository = userRepository;
+            _logger = logger;
         }
 
         [Function("ExchangePlaidPublicToken")]
@@ -49,11 +50,7 @@ namespace BulldogFinance.Functions.Functions
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
-            {
-                var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
-                await unauthorized.WriteStringAsync("Unauthorized.");
-                return unauthorized;
-            }
+                return await ApiResponse.UnauthorizedAsync(req);
 
             string body;
             using (var reader = new StreamReader(req.Body))
@@ -62,11 +59,7 @@ namespace BulldogFinance.Functions.Functions
             }
 
             if (string.IsNullOrWhiteSpace(body))
-            {
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("Request body is empty.");
-                return bad;
-            }
+                return await ApiResponse.BadRequestAsync(req, "Request body is empty.");
 
             ExchangePlaidPublicTokenRequest? requestModel;
             try
@@ -75,17 +68,11 @@ namespace BulldogFinance.Functions.Functions
             }
             catch (JsonException)
             {
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("Invalid JSON.");
-                return bad;
+                return await ApiResponse.BadRequestAsync(req, "Invalid JSON.");
             }
 
             if (requestModel == null || string.IsNullOrWhiteSpace(requestModel.PublicToken))
-            {
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("publicToken is required.");
-                return bad;
-            }
+                return await ApiResponse.BadRequestAsync(req, "publicToken is required.");
 
             var exchange = await _plaidClient.ExchangePublicTokenAsync(requestModel.PublicToken);
             var now = DateTime.UtcNow;
@@ -102,13 +89,43 @@ namespace BulldogFinance.Functions.Functions
             };
 
             await _plaidRepository.UpsertItemAsync(itemEntity);
-            var importedAccounts = await _plaidSyncService.ImportAccountsAsync(
-                userId,
-                exchange.ItemId,
-                exchange.AccessToken,
-                requestModel.InstitutionName);
-            await _plaidSyncService.RefreshBalancesAsync(userId, exchange.ItemId);
-            var syncSummary = await _plaidSyncService.SyncTransactionsAsync(userId, exchange.ItemId);
+
+            IReadOnlyList<BulldogFinance.Functions.Models.Accounts.AccountEntity> importedAccounts;
+            PlaidSyncSummary syncSummary;
+
+            try
+            {
+                importedAccounts = await _plaidSyncService.ImportAccountsAsync(
+                    userId,
+                    exchange.ItemId,
+                    exchange.AccessToken,
+                    requestModel.InstitutionName);
+                await _plaidSyncService.RefreshBalancesAsync(userId, exchange.ItemId);
+                syncSummary = await _plaidSyncService.SyncTransactionsAsync(userId, exchange.ItemId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Plaid setup failed after token exchange. Rolling back item. UserId={UserId} ItemId={ItemId}",
+                    userId,
+                    exchange.ItemId);
+
+                try
+                {
+                    await _plaidRepository.DeleteItemAsync(userId, exchange.ItemId);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(
+                        rollbackEx,
+                        "Rollback failed. Orphaned item may remain. UserId={UserId} ItemId={ItemId}",
+                        userId,
+                        exchange.ItemId);
+                }
+
+                return await ApiResponse.BadGatewayAsync(req, "Failed to import accounts from Plaid. The connection has been rolled back.");
+            }
 
             var existingUser = await _userRepository.GetUserAsync(userId);
             var profile = existingUser ?? new UserEntity

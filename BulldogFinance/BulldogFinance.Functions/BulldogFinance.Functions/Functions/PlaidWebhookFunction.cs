@@ -1,15 +1,13 @@
-using System.IO;
-using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 using BulldogFinance.Functions.Models.Plaid;
 using BulldogFinance.Functions.Services.Plaid;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace BulldogFinance.Functions.Functions
 {
@@ -22,16 +20,19 @@ namespace BulldogFinance.Functions.Functions
 
         private readonly IPlaidRepository _plaidRepository;
         private readonly IPlaidSyncService _plaidSyncService;
+        private readonly ILogger<PlaidWebhookFunction> _logger;
         private readonly string? _webhookSharedSecret;
         private readonly string _webhookSecretQueryParameter;
 
         public PlaidWebhookFunction(
             IPlaidRepository plaidRepository,
             IPlaidSyncService plaidSyncService,
+            ILogger<PlaidWebhookFunction> logger,
             IConfiguration configuration)
         {
             _plaidRepository = plaidRepository;
             _plaidSyncService = plaidSyncService;
+            _logger = logger;
             _webhookSharedSecret = configuration["Plaid:WebhookSharedSecret"];
             _webhookSecretQueryParameter = configuration["Plaid:WebhookSecretQueryParameter"] ?? "secret";
         }
@@ -57,6 +58,7 @@ namespace BulldogFinance.Functions.Functions
             if (!string.IsNullOrWhiteSpace(body))
             {
                 var payload = JsonSerializer.Deserialize<PlaidWebhookRequest>(body, JsonOptions);
+
                 if (payload?.WebhookType == "TRANSACTIONS" &&
                     payload.WebhookCode == "SYNC_UPDATES_AVAILABLE" &&
                     !string.IsNullOrWhiteSpace(payload.ItemId))
@@ -65,13 +67,40 @@ namespace BulldogFinance.Functions.Functions
                     if (item != null)
                     {
                         await _plaidSyncService.SyncTransactionsAsync(item.PartitionKey, item.RowKey);
+                        await _plaidSyncService.RefreshBalancesAsync(item.PartitionKey, item.RowKey);
                     }
+                }
+                else if (payload?.WebhookType == "ITEM" &&
+                         payload.WebhookCode == "ERROR" &&
+                         !string.IsNullOrWhiteSpace(payload.ItemId))
+                {
+                    await HandleItemErrorAsync(payload.ItemId, payload.Error);
                 }
             }
 
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteStringAsync("{\"ok\":true}");
             return response;
+        }
+
+        private async Task HandleItemErrorAsync(string itemId, PlaidWebhookError? error)
+        {
+            var item = await _plaidRepository.GetItemByItemIdAsync(itemId);
+            if (item == null || !string.Equals(item.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            item.Status = "ERROR";
+            item.UpdatedAtUtc = DateTime.UtcNow;
+            await _plaidRepository.UpsertItemAsync(item);
+
+            _logger.LogWarning(
+                "Plaid item marked as ERROR. ItemId={ItemId} UserId={UserId} ErrorCode={ErrorCode} ErrorMessage={ErrorMessage}",
+                itemId,
+                item.PartitionKey,
+                error?.ErrorCode,
+                error?.ErrorMessage);
         }
 
         private bool HasValidWebhookSecret(HttpRequestData req)
