@@ -4,23 +4,67 @@ import {
     ensureNativeAuthConfig,
     nativeAuthConfig,
 } from "@/auth/config/nativeAuthConfig.js";
+import { getRememberMe } from "@/auth/core/tokenStore.js";
 
 let nativeAuthClientPromise;
 
+const FRIENDLY_ERRORS = {
+    // Sign-up
+    1003037: "An account with this email already exists. Please log in instead.",
+    user_already_exists: "An account with this email already exists. Please log in instead.",
+    701014: "A verification code was already sent to your email. Please check your inbox or wait a moment before requesting a new one.",
+
+    // Sign-in
+    50034: "No account found with this email address.",
+    50126: "Incorrect email or password. Please try again.",
+    50057: "This account has been disabled. Please contact support.",
+
+    // OTP
+    invalid_oob_value: "The verification code is incorrect. Please try again.",
+    oob_code_expired: "The verification code has expired. Please request a new one.",
+
+    // Password policy
+    password_too_weak: "Your password is too weak. Please use at least 8 characters with a mix of letters, numbers, and symbols.",
+    password_too_long: "Your password is too long.",
+    password_recently_used: "You have used this password recently. Please choose a different one.",
+
+    // Misc
+    700016: "Application configuration error. Please contact support.",
+};
+
 export function getAuthErrorMessage(error, fallbackMessage) {
-    return (
-        error?.errorData?.errorDescription ||
-        error?.errorDescription ||
-        error?.message ||
-        fallbackMessage
-    );
+    const data = error?.errorData ?? error;
+
+    const errorCodes = data?.errorCodes ?? [];
+    for (const code of errorCodes) {
+        if (FRIENDLY_ERRORS[code]) return FRIENDLY_ERRORS[code];
+    }
+
+    const errorCode = data?.error ?? data?.errorCode;
+    if (errorCode && FRIENDLY_ERRORS[errorCode]) return FRIENDLY_ERRORS[errorCode];
+
+    const subError = data?.subError ?? data?.suberror;
+    if (subError && FRIENDLY_ERRORS[subError]) return FRIENDLY_ERRORS[subError];
+
+    return fallbackMessage;
 }
 
 export async function getNativeAuthClient() {
     ensureNativeAuthConfig();
 
     if (!nativeAuthClientPromise) {
-        nativeAuthClientPromise = CustomAuthPublicClientApplication.create(nativeAuthConfig);
+        const config = {
+            ...nativeAuthConfig,
+            cache: {
+                ...nativeAuthConfig.cache,
+                cacheLocation: getRememberMe() ? "localStorage" : "sessionStorage",
+            },
+        };
+        nativeAuthClientPromise = CustomAuthPublicClientApplication.create(config)
+            .catch((error) => {
+                nativeAuthClientPromise = null;
+                throw error;
+            });
     }
 
     return nativeAuthClientPromise;

@@ -2,7 +2,6 @@ import React, { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/core/authContext.js";
 import AuthLayout from "@/components/auth/AuthLayout.jsx";
-import AuthTabs from "@/components/auth/AuthTabs.jsx";
 import EmailField from "@/components/auth/EmailField.jsx";
 import GoogleButton from "@/components/auth/GoogleButton.jsx";
 import PasswordField from "@/components/auth/PasswordField.jsx";
@@ -367,12 +366,10 @@ export default function SignupPage() {
 
     return (
         <AuthLayout
-            title="Create account"
-            subtitle="Set up a native Bulldog Finance sign-in or create your account with Google."
+            title="Create an account"
+            subtitle=""
         >
-            <div className="space-y-6">
-                <AuthTabs active="signup" />
-
+            <div className="flex flex-col gap-6">
                 {error ? (
                     <div className="rounded-[12px] border border-[#fecdca] bg-[#fef3f2] px-4 py-3 text-sm text-[#b42318]">
                         {error}
@@ -381,14 +378,14 @@ export default function SignupPage() {
 
                 {renderStep()}
 
-                {step !== "details" ? (
-                    <div className="text-sm text-[var(--text-soft)]">
-                        Already have an account?{" "}
-                        <Link to="/login" className="font-semibold text-[var(--accent)]">
-                            Go back to log in
-                        </Link>
-                    </div>
-                ) : null}
+                <div className="flex justify-center gap-1 text-center">
+                    <span className="text-sm text-[var(--color-gray-500)]">
+                        Already have an account?
+                    </span>
+                    <Link to="/login" className="text-sm font-semibold text-[var(--accent)]">
+                        Log in instead
+                    </Link>
+                </div>
             </div>
         </AuthLayout>
     );

@@ -1,11 +1,32 @@
 const STORAGE_KEY = "bulldogfinance.auth.session";
+const REMEMBER_KEY = "bulldogfinance.auth.remember";
+
+export function getRememberMe() {
+    try {
+        return window.localStorage?.getItem(REMEMBER_KEY) === "1";
+    } catch {
+        return false;
+    }
+}
+
+export function setRememberMe(value) {
+    try {
+        if (value) {
+            window.localStorage?.setItem(REMEMBER_KEY, "1");
+        } else {
+            window.localStorage?.removeItem(REMEMBER_KEY);
+        }
+    } catch {
+        // ignore
+    }
+}
 
 function getStorage() {
     if (typeof window === "undefined") {
         return null;
     }
 
-    return window.sessionStorage;
+    return getRememberMe() ? window.localStorage : window.sessionStorage;
 }
 
 function buildInitials(name = "", givenName = "", surname = "") {

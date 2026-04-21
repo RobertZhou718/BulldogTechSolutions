@@ -4,6 +4,7 @@ import {
     bootstrapStoredAuthSession,
     clearStoredAuthSession,
     saveStoredAuthSession,
+    setRememberMe,
 } from "./tokenStore.js";
 import {
     buildSessionFromAccountData,
@@ -121,7 +122,8 @@ export default function AuthProvider({ children }) {
         };
     }, [applySession, clearSession]);
 
-    const signInWithPassword = useCallback(async (email, password) => {
+    const signInWithPassword = useCallback(async (email, password, rememberMe = false) => {
+        setRememberMe(rememberMe);
         setBusy(true);
 
         try {
@@ -134,6 +136,7 @@ export default function AuthProvider({ children }) {
     }, [applySession, setBusy]);
 
     const signInWithGoogle = useCallback(async () => {
+        setRememberMe(true);
         setBusy(true);
 
         try {

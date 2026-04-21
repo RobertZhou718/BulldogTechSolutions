@@ -9,7 +9,7 @@ export default function PasswordField({
     label = "Password",
     name = "password",
     onChange,
-    placeholder = "Enter your password",
+    placeholder = "••••••••••••",
     value,
 }) {
     const [isVisible, setIsVisible] = useState(false);
