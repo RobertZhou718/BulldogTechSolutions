@@ -1,6 +1,6 @@
 import React from "react";
 import FloatingChatbot from "@/components/chat/FloatingChatbot.jsx";
-import { ChatbotProvider } from "@/components/chat/ChatbotContext.jsx";
+import { ChatbotProvider } from "@/components/chat/ChatbotProvider.jsx";
 import SideNav from "./SideNav.jsx";
 import TopBar from "./TopBar.jsx";
 
