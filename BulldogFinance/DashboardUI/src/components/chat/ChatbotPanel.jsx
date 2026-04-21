@@ -42,9 +42,7 @@ export default function ChatbotPanel({
 
             <div className="mt-6 flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div
-                    className={`min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 ${
-                        embedded ? "max-h-full" : "max-h-[360px]"
-                    }`}
+                    className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"
                 >
                     {messages.map((message) => (
                         <div
