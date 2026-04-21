@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace BulldogFinance.Functions.Models.Users
+﻿namespace BulldogFinance.Functions.Models.Users
 {
     public class OnboardingRequest
     {

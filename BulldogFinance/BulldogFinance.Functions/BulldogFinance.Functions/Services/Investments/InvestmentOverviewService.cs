@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Net.Http;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System.Text.Json;
 using BulldogFinance.Functions.Models.Investments;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -66,64 +61,53 @@ namespace BulldogFinance.Functions.Services.Investments
                 foreach (var h in holdings)
                 {
                     if (!string.IsNullOrWhiteSpace(h.Symbol))
-                    {
                         symbols.Add(h.Symbol.Trim().ToUpperInvariant());
-                    }
                 }
 
-                var symbolList = new List<string>(symbols);
-                if (symbolList.Count > maxSymbolsPerUser)
-                {
-                    symbolList = symbolList.GetRange(0, maxSymbolsPerUser);
-                }
+                var symbolSet = symbols.Take(maxSymbolsPerUser).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-                foreach (var h in holdings)
-                {
-                    if (string.IsNullOrWhiteSpace(h.Symbol)) continue;
-                    var symbol = h.Symbol.Trim().ToUpperInvariant();
-                    if (!symbolList.Contains(symbol, StringComparer.OrdinalIgnoreCase))
+                var holdingTasks = holdings
+                    .Where(h => !string.IsNullOrWhiteSpace(h.Symbol)
+                                && symbolSet.Contains(h.Symbol.Trim().ToUpperInvariant()))
+                    .Select(async h =>
                     {
-                        continue;
-                    }
+                        var symbol = h.Symbol!.Trim().ToUpperInvariant();
 
-                    var (price, changePercent) =
-                        await GetQuoteAsync(client, apiKey, symbol, cancellationToken);
+                        var quoteTask = GetQuoteAsync(client, apiKey, symbol, cancellationToken);
+                        var newsTask = GetNewsAsync(client, apiKey, symbol, fromStr, toStr, maxNewsPerSymbol, cancellationToken);
+                        await Task.WhenAll(quoteTask, newsTask);
 
-                    var news = await GetNewsAsync(
-                        client,
-                        apiKey,
-                        symbol,
-                        fromStr,
-                        toStr,
-                        maxNewsPerSymbol,
-                        cancellationToken);
+                        var (price, changePercent) = quoteTask.Result;
+                        var news = newsTask.Result;
 
-                    var marketValue = h.Quantity * price;
-                    var costValue = h.Quantity * h.AvgCost;
-                    double unrealizedPnL = 0;
-                    double unrealizedPnLPercent = 0;
+                        var marketValue = h.Quantity * price;
+                        var costValue = h.Quantity * h.AvgCost;
+                        double unrealizedPnL = 0;
+                        double unrealizedPnLPercent = 0;
 
-                    if (costValue > 1e-8)
-                    {
-                        unrealizedPnL = marketValue - costValue;
-                        unrealizedPnLPercent = unrealizedPnL / costValue * 100.0;
-                    }
+                        if (costValue > 1e-8)
+                        {
+                            unrealizedPnL = marketValue - costValue;
+                            unrealizedPnLPercent = unrealizedPnL / costValue * 100.0;
+                        }
 
-                    overview.Holdings.Add(new InvestmentHoldingOverviewDto
-                    {
-                        Symbol = symbol,
-                        Exchange = h.Exchange,
-                        Quantity = h.Quantity,
-                        AvgCost = h.AvgCost,
-                        Currency = h.Currency,
-                        CurrentPrice = price,
-                        ChangePercent = changePercent,
-                        MarketValue = marketValue,
-                        UnrealizedPnL = unrealizedPnL,
-                        UnrealizedPnLPercent = unrealizedPnLPercent,
-                        News = news
+                        return new InvestmentHoldingOverviewDto
+                        {
+                            Symbol = symbol,
+                            Exchange = h.Exchange,
+                            Quantity = h.Quantity,
+                            AvgCost = h.AvgCost,
+                            Currency = h.Currency,
+                            CurrentPrice = price,
+                            ChangePercent = changePercent,
+                            MarketValue = marketValue,
+                            UnrealizedPnL = unrealizedPnL,
+                            UnrealizedPnLPercent = unrealizedPnLPercent,
+                            News = news
+                        };
                     });
-                }
+
+                overview.Holdings.AddRange(await Task.WhenAll(holdingTasks));
             }
             else
             {
@@ -131,38 +115,32 @@ namespace BulldogFinance.Functions.Services.Investments
                 var popularStr = _configuration["Finnhub:PopularSymbols"]
                                  ?? "AAPL,MSFT,NVDA,TSLA,GOOGL,AMZN";
 
-                var popularSymbols = popularStr.Split(
-                    ',',
-                    StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var popularSymbols = popularStr
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Take(maxSymbolsPerUser)
+                    .Select(s => s.ToUpperInvariant())
+                    .ToList();
 
-                int count = 0;
-                foreach (var s in popularSymbols)
+                var popularTasks = popularSymbols.Select(async symbol =>
                 {
-                    if (count >= maxSymbolsPerUser) break;
-                    var symbol = s.ToUpperInvariant();
-                    count++;
+                    var quoteTask = GetQuoteAsync(client, apiKey, symbol, cancellationToken);
+                    var newsTask = GetNewsAsync(client, apiKey, symbol, fromStr, toStr, maxNewsPerSymbol, cancellationToken);
+                    await Task.WhenAll(quoteTask, newsTask);
 
-                    var (price, changePercent) =
-                        await GetQuoteAsync(client, apiKey, symbol, cancellationToken);
+                    var (price, changePercent) = quoteTask.Result;
+                    var news = newsTask.Result;
 
-                    var news = await GetNewsAsync(
-                        client,
-                        apiKey,
-                        symbol,
-                        fromStr,
-                        toStr,
-                        maxNewsPerSymbol,
-                        cancellationToken);
-
-                    overview.Popular.Add(new SymbolOverviewDto
+                    return new SymbolOverviewDto
                     {
                         Symbol = symbol,
                         Exchange = "US",
                         CurrentPrice = price,
                         ChangePercent = changePercent,
                         News = news
-                    });
-                }
+                    };
+                });
+
+                overview.Popular.AddRange(await Task.WhenAll(popularTasks));
             }
 
             return overview;

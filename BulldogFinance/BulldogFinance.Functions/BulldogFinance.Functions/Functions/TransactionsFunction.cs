@@ -5,12 +5,8 @@ using BulldogFinance.Functions.Services.Transactions;
 using Azure;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
-using System;
-using System.IO;
-using System.Linq;
 using System.Net;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace BulldogFinance.Functions.Functions
 {
@@ -40,11 +36,7 @@ namespace BulldogFinance.Functions.Functions
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
-            {
-                var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
-                await unauthorized.WriteStringAsync("Unauthorized.");
-                return unauthorized;
-            }
+                return await ApiResponse.UnauthorizedAsync(req);
 
             string body;
             using (var reader = new StreamReader(req.Body))
@@ -53,11 +45,7 @@ namespace BulldogFinance.Functions.Functions
             }
 
             if (string.IsNullOrWhiteSpace(body))
-            {
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("Request body is empty.");
-                return bad;
-            }
+                return await ApiResponse.BadRequestAsync(req, "Request body is empty.");
 
             TransactionCreateRequest? requestModel;
             try
@@ -66,35 +54,21 @@ namespace BulldogFinance.Functions.Functions
             }
             catch (JsonException)
             {
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("Invalid JSON.");
-                return bad;
+                return await ApiResponse.BadRequestAsync(req, "Invalid JSON.");
             }
 
             if (requestModel == null ||
                 string.IsNullOrWhiteSpace(requestModel.AccountId) ||
                 requestModel.Amount <= 0)
-            {
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("AccountId and positive Amount are required.");
-                return bad;
-            }
+                return await ApiResponse.BadRequestAsync(req, "AccountId and positive Amount are required.");
 
             var typeUpper = (requestModel.Type ?? string.Empty).Trim().ToUpperInvariant();
             if (typeUpper != "INCOME" && typeUpper != "EXPENSE")
-            {
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("Type must be INCOME or EXPENSE.");
-                return bad;
-            }
+                return await ApiResponse.BadRequestAsync(req, "Type must be INCOME or EXPENSE.");
 
             var account = await _accountRepository.GetAccountAsync(userId, requestModel.AccountId);
             if (account == null || account.IsArchived)
-            {
-                var notFound = req.CreateResponse(HttpStatusCode.NotFound);
-                await notFound.WriteStringAsync("Account not found or archived.");
-                return notFound;
-            }
+                return await ApiResponse.NotFoundAsync(req, "Account not found or archived.");
 
             var now = DateTime.UtcNow;
             var occurredAt = requestModel.OccurredAtUtc ?? now;
@@ -197,11 +171,7 @@ namespace BulldogFinance.Functions.Functions
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
-            {
-                var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
-                await unauthorized.WriteStringAsync("Unauthorized.");
-                return unauthorized;
-            }
+                return await ApiResponse.UnauthorizedAsync(req);
 
             string? accountId = null;
             DateTime? fromUtc = null;

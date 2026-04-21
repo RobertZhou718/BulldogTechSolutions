@@ -1,8 +1,7 @@
-using System.IO;
 using System.Net;
 using System.Text.Json;
-using System.Threading.Tasks;
 using BulldogFinance.Functions.Helper;
+using BulldogFinance.Functions.Models.Plaid;
 using BulldogFinance.Functions.Services.Plaid;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
@@ -31,11 +30,7 @@ namespace BulldogFinance.Functions.Functions
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
-            {
-                var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
-                await unauthorized.WriteStringAsync("Unauthorized.");
-                return unauthorized;
-            }
+                return await ApiResponse.UnauthorizedAsync(req);
 
             string? itemId = null;
             using (var reader = new StreamReader(req.Body))
@@ -51,9 +46,21 @@ namespace BulldogFinance.Functions.Functions
                 }
             }
 
-            var summary = string.IsNullOrWhiteSpace(itemId)
-                ? await _plaidSyncService.SyncTransactionsForAllItemsAsync(userId)
-                : await _plaidSyncService.SyncTransactionsAsync(userId, itemId);
+            PlaidSyncSummary summary;
+            if (string.IsNullOrWhiteSpace(itemId))
+            {
+                summary = await _plaidSyncService.SyncTransactionsForAllItemsAsync(userId);
+                var items = await _plaidSyncService.GetActiveItemsAsync(userId);
+                foreach (var item in items)
+                {
+                    await _plaidSyncService.RefreshBalancesAsync(userId, item.RowKey);
+                }
+            }
+            else
+            {
+                summary = await _plaidSyncService.SyncTransactionsAsync(userId, itemId);
+                await _plaidSyncService.RefreshBalancesAsync(userId, itemId);
+            }
 
             var response = req.CreateResponse(HttpStatusCode.OK);
             response.Headers.Add("Content-Type", "application/json; charset=utf-8");

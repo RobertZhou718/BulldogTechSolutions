@@ -1,7 +1,5 @@
-﻿using System;
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
-using System.Threading.Tasks;
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Investments;
 using BulldogFinance.Functions.Services.Investments;
@@ -37,11 +35,7 @@ namespace BulldogFinance.Functions.Functions
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
-            {
-                var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
-                await unauthorized.WriteStringAsync("Unauthorized.");
-                return unauthorized;
-            }
+                return await ApiResponse.UnauthorizedAsync(req);
 
             UpsertInvestmentRequest? payload;
             try
@@ -53,24 +47,14 @@ namespace BulldogFinance.Functions.Functions
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to deserialize UpsertInvestmentRequest");
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("Invalid JSON payload.");
-                return bad;
+                return await ApiResponse.BadRequestAsync(req, "Invalid JSON payload.");
             }
 
             if (payload == null || string.IsNullOrWhiteSpace(payload.Symbol))
-            {
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("Symbol is required.");
-                return bad;
-            }
+                return await ApiResponse.BadRequestAsync(req, "Symbol is required.");
 
             if (payload.Quantity < 0 || payload.AvgCost < 0)
-            {
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("Quantity and AvgCost must be >= 0.");
-                return bad;
-            }
+                return await ApiResponse.BadRequestAsync(req, "Quantity and AvgCost must be >= 0.");
 
             _logger.LogInformation("UpsertInvestment for user {UserId}, symbol {Symbol}",
                 userId, payload.Symbol);
@@ -86,9 +70,7 @@ namespace BulldogFinance.Functions.Functions
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in UpsertInvestment");
-                var error = req.CreateResponse(HttpStatusCode.InternalServerError);
-                await error.WriteStringAsync("Failed to save investment.");
-                return error;
+                return await ApiResponse.InternalErrorAsync(req, "Failed to save investment.");
             }
         }
     }

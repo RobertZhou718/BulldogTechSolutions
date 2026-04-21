@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using Azure;
 using Azure.Data.Tables;
@@ -248,6 +246,21 @@ namespace BulldogFinance.Functions.Models.Plaid
 
         [JsonPropertyName("item_id")]
         public string? ItemId { get; set; }
+
+        [JsonPropertyName("error")]
+        public PlaidWebhookError? Error { get; set; }
+    }
+
+    public class PlaidWebhookError
+    {
+        [JsonPropertyName("error_type")]
+        public string? ErrorType { get; set; }
+
+        [JsonPropertyName("error_code")]
+        public string? ErrorCode { get; set; }
+
+        [JsonPropertyName("error_message")]
+        public string? ErrorMessage { get; set; }
     }
 
     public class PlaidSyncSummary

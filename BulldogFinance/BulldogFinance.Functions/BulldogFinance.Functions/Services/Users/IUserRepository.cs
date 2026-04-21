@@ -1,6 +1,4 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
-using BulldogFinance.Functions.Models.Users;
+﻿using BulldogFinance.Functions.Models.Users;
 
 namespace BulldogFinance.Functions.Services.Users
 {

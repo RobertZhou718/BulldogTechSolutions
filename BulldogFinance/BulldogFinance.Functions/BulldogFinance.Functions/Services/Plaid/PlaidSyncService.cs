@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using BulldogFinance.Functions.Models.Accounts;
 using BulldogFinance.Functions.Models.Plaid;
 using BulldogFinance.Functions.Models.Transactions;
@@ -259,6 +254,14 @@ namespace BulldogFinance.Functions.Services.Plaid
             }
 
             await _plaidRepository.DeleteItemAsync(userId, itemId, cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<PlaidItemEntity>> GetActiveItemsAsync(string userId, CancellationToken cancellationToken = default)
+        {
+            var items = await _plaidRepository.GetItemsAsync(userId, cancellationToken);
+            return items
+                .Where(x => string.Equals(x.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+                .ToList();
         }
 
         private async Task<PlaidItemEntity> GetActiveItemAsync(string userId, string itemId, CancellationToken cancellationToken)

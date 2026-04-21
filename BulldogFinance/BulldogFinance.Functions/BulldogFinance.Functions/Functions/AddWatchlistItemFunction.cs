@@ -1,7 +1,5 @@
-﻿using System;
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
-using System.Threading.Tasks;
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Watchlist;
 using BulldogFinance.Functions.Services.Investments;
@@ -37,11 +35,7 @@ namespace BulldogFinance.Functions.Functions
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
-            {
-                var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
-                await unauthorized.WriteStringAsync("Unauthorized.");
-                return unauthorized;
-            }
+                return await ApiResponse.UnauthorizedAsync(req);
 
             AddWatchlistRequest? payload;
             try
@@ -53,17 +47,11 @@ namespace BulldogFinance.Functions.Functions
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to deserialize AddWatchlistRequest");
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("Invalid JSON payload.");
-                return bad;
+                return await ApiResponse.BadRequestAsync(req, "Invalid JSON payload.");
             }
 
             if (payload == null || string.IsNullOrWhiteSpace(payload.Symbol))
-            {
-                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-                await bad.WriteStringAsync("Symbol is required.");
-                return bad;
-            }
+                return await ApiResponse.BadRequestAsync(req, "Symbol is required.");
 
             await _investmentService.AddToWatchlistAsync(
                 userId,

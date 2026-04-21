@@ -22,11 +22,7 @@ namespace BulldogFinance.Functions.Functions
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
-            {
-                var unauthorized = req.CreateResponse(HttpStatusCode.Unauthorized);
-                await unauthorized.WriteStringAsync("Unauthorized.");
-                return unauthorized;
-            }
+                return await ApiResponse.UnauthorizedAsync(req, cancellationToken);
 
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteAsJsonAsync(

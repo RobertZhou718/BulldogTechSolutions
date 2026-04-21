@@ -1,7 +1,4 @@
-﻿// Models/SymbolOverviewDto.cs
-using System.Collections.Generic;
-
-namespace BulldogFinance.Functions.Models.Investments
+﻿namespace BulldogFinance.Functions.Models.Investments
 {
     public class SymbolOverviewDto
     {

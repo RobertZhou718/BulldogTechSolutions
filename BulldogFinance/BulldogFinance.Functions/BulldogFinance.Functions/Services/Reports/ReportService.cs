@@ -1,5 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using BulldogFinance.Functions.Models.Reports;
 using BulldogFinance.Functions.Services.Chat;

@@ -1,7 +1,4 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
-
-namespace BulldogFinance.Functions.Services.Chat
+﻿namespace BulldogFinance.Functions.Services.Chat
 {
     public interface IAiClient
     {

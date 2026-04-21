@@ -1,6 +1,4 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
-using BulldogFinance.Functions.Models.Investments;
+﻿using BulldogFinance.Functions.Models.Investments;
 
 namespace BulldogFinance.Functions.Services.Investments
 {

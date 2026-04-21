@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using BulldogFinance.Functions.Models.Accounts;
+﻿using BulldogFinance.Functions.Models.Accounts;
 
 namespace BulldogFinance.Functions.Models.Tools
 {
