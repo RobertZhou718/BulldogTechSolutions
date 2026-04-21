@@ -9,6 +9,8 @@ namespace BulldogFinance.Functions.Helper
 
         private const string DebugUserIdHeaderName = "X-Debug-UserId";
         private const string AllowDebugHeaderSetting = "Auth__AllowDebugUserIdHeader";
+        private const string ClientPrincipalNameHeaderName = "X-MS-CLIENT-PRINCIPAL-NAME";
+        private const string ClientPrincipalIdHeaderName = "X-MS-CLIENT-PRINCIPAL-ID";
 
         public static string? GetUserId(HttpRequestData req)
         {
@@ -19,13 +21,16 @@ namespace BulldogFinance.Functions.Helper
                 return userId;
             }
 
-            if (req.Headers.TryGetValues("X-MS-CLIENT-PRINCIPAL-ID", out var principalIds))
+            var principalName = GetFirstHeaderValue(req, ClientPrincipalNameHeaderName);
+            if (!string.IsNullOrWhiteSpace(principalName))
             {
-                var id = principalIds.FirstOrDefault();
-                if (!string.IsNullOrWhiteSpace(id))
-                {
-                    return id;
-                }
+                return principalName;
+            }
+
+            var principalId = GetFirstHeaderValue(req, ClientPrincipalIdHeaderName);
+            if (!string.IsNullOrWhiteSpace(principalId))
+            {
+                return principalId;
             }
 
             if (!AllowDebugUserIdHeader())
@@ -43,6 +48,19 @@ namespace BulldogFinance.Functions.Helper
             }
 
             return null;
+        }
+
+        private static string? GetFirstHeaderValue(HttpRequestData req, string headerName)
+        {
+            if (!req.Headers.TryGetValues(headerName, out var values))
+            {
+                return null;
+            }
+
+            var value = values.FirstOrDefault();
+            return string.IsNullOrWhiteSpace(value)
+                ? null
+                : value.Trim();
         }
 
         private static bool AllowDebugUserIdHeader()
