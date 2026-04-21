@@ -104,10 +104,7 @@ namespace BulldogFinance.Functions.Services.Auth
                         "The bearer token was not issued for the configured External ID tenant.");
                 }
 
-                var userId = GetClaim(principal, "sub")
-                    ?? GetClaim(principal, "oid")
-                    ?? GetClaim(principal, "http://schemas.microsoft.com/identity/claims/objectidentifier")
-                    ?? GetClaim(principal, ClaimTypes.NameIdentifier);
+                var userId = ResolveUserId(principal);
 
                 if (string.IsNullOrWhiteSpace(userId))
                 {
@@ -186,6 +183,37 @@ namespace BulldogFinance.Functions.Services.Auth
         private static string NormalizeIssuer(string issuer)
         {
             return issuer.Trim().TrimEnd('/');
+        }
+
+        private static string? ResolveUserId(ClaimsPrincipal principal)
+        {
+            var userId = FirstNonEmpty(
+                GetClaim(principal, "upn"),
+                GetClaim(principal, "preferred_username"),
+                GetClaim(principal, ClaimTypes.Upn),
+                GetClaim(principal, ClaimTypes.Email),
+                GetClaim(principal, "email"),
+                GetClaim(principal, "sub"),
+                GetClaim(principal, "oid"),
+                GetClaim(principal, "http://schemas.microsoft.com/identity/claims/objectidentifier"),
+                GetClaim(principal, ClaimTypes.NameIdentifier));
+
+            return string.IsNullOrWhiteSpace(userId)
+                ? null
+                : userId.Trim();
+        }
+
+        private static string? FirstNonEmpty(params string?[] values)
+        {
+            foreach (var value in values)
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+
+            return null;
         }
 
         private static string? GetClaim(ClaimsPrincipal principal, string claimType)

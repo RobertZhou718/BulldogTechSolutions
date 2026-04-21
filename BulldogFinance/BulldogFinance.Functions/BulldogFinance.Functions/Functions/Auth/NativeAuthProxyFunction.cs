@@ -8,6 +8,17 @@ namespace BulldogFinance.Functions.Functions.Auth
 {
     public sealed class NativeAuthProxyFunction
     {
+        private static readonly HashSet<string> BlockedResponseHeaders = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Content-Length",
+            "Transfer-Encoding",
+            "Connection",
+            "Keep-Alive",
+            "Server",
+            "Date",
+            "Set-Cookie"
+        };
+
         private readonly INativeAuthApiProxyService _nativeAuthApiProxyService;
         private readonly ILogger<NativeAuthProxyFunction> _logger;
 
@@ -72,7 +83,7 @@ namespace BulldogFinance.Functions.Functions.Auth
         {
             foreach (var header in upstreamResponse.Headers)
             {
-                response.Headers.Add(header.Key, string.Join(",", header.Value));
+                TryCopyHeader(response, header.Key, header.Value);
             }
 
             if (upstreamResponse.Content == null)
@@ -82,8 +93,18 @@ namespace BulldogFinance.Functions.Functions.Auth
 
             foreach (var header in upstreamResponse.Content.Headers)
             {
-                response.Headers.Add(header.Key, string.Join(",", header.Value));
+                TryCopyHeader(response, header.Key, header.Value);
             }
+        }
+
+        private static void TryCopyHeader(HttpResponseData response, string headerName, IEnumerable<string> values)
+        {
+            if (BlockedResponseHeaders.Contains(headerName))
+            {
+                return;
+            }
+
+            response.Headers.TryAddWithoutValidation(headerName, values);
         }
     }
 }
