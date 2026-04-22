@@ -20,7 +20,7 @@ export default function ChatbotPanel({
     };
 
     return (
-        <Card className={`flex h-full min-h-0 flex-col overflow-hidden ${className}`}>
+        <Card className={`flex min-h-0 flex-col overflow-hidden ${className}`}>
             <div className="flex items-start gap-3">
                 <img
                     src={chatbotAvatar}
@@ -80,7 +80,7 @@ export default function ChatbotPanel({
                     <p className="mt-4 text-sm font-medium text-[var(--color-error-500)]">{error}</p>
                 ) : null}
 
-                {prompts.length > 0 ? (
+                {prompts.length > 0 && messages.length === 0 ? (
                     <div className="mt-5 shrink-0">
                         <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-soft)]">
                             Suggested prompts

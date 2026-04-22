@@ -43,6 +43,8 @@ namespace BulldogFinance.Functions.Functions
             if (string.IsNullOrWhiteSpace(userId))
                 return await ApiResponse.UnauthorizedAsync(req);
 
+            var userEmail = AuthHelper.GetUserEmail(req);
+
             string body;
             using (var reader = new StreamReader(req.Body))
             {
@@ -158,6 +160,7 @@ namespace BulldogFinance.Functions.Functions
                 CreatedAtUtc = now
             };
 
+            userEntity.Email = userEmail;
             userEntity.DefaultCurrency = defaultCurrency;
             userEntity.OnboardingDone = true;
             userEntity.UpdatedAtUtc = now;
