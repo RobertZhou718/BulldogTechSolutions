@@ -7,6 +7,7 @@ import {
 import { getRememberMe } from "@/auth/core/tokenStore.js";
 
 let nativeAuthClientPromise;
+let nativeAuthClientCacheLocation;
 
 const FRIENDLY_ERRORS = {
     // Sign-up
@@ -52,17 +53,28 @@ export function getAuthErrorMessage(error, fallbackMessage) {
 export async function getNativeAuthClient() {
     ensureNativeAuthConfig();
 
+    const desiredCacheLocation = getRememberMe() ? "localStorage" : "sessionStorage";
+
+    // If the stored rememberMe preference has changed since the client was
+    // created, the cache location is stale — rebuild so MSAL persists to the
+    // same storage the app session uses.
+    if (nativeAuthClientPromise && nativeAuthClientCacheLocation !== desiredCacheLocation) {
+        nativeAuthClientPromise = null;
+    }
+
     if (!nativeAuthClientPromise) {
         const config = {
             ...nativeAuthConfig,
             cache: {
                 ...nativeAuthConfig.cache,
-                cacheLocation: getRememberMe() ? "localStorage" : "sessionStorage",
+                cacheLocation: desiredCacheLocation,
             },
         };
+        nativeAuthClientCacheLocation = desiredCacheLocation;
         nativeAuthClientPromise = CustomAuthPublicClientApplication.create(config)
             .catch((error) => {
                 nativeAuthClientPromise = null;
+                nativeAuthClientCacheLocation = undefined;
                 throw error;
             });
     }

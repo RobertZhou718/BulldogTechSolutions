@@ -28,6 +28,19 @@ import { signInWithGoogle as signInWithGoogleService } from "@/auth/native/socia
 
 const bootstrappedSession = bootstrapStoredAuthSession();
 
+function isAccessTokenExpired(token) {
+    try {
+        const base64Url = token.split(".")[1];
+        // JWT uses base64url encoding; atob requires standard base64
+        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+        const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+        const payload = JSON.parse(atob(base64 + padding));
+        return !payload.exp || Date.now() >= payload.exp * 1000;
+    } catch {
+        return true;
+    }
+}
+
 export default function AuthProvider({ children }) {
     const [authState, setAuthState] = useState({
         isAuthenticated: Boolean(bootstrappedSession?.accessToken),
@@ -86,7 +99,19 @@ export default function AuthProvider({ children }) {
                 }
 
                 if (!accountData) {
-                    clearSession();
+                    // MSAL Native Auth doesn't restore its in-memory account state on page
+                    // refresh. If we have a non-expired stored token, keep the user
+                    // authenticated — the API will reject it with 401 if it's actually invalid.
+                    if (
+                        bootstrappedSession?.accessToken &&
+                        !isAccessTokenExpired(bootstrappedSession.accessToken)
+                    ) {
+                        if (isActive) {
+                            setAuthState((current) => ({ ...current, isLoading: false }));
+                        }
+                    } else {
+                        clearSession();
+                    }
                     return;
                 }
 

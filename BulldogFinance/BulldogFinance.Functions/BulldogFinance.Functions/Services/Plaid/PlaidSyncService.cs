@@ -237,19 +237,15 @@ namespace BulldogFinance.Functions.Services.Plaid
             foreach (var link in links)
             {
                 var account = await _accountRepository.GetAccountAsync(userId, link.LocalAccountId, cancellationToken);
-                if (account == null)
+                if (account != null)
                 {
-                    continue;
+                    await _transactionRepository.MarkTransactionsDeletedByAccountIdAsync(
+                        userId,
+                        account.RowKey,
+                        cancellationToken);
+                    await _accountRepository.DeleteAccountAsync(userId, account.RowKey, cancellationToken);
                 }
 
-                account.IsArchived = true;
-                account.UpdatedAtUtc = DateTime.UtcNow;
-                await _accountRepository.UpdateAccountAsync(account, cancellationToken);
-                await _transactionRepository.MarkTransactionsDeletedByAccountIdAsync(
-                    userId,
-                    account.RowKey,
-                    cancellationToken);
-                await _accountRepository.DeleteAccountAsync(userId, account.RowKey, cancellationToken);
                 await _plaidRepository.DeleteAccountLinkAsync(userId, link.RowKey, cancellationToken);
             }
 
