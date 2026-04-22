@@ -3,6 +3,7 @@ import { AuthContext } from "./authContext.js";
 import {
     bootstrapStoredAuthSession,
     clearStoredAuthSession,
+    getRememberMe,
     saveStoredAuthSession,
     setRememberMe,
 } from "./tokenStore.js";
@@ -26,7 +27,7 @@ import {
 } from "@/auth/native/signUpService.js";
 import { signInWithGoogle as signInWithGoogleService } from "@/auth/native/socialService.js";
 
-const bootstrappedSession = bootstrapStoredAuthSession();
+const rawBootstrappedSession = bootstrapStoredAuthSession();
 
 function isAccessTokenExpired(token) {
     try {
@@ -38,6 +39,25 @@ function isAccessTokenExpired(token) {
         return !payload.exp || Date.now() >= payload.exp * 1000;
     } catch {
         return true;
+    }
+}
+
+// Drop the bootstrapped session early if its JWT is already expired — otherwise
+// the UI flashes protected content before initialize() catches up.
+const bootstrappedSession =
+    rawBootstrappedSession?.accessToken &&
+    !isAccessTokenExpired(rawBootstrappedSession.accessToken)
+        ? rawBootstrappedSession
+        : null;
+
+async function wipeMsalAccount() {
+    try {
+        const accountData = await getCurrentAccountData();
+        if (accountData) {
+            await accountData.signOut();
+        }
+    } catch (error) {
+        console.error("Failed to clear MSAL account", error);
     }
 }
 
@@ -102,10 +122,7 @@ export default function AuthProvider({ children }) {
                     // MSAL Native Auth doesn't restore its in-memory account state on page
                     // refresh. If we have a non-expired stored token, keep the user
                     // authenticated — the API will reject it with 401 if it's actually invalid.
-                    if (
-                        bootstrappedSession?.accessToken &&
-                        !isAccessTokenExpired(bootstrappedSession.accessToken)
-                    ) {
+                    if (bootstrappedSession?.accessToken) {
                         if (isActive) {
                             setAuthState((current) => ({ ...current, isLoading: false }));
                         }
@@ -135,10 +152,7 @@ export default function AuthProvider({ children }) {
                     // missing a refresh token after a storage change). If our
                     // stored JWT is still valid, keep the user signed in — the
                     // API will 401 if it's truly invalid.
-                    if (
-                        bootstrappedSession?.accessToken &&
-                        !isAccessTokenExpired(bootstrappedSession.accessToken)
-                    ) {
+                    if (bootstrappedSession?.accessToken) {
                         setAuthState((current) => ({ ...current, isLoading: false }));
                     } else {
                         // MSAL has a stale account but we can't refresh it — wipe
@@ -170,6 +184,7 @@ export default function AuthProvider({ children }) {
     }, [applySession, clearSession]);
 
     const signInWithPassword = useCallback(async (email, password, rememberMe = false) => {
+        const previousRememberMe = getRememberMe();
         setRememberMe(rememberMe);
         setBusy(true);
 
@@ -177,12 +192,15 @@ export default function AuthProvider({ children }) {
             const session = await signInWithPasswordService({ email, password });
             return applySession(session);
         } catch (error) {
+            // Revert rememberMe so a failed attempt doesn't mutate the user's preference.
+            setRememberMe(previousRememberMe);
             setBusy(false);
             throw error;
         }
     }, [applySession, setBusy]);
 
     const signInWithGoogle = useCallback(async () => {
+        const previousRememberMe = getRememberMe();
         setRememberMe(true);
         setBusy(true);
 
@@ -190,6 +208,7 @@ export default function AuthProvider({ children }) {
             const session = await signInWithGoogleService();
             return applySession(session);
         } catch (error) {
+            setRememberMe(previousRememberMe);
             setBusy(false);
             throw error;
         }
@@ -277,15 +296,7 @@ export default function AuthProvider({ children }) {
             authMethod: null,
         });
 
-        try {
-            const accountData = await getCurrentAccountData();
-
-            if (accountData) {
-                await accountData.signOut();
-            }
-        } catch (error) {
-            console.error("Failed to sign out cleanly", error);
-        }
+        await wipeMsalAccount();
     }, []);
 
     const contextValue = useMemo(() => ({

@@ -11,27 +11,56 @@ import {
     getCurrentAccountData,
 } from "@/auth/native/nativeClient.js";
 
+function isJwtExpiringSoon(token, skewMs = 0) {
+    try {
+        const base64Url = token.split(".")[1];
+        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+        const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+        const payload = JSON.parse(atob(base64 + padding));
+        if (!payload.exp) return true;
+        return Date.now() + skewMs >= payload.exp * 1000;
+    } catch {
+        return true;
+    }
+}
+
 export function useApiClient() {
     const { signOut } = useAuth();
 
     const getAccessToken = useCallback(async () => {
-        const accountData = await getCurrentAccountData().catch(() => null);
-        if (accountData && apiConfig.scopes.length > 0) {
-            const refreshedSession = await buildSessionFromAccountData(
-                accountData,
-                getStoredAuthSession()?.authMethod || "native"
-            );
-            saveStoredAuthSession(refreshedSession);
-            return refreshedSession.accessToken;
+        const storedToken = getStoredAccessToken();
+        // Treat tokens within the skew window as "about to expire" so we refresh
+        // proactively and never hand out a token the API will reject.
+        const EXPIRY_SKEW_MS = 60 * 1000;
+
+        if (storedToken && !isJwtExpiringSoon(storedToken, EXPIRY_SKEW_MS)) {
+            return storedToken;
         }
 
-        const accessToken = getStoredAccessToken();
+        if (apiConfig.scopes.length > 0) {
+            const accountData = await getCurrentAccountData().catch(() => null);
 
-        if (!accessToken) {
+            if (accountData) {
+                try {
+                    const refreshedSession = await buildSessionFromAccountData(
+                        accountData,
+                        getStoredAuthSession()?.authMethod || "native"
+                    );
+                    saveStoredAuthSession(refreshedSession);
+                    return refreshedSession.accessToken;
+                } catch (refreshError) {
+                    console.error("Silent token refresh failed", refreshError);
+                    // Fall through to the stored token so a transient MSAL hiccup
+                    // doesn't break the request — the API will 401 if it's truly bad.
+                }
+            }
+        }
+
+        if (!storedToken) {
             throw new Error("No signed-in access token");
         }
 
-        return accessToken;
+        return storedToken;
     }, []);
 
     // Centralized request helper that attaches the access token and normalizes API errors.
