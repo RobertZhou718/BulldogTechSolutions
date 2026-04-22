@@ -52,6 +52,8 @@ namespace BulldogFinance.Functions.Functions
             if (string.IsNullOrWhiteSpace(userId))
                 return await ApiResponse.UnauthorizedAsync(req);
 
+            var userEmail = AuthHelper.GetUserEmail(req);
+
             string body;
             using (var reader = new StreamReader(req.Body))
             {
@@ -134,6 +136,7 @@ namespace BulldogFinance.Functions.Functions
                 RowKey = "PROFILE",
                 CreatedAtUtc = now
             };
+            profile.Email = userEmail;
             profile.DefaultCurrency ??= importedAccounts.Count > 0 ? importedAccounts[0].Currency : "CAD";
             profile.OnboardingDone = true;
             profile.UpdatedAtUtc = now;

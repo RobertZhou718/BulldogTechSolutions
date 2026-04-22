@@ -33,18 +33,19 @@ export default function AssistantPage() {
             <div className="grid gap-6 xl:grid-cols-12">
                 <div className="xl:col-span-4">
                     <Card className="flex h-[720px] min-h-0 flex-col">
-                        <div className="flex items-start justify-between gap-3">
-                            <div>
+                        <div>
+                            <div className="flex items-center justify-between">
                                 <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
                                     Chat history
                                 </p>
-                                <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
-                                    Open a previous thread
-                                </h2>
+                                <Button variant="secondary" className="shrink-0 whitespace-nowrap" onClick={startNewConversation}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                    New chat
+                                </Button>
                             </div>
-                            <Button variant="secondary" onClick={startNewConversation}>
-                                New chat
-                            </Button>
+                            <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
+                                Open a previous thread
+                            </h2>
                         </div>
 
                         <div className="mt-6 flex-1 space-y-3 overflow-y-auto pr-1">

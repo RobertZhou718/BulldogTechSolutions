@@ -12,20 +12,17 @@ namespace BulldogFinance.Functions.Helper
         private const string ClientPrincipalNameHeaderName = "X-MS-CLIENT-PRINCIPAL-NAME";
         private const string ClientPrincipalIdHeaderName = "X-MS-CLIENT-PRINCIPAL-ID";
 
+        public static string? GetUserEmail(HttpRequestData req) =>
+            GetFirstHeaderValue(req, ClientPrincipalNameHeaderName);
+
         public static string? GetUserId(HttpRequestData req)
         {
-            if (req.FunctionContext.Items.TryGetValue(AuthenticatedUserIdContextKey, out var authenticatedUserId)
-                && authenticatedUserId is string userId
-                && !string.IsNullOrWhiteSpace(userId))
-            {
-                return userId;
-            }
-
-            var principalName = GetFirstHeaderValue(req, ClientPrincipalNameHeaderName);
-            if (!string.IsNullOrWhiteSpace(principalName))
-            {
-                return principalName;
-            }
+            //if (req.FunctionContext.Items.TryGetValue(AuthenticatedUserIdContextKey, out var authenticatedUserId)
+            //    && authenticatedUserId is string userId
+            //    && !string.IsNullOrWhiteSpace(userId))
+            //{
+            //    return userId;
+            //}
 
             var principalId = GetFirstHeaderValue(req, ClientPrincipalIdHeaderName);
             if (!string.IsNullOrWhiteSpace(principalId))
