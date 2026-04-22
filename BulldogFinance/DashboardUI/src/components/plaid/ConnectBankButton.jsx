@@ -40,17 +40,27 @@ export default function ConnectBankButton({ onConnected, className }) {
     const { open, ready } = usePlaidLink({
         token: linkToken || null,
         onSuccess: async (publicToken, metadata) => {
+            setSubmitting(true);
+            setError("");
+
             try {
-                setSubmitting(true);
-                setError("");
                 await exchangePlaidPublicToken({
                     publicToken,
                     institutionId: metadata?.institution?.institution_id || null,
                     institutionName: metadata?.institution?.name || null,
                 });
-                await onConnected?.();
             } catch (e) {
                 setError(e.message || "Failed to connect bank account.");
+                setSubmitting(false);
+                return;
+            }
+
+            try {
+                await onConnected?.();
+            } catch (e) {
+                // The bank link itself succeeded; don't surface a post-link refresh
+                // failure as a connection error, which previously showed "API 500".
+                console.error("Post-connect refresh failed", e);
             } finally {
                 setSubmitting(false);
             }

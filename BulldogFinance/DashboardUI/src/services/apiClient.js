@@ -66,7 +66,11 @@ export function useApiClient() {
             if (rawText) {
                 try {
                     const payload = JSON.parse(rawText);
-                    errorMessage = payload?.message || payload?.error || rawText;
+                    const nestedError =
+                        typeof payload?.error === "object" && payload.error !== null
+                            ? payload.error.message || payload.error.code
+                            : payload?.error;
+                    errorMessage = payload?.message || nestedError || rawText;
                 } catch {
                     errorMessage = rawText;
                 }

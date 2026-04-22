@@ -187,37 +187,33 @@ namespace BulldogFinance.Functions.Functions
                 !string.IsNullOrWhiteSpace(account.ExternalAccountId))
             {
                 var link = await _plaidRepository.GetAccountLinkAsync(userId, account.ExternalAccountId);
-                if (link == null)
-                {
-                    account.IsArchived = true;
-                    account.UpdatedAtUtc = DateTime.UtcNow;
-                    await _accountRepository.UpdateAccountAsync(account);
-                    await _transactionRepository.MarkTransactionsDeletedByAccountIdAsync(userId, account.RowKey);
-                }
-                else
-                {
-                    var links = await _plaidRepository.GetAccountLinksByItemAsync(userId, link.ItemId);
-                    var activeLinkedAccountCount = 0;
 
-                    foreach (var relatedLink in links)
+                account.IsArchived = true;
+                account.UpdatedAtUtc = DateTime.UtcNow;
+                await _accountRepository.UpdateAccountAsync(account);
+                await _transactionRepository.MarkTransactionsDeletedByAccountIdAsync(userId, account.RowKey);
+
+                if (link != null)
+                {
+                    // Drop the link first so sync stops touching this archived account,
+                    // and so the remaining-active check below cannot race with a sibling delete.
+                    await _plaidRepository.DeleteAccountLinkAsync(userId, link.RowKey);
+
+                    var remainingLinks = await _plaidRepository.GetAccountLinksByItemAsync(userId, link.ItemId);
+                    var hasActiveAccount = false;
+                    foreach (var relatedLink in remainingLinks)
                     {
                         var relatedAccount = await _accountRepository.GetAccountAsync(userId, relatedLink.LocalAccountId);
                         if (relatedAccount != null && !relatedAccount.IsArchived)
                         {
-                            activeLinkedAccountCount++;
+                            hasActiveAccount = true;
+                            break;
                         }
                     }
 
-                    if (activeLinkedAccountCount <= 1)
+                    if (!hasActiveAccount)
                     {
                         await _plaidSyncService.RemoveItemAsync(userId, link.ItemId);
-                    }
-                    else
-                    {
-                        account.IsArchived = true;
-                        account.UpdatedAtUtc = DateTime.UtcNow;
-                        await _accountRepository.UpdateAccountAsync(account);
-                        await _transactionRepository.MarkTransactionsDeletedByAccountIdAsync(userId, account.RowKey);
                     }
                 }
             }

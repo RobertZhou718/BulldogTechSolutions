@@ -6,6 +6,7 @@ import Card from "@/components/ui/Card.jsx";
 import { Field, Input, Select } from "@/components/ui/Field.jsx";
 import Spinner from "@/components/ui/Spinner.jsx";
 import { useApiClient } from "@/services/apiClient";
+import { formatCurrency } from "@/lib/utils";
 
 const ACCOUNT_TYPES = [
     { value: "cash", label: "Cash" },
@@ -17,13 +18,14 @@ const ACCOUNT_TYPES = [
 const CURRENCIES = ["CAD", "USD", "CNY", "EUR"];
 
 export default function OnboardingPage() {
-    const { getMe, postOnboarding } = useApiClient();
+    const { getMe, postOnboarding, getAccounts } = useApiClient();
     const navigate = useNavigate();
 
     const [loadingMe, setLoadingMe] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [defaultCurrency, setDefaultCurrency] = useState("CAD");
+    const [linkedAccounts, setLinkedAccounts] = useState([]);
     const [rows, setRows] = useState([
         { id: 1, name: "Cash", type: "cash", currency: "CAD", initialBalance: "" },
         { id: 2, name: "Chequing", type: "bank", currency: "CAD", initialBalance: "" },
@@ -78,7 +80,6 @@ export default function OnboardingPage() {
     };
 
     const handleRemoveRow = (id) => {
-        if (rows.length === 1) return;
         setRows((prev) => prev.filter((row) => row.id !== id));
     };
 
@@ -114,7 +115,24 @@ export default function OnboardingPage() {
     };
 
     const handlePlaidConnected = async () => {
-        navigate("/dashboard", { replace: true });
+        // After a Plaid exchange the server marks onboarding as done and has already
+        // imported the Plaid accounts. Re-check /me so we only navigate once we're
+        // sure the server completed the flow; otherwise stay here and let the user
+        // see the linked accounts or retry.
+        try {
+            const [me, accounts] = await Promise.all([
+                getMe().catch(() => null),
+                getAccounts().catch(() => []),
+            ]);
+
+            setLinkedAccounts(Array.isArray(accounts) ? accounts : []);
+
+            if (me?.onboardingDone) {
+                navigate("/dashboard", { replace: true });
+            }
+        } catch (e) {
+            console.error("Failed to refresh onboarding state after Plaid link", e);
+        }
     };
 
     if (loadingMe) {
@@ -152,6 +170,40 @@ export default function OnboardingPage() {
                             you grant permission.
                         </p>
                         <ConnectBankButton className="mt-4" onConnected={handlePlaidConnected} />
+
+                        {linkedAccounts.length > 0 ? (
+                            <div className="mt-4 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-3">
+                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-soft)]">
+                                    Linked accounts
+                                </p>
+                                <ul className="mt-2 space-y-1 text-sm text-[var(--text-main)]">
+                                    {linkedAccounts.map((account) => (
+                                        <li
+                                            key={account.accountId}
+                                            className="flex items-center justify-between gap-2"
+                                        >
+                                            <span className="truncate">
+                                                {account.name}
+                                                {account.mask ? ` •••• ${account.mask}` : ""}
+                                            </span>
+                                            <span className="text-[var(--text-muted)]">
+                                                {formatCurrency(
+                                                    account.currentBalance,
+                                                    account.currency,
+                                                    2
+                                                )}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                                <Button
+                                    className="mt-3"
+                                    onClick={() => navigate("/dashboard", { replace: true })}
+                                >
+                                    Continue to dashboard
+                                </Button>
+                            </div>
+                        ) : null}
                     </div>
 
                     <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] p-5">
@@ -261,7 +313,6 @@ export default function OnboardingPage() {
                                         variant="ghost"
                                         className="w-full md:w-auto"
                                         onClick={() => handleRemoveRow(row.id)}
-                                        disabled={rows.length === 1}
                                     >
                                         Remove
                                     </Button>

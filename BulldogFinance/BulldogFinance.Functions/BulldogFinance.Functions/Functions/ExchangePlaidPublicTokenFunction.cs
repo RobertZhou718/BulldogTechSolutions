@@ -104,6 +104,22 @@ namespace BulldogFinance.Functions.Functions
                     requestModel.InstitutionName);
                 await _plaidSyncService.RefreshBalancesAsync(userId, exchange.ItemId);
                 syncSummary = await _plaidSyncService.SyncTransactionsAsync(userId, exchange.ItemId);
+
+                var existingUser = await _userRepository.GetUserAsync(userId);
+                var profile = existingUser ?? new UserEntity
+                {
+                    PartitionKey = userId,
+                    RowKey = "PROFILE",
+                    CreatedAtUtc = now
+                };
+                if (!string.IsNullOrWhiteSpace(userEmail))
+                {
+                    profile.Email = userEmail;
+                }
+                profile.DefaultCurrency ??= importedAccounts.Count > 0 ? importedAccounts[0].Currency : "CAD";
+                profile.OnboardingDone = true;
+                profile.UpdatedAtUtc = now;
+                await _userRepository.UpsertUserAsync(profile);
             }
             catch (Exception ex)
             {
@@ -128,19 +144,6 @@ namespace BulldogFinance.Functions.Functions
 
                 return await ApiResponse.BadGatewayAsync(req, "Failed to import accounts from Plaid. The connection has been rolled back.");
             }
-
-            var existingUser = await _userRepository.GetUserAsync(userId);
-            var profile = existingUser ?? new UserEntity
-            {
-                PartitionKey = userId,
-                RowKey = "PROFILE",
-                CreatedAtUtc = now
-            };
-            profile.Email = userEmail;
-            profile.DefaultCurrency ??= importedAccounts.Count > 0 ? importedAccounts[0].Currency : "CAD";
-            profile.OnboardingDone = true;
-            profile.UpdatedAtUtc = now;
-            await _userRepository.UpsertUserAsync(profile);
 
             var response = req.CreateResponse(HttpStatusCode.OK);
             response.Headers.Add("Content-Type", "application/json; charset=utf-8");
