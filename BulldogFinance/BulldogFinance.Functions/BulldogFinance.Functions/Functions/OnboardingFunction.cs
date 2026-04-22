@@ -64,16 +64,15 @@ namespace BulldogFinance.Functions.Functions
                 return await ApiResponse.BadRequestAsync(req, "Invalid JSON.");
             }
 
-            if (request == null || request.Accounts == null || request.Accounts.Count == 0)
-                return await ApiResponse.BadRequestAsync(req, "At least one account is required.");
+            if (request == null)
+                return await ApiResponse.BadRequestAsync(req, "Invalid request body.");
 
             var defaultCurrency = string.IsNullOrWhiteSpace(request.DefaultCurrency)
                 ? "CAD"
                 : request.DefaultCurrency!.Trim().ToUpperInvariant();
 
             var existingUser = await _userRepository.GetUserAsync(userId);
-            if (existingUser?.OnboardingDone == true)
-                return await ApiResponse.ConflictAsync(req, "Onboarding already completed for this user.");
+            var accounts = request.Accounts ?? new List<OnboardingAccountInput>();
 
             var now = DateTime.UtcNow;
             var responseModel = new OnboardingResponse
@@ -84,7 +83,7 @@ namespace BulldogFinance.Functions.Functions
 
             int sortOrder = 0;
 
-            foreach (var acc in request.Accounts)
+            foreach (var acc in accounts)
             {
                 if (string.IsNullOrWhiteSpace(acc.Name))
                 {

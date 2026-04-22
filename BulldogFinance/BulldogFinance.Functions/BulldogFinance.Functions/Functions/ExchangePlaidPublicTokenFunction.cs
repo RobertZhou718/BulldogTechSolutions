@@ -93,7 +93,6 @@ namespace BulldogFinance.Functions.Functions
             await _plaidRepository.UpsertItemAsync(itemEntity);
 
             IReadOnlyList<BulldogFinance.Functions.Models.Accounts.AccountEntity> importedAccounts;
-            PlaidSyncSummary syncSummary;
 
             try
             {
@@ -102,9 +101,61 @@ namespace BulldogFinance.Functions.Functions
                     exchange.ItemId,
                     exchange.AccessToken,
                     requestModel.InstitutionName);
-                await _plaidSyncService.RefreshBalancesAsync(userId, exchange.ItemId);
-                syncSummary = await _plaidSyncService.SyncTransactionsAsync(userId, exchange.ItemId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to import Plaid accounts after token exchange. Rolling back item. UserId={UserId} ItemId={ItemId}",
+                    userId,
+                    exchange.ItemId);
 
+                try
+                {
+                    await _plaidRepository.DeleteItemAsync(userId, exchange.ItemId);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(
+                        rollbackEx,
+                        "Rollback failed. Orphaned item may remain. UserId={UserId} ItemId={ItemId}",
+                        userId,
+                        exchange.ItemId);
+                }
+
+                return await ApiResponse.BadGatewayAsync(req, "Failed to import accounts from Plaid. The connection has been rolled back.");
+            }
+
+            var syncSummary = new PlaidSyncSummary();
+
+            try
+            {
+                await _plaidSyncService.RefreshBalancesAsync(userId, exchange.ItemId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Plaid balance refresh failed after linking; accounts remain connected and user can retry. UserId={UserId} ItemId={ItemId}",
+                    userId,
+                    exchange.ItemId);
+            }
+
+            try
+            {
+                syncSummary = await _plaidSyncService.SyncTransactionsAsync(userId, exchange.ItemId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Plaid transactions sync failed after linking; accounts remain connected and user can retry. UserId={UserId} ItemId={ItemId}",
+                    userId,
+                    exchange.ItemId);
+            }
+
+            try
+            {
                 var existingUser = await _userRepository.GetUserAsync(userId);
                 var profile = existingUser ?? new UserEntity
                 {
@@ -123,26 +174,11 @@ namespace BulldogFinance.Functions.Functions
             }
             catch (Exception ex)
             {
-                _logger.LogError(
+                _logger.LogWarning(
                     ex,
-                    "Plaid setup failed after token exchange. Rolling back item. UserId={UserId} ItemId={ItemId}",
+                    "Failed to update user profile after Plaid link; accounts remain connected. UserId={UserId} ItemId={ItemId}",
                     userId,
                     exchange.ItemId);
-
-                try
-                {
-                    await _plaidRepository.DeleteItemAsync(userId, exchange.ItemId);
-                }
-                catch (Exception rollbackEx)
-                {
-                    _logger.LogError(
-                        rollbackEx,
-                        "Rollback failed. Orphaned item may remain. UserId={UserId} ItemId={ItemId}",
-                        userId,
-                        exchange.ItemId);
-                }
-
-                return await ApiResponse.BadGatewayAsync(req, "Failed to import accounts from Plaid. The connection has been rolled back.");
             }
 
             var response = req.CreateResponse(HttpStatusCode.OK);
