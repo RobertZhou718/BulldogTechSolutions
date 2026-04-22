@@ -98,8 +98,8 @@ export default function OnboardingPage() {
                 }))
                 .filter((account) => account.name.length > 0);
 
-            if (!cleanedAccounts.length) {
-                setError("Please enter at least one account.");
+            if (!cleanedAccounts.length && linkedAccounts.length === 0) {
+                setError("Please connect a bank or enter at least one account.");
                 setSaving(false);
                 return;
             }
@@ -115,21 +115,12 @@ export default function OnboardingPage() {
     };
 
     const handlePlaidConnected = async () => {
-        // After a Plaid exchange the server marks onboarding as done and has already
-        // imported the Plaid accounts. Re-check /me so we only navigate once we're
-        // sure the server completed the flow; otherwise stay here and let the user
-        // see the linked accounts or retry.
+        // Stay on the onboarding page so the user can see which accounts were
+        // linked, optionally remove any manual rows, and click "Save and continue"
+        // (or "Continue to dashboard") when ready.
         try {
-            const [me, accounts] = await Promise.all([
-                getMe().catch(() => null),
-                getAccounts().catch(() => []),
-            ]);
-
+            const accounts = await getAccounts().catch(() => []);
             setLinkedAccounts(Array.isArray(accounts) ? accounts : []);
-
-            if (me?.onboardingDone) {
-                navigate("/dashboard", { replace: true });
-            }
         } catch (e) {
             console.error("Failed to refresh onboarding state after Plaid link", e);
         }
