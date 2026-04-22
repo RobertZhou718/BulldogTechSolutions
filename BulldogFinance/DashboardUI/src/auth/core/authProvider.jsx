@@ -127,8 +127,30 @@ export default function AuthProvider({ children }) {
                 } catch (error) {
                     console.error("Failed to restore auth session", error);
 
-                    if (isActive) {
-                        clearSession();
+                    if (!isActive) {
+                        return;
+                    }
+
+                    // Silent token refresh can fail transiently (e.g. MSAL cache
+                    // missing a refresh token after a storage change). If our
+                    // stored JWT is still valid, keep the user signed in — the
+                    // API will 401 if it's truly invalid.
+                    if (
+                        bootstrappedSession?.accessToken &&
+                        !isAccessTokenExpired(bootstrappedSession.accessToken)
+                    ) {
+                        setAuthState((current) => ({ ...current, isLoading: false }));
+                    } else {
+                        // MSAL has a stale account but we can't refresh it — wipe
+                        // its cache too so a follow-up signup/signIn isn't blocked.
+                        try {
+                            await accountData.signOut();
+                        } catch (signOutError) {
+                            console.error("Failed to clear stale MSAL account", signOutError);
+                        }
+                        if (isActive) {
+                            clearSession();
+                        }
                     }
                 }
             } catch (error) {
