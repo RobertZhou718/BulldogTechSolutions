@@ -29,6 +29,14 @@ function getStorage() {
     return getRememberMe() ? window.localStorage : window.sessionStorage;
 }
 
+function getOtherStorage() {
+    if (typeof window === "undefined") {
+        return null;
+    }
+
+    return getRememberMe() ? window.sessionStorage : window.localStorage;
+}
+
 function buildInitials(name = "", givenName = "", surname = "") {
     const parts = [givenName, surname].filter(Boolean);
 
@@ -114,14 +122,24 @@ export function saveStoredAuthSession(session) {
     };
 
     storage.setItem(STORAGE_KEY, JSON.stringify(normalizedSession));
+    // Clear any orphan from the opposite storage so toggling rememberMe never
+    // leaves two sessions in parallel.
+    getOtherStorage()?.removeItem(STORAGE_KEY);
 
     return normalizedSession;
 }
 
 export function clearStoredAuthSession() {
-    const storage = getStorage();
-
-    storage?.removeItem(STORAGE_KEY);
+    try {
+        window.localStorage?.removeItem(STORAGE_KEY);
+    } catch {
+        // ignore
+    }
+    try {
+        window.sessionStorage?.removeItem(STORAGE_KEY);
+    } catch {
+        // ignore
+    }
 }
 
 export function getStoredAccessToken() {
