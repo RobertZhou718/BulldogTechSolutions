@@ -1,27 +1,36 @@
+using System.Text.Json;
 using BulldogFinance.Functions.Models.Accounts;
 using BulldogFinance.Functions.Models.Plaid;
 using BulldogFinance.Functions.Models.Transactions;
 using BulldogFinance.Functions.Services.Accounts;
 using BulldogFinance.Functions.Services.Transactions;
+using Going.Plaid.Accounts;
+using Going.Plaid.Converters;
+using Going.Plaid.Entity;
+using Going.Plaid.Item;
+using Going.Plaid.Transactions;
 
 namespace BulldogFinance.Functions.Services.Plaid
 {
     public class PlaidSyncService : IPlaidSyncService
     {
-        private readonly IPlaidClient _plaidClient;
+        private static readonly JsonSerializerOptions EnumJsonOptions =
+            new JsonSerializerOptions().AddPlaidConverters();
+
+        private readonly IPlaidClientFactory _plaidClientFactory;
         private readonly IPlaidRepository _plaidRepository;
         private readonly IPlaidTokenProtector _tokenProtector;
         private readonly IAccountRepository _accountRepository;
         private readonly ITransactionRepository _transactionRepository;
 
         public PlaidSyncService(
-            IPlaidClient plaidClient,
+            IPlaidClientFactory plaidClientFactory,
             IPlaidRepository plaidRepository,
             IPlaidTokenProtector tokenProtector,
             IAccountRepository accountRepository,
             ITransactionRepository transactionRepository)
         {
-            _plaidClient = plaidClient;
+            _plaidClientFactory = plaidClientFactory;
             _plaidRepository = plaidRepository;
             _tokenProtector = tokenProtector;
             _accountRepository = accountRepository;
@@ -35,13 +44,21 @@ namespace BulldogFinance.Functions.Services.Plaid
             string? institutionName,
             CancellationToken cancellationToken = default)
         {
-            var accountsResult = await _plaidClient.GetAccountsAsync(accessToken, cancellationToken);
+            var plaidClient = _plaidClientFactory.Create(accessToken);
+            var accountsResult = await plaidClient.AccountsGetAsync(new AccountsGetRequest());
+            EnsureSuccess(accountsResult, "/accounts/get");
+
             var now = DateTime.UtcNow;
             var localAccounts = new List<AccountEntity>();
             var sortOrder = 1000;
 
             foreach (var plaidAccount in accountsResult.Accounts)
             {
+                var typeString = EnumToPlaidString(plaidAccount.Type);
+                var subtypeString = plaidAccount.Subtype.HasValue
+                    ? EnumToPlaidString(plaidAccount.Subtype.Value)
+                    : null;
+
                 var existing = await _accountRepository.GetAccountByExternalReferenceAsync(
                     userId,
                     "Plaid",
@@ -49,8 +66,8 @@ namespace BulldogFinance.Functions.Services.Plaid
                     cancellationToken);
 
                 var currency = ResolveCurrency(plaidAccount.Balances);
-                var currentBalanceCents = DecimalToCents(plaidAccount.Balances.Current);
-                var availableBalanceCents = DecimalToCents(plaidAccount.Balances.Available);
+                var currentBalanceCents = DecimalToCents(plaidAccount.Balances?.Current);
+                var availableBalanceCents = DecimalToCents(plaidAccount.Balances?.Available);
 
                 if (existing == null)
                 {
@@ -59,7 +76,7 @@ namespace BulldogFinance.Functions.Services.Plaid
                         PartitionKey = userId,
                         RowKey = Guid.NewGuid().ToString("N"),
                         Name = plaidAccount.Name,
-                        Type = $"{plaidAccount.Type}:{plaidAccount.Subtype ?? "unknown"}",
+                        Type = $"{typeString}:{subtypeString ?? "unknown"}",
                         Currency = currency,
                         CurrentBalanceCents = currentBalanceCents,
                         AvailableBalanceCents = availableBalanceCents,
@@ -80,7 +97,7 @@ namespace BulldogFinance.Functions.Services.Plaid
                 else
                 {
                     existing.Name = plaidAccount.Name;
-                    existing.Type = $"{plaidAccount.Type}:{plaidAccount.Subtype ?? "unknown"}";
+                    existing.Type = $"{typeString}:{subtypeString ?? "unknown"}";
                     existing.Currency = currency;
                     existing.CurrentBalanceCents = currentBalanceCents;
                     existing.AvailableBalanceCents = availableBalanceCents;
@@ -104,8 +121,8 @@ namespace BulldogFinance.Functions.Services.Plaid
                     Name = plaidAccount.Name,
                     OfficialName = plaidAccount.OfficialName,
                     Mask = plaidAccount.Mask,
-                    Type = plaidAccount.Type,
-                    Subtype = plaidAccount.Subtype,
+                    Type = typeString,
+                    Subtype = subtypeString,
                     Currency = currency,
                     CreatedAtUtc = now,
                     UpdatedAtUtc = now
@@ -121,7 +138,10 @@ namespace BulldogFinance.Functions.Services.Plaid
         {
             var item = await GetActiveItemAsync(userId, itemId, cancellationToken);
             var accessToken = _tokenProtector.Unprotect(item.AccessTokenEncrypted);
-            var balances = await _plaidClient.GetBalancesAsync(accessToken, cancellationToken);
+            var plaidClient = _plaidClientFactory.Create(accessToken);
+            var balances = await plaidClient.AccountsBalanceGetAsync(new AccountsBalanceGetRequest());
+            EnsureSuccess(balances, "/accounts/balance/get");
+
             var now = DateTime.UtcNow;
 
             foreach (var plaidAccount in balances.Accounts)
@@ -142,8 +162,8 @@ namespace BulldogFinance.Functions.Services.Plaid
                     continue;
                 }
 
-                localAccount.CurrentBalanceCents = DecimalToCents(plaidAccount.Balances.Current);
-                localAccount.AvailableBalanceCents = DecimalToCents(plaidAccount.Balances.Available);
+                localAccount.CurrentBalanceCents = DecimalToCents(plaidAccount.Balances?.Current);
+                localAccount.AvailableBalanceCents = DecimalToCents(plaidAccount.Balances?.Available);
                 localAccount.Currency = ResolveCurrency(plaidAccount.Balances);
                 localAccount.LastBalanceRefreshUtc = now;
                 localAccount.UpdatedAtUtc = now;
@@ -156,12 +176,20 @@ namespace BulldogFinance.Functions.Services.Plaid
         {
             var item = await GetActiveItemAsync(userId, itemId, cancellationToken);
             var accessToken = _tokenProtector.Unprotect(item.AccessTokenEncrypted);
+            var plaidClient = _plaidClientFactory.Create(accessToken);
             var summary = new PlaidSyncSummary();
             var cursor = item.Cursor;
 
             while (true)
             {
-                var syncResult = await _plaidClient.SyncTransactionsAsync(accessToken, cursor, cancellationToken);
+                var request = new TransactionsSyncRequest();
+                if (!string.IsNullOrWhiteSpace(cursor))
+                {
+                    request.Cursor = cursor;
+                }
+
+                var syncResult = await plaidClient.TransactionsSyncAsync(request);
+                EnsureSuccess(syncResult, "/transactions/sync");
 
                 foreach (var transaction in syncResult.Added)
                 {
@@ -180,6 +208,11 @@ namespace BulldogFinance.Functions.Services.Plaid
 
                 foreach (var removed in syncResult.Removed)
                 {
+                    if (string.IsNullOrWhiteSpace(removed.TransactionId))
+                    {
+                        continue;
+                    }
+
                     var existing = await _transactionRepository.GetByExternalTransactionIdAsync(
                         userId,
                         removed.TransactionId,
@@ -231,7 +264,9 @@ namespace BulldogFinance.Functions.Services.Plaid
         {
             var item = await GetActiveItemAsync(userId, itemId, cancellationToken);
             var accessToken = _tokenProtector.Unprotect(item.AccessTokenEncrypted);
-            await _plaidClient.RemoveItemAsync(accessToken, cancellationToken);
+            var plaidClient = _plaidClientFactory.Create(accessToken);
+            var removeResult = await plaidClient.ItemRemoveAsync(new ItemRemoveRequest());
+            EnsureSuccess(removeResult, "/item/remove");
 
             var links = await _plaidRepository.GetAccountLinksByItemAsync(userId, itemId, cancellationToken);
             foreach (var link in links)
@@ -278,10 +313,16 @@ namespace BulldogFinance.Functions.Services.Plaid
 
         private async Task<bool> UpsertPlaidTransactionAsync(
             string userId,
-            PlaidTransaction plaidTransaction,
+            Transaction plaidTransaction,
             bool isCreateOnly,
             CancellationToken cancellationToken)
         {
+            if (string.IsNullOrWhiteSpace(plaidTransaction.TransactionId) ||
+                string.IsNullOrWhiteSpace(plaidTransaction.AccountId))
+            {
+                return false;
+            }
+
             var localAccount = await _accountRepository.GetAccountByExternalReferenceAsync(
                 userId,
                 "Plaid",
@@ -311,23 +352,33 @@ namespace BulldogFinance.Functions.Services.Plaid
                 CreatedAtUtc = now
             };
 
+            var amount = plaidTransaction.Amount ?? 0m;
+            var postedDate = DateOnlyToUtcDateTime(plaidTransaction.Date);
+            var authorizedDate = DateOnlyToUtcDateTime(plaidTransaction.AuthorizedDate);
+
+#pragma warning disable CS0612 // Transaction.Name is marked obsolete by Going.Plaid
+            // Plaid still returns this field; preserve previous behavior of
+            // surfacing it as the local Note.
+            var note = plaidTransaction.Name ?? string.Empty;
+#pragma warning restore CS0612
+
             entity.AccountId = localAccount.RowKey;
-            entity.Type = plaidTransaction.Amount >= 0 ? "EXPENSE" : "INCOME";
-            entity.AmountCents = DecimalToCents(Math.Abs(plaidTransaction.Amount));
+            entity.Type = amount >= 0 ? "EXPENSE" : "INCOME";
+            entity.AmountCents = DecimalToCents(Math.Abs(amount));
             entity.Currency = !string.IsNullOrWhiteSpace(plaidTransaction.IsoCurrencyCode)
                 ? plaidTransaction.IsoCurrencyCode!
                 : localAccount.Currency;
             entity.Category = plaidTransaction.PersonalFinanceCategory?.Detailed
                 ?? plaidTransaction.PersonalFinanceCategory?.Primary;
-            entity.Note = plaidTransaction.Name;
+            entity.Note = note;
             entity.MerchantName = plaidTransaction.MerchantName;
             entity.Source = "Plaid";
             entity.ExternalTransactionId = plaidTransaction.TransactionId;
             entity.ExternalAccountId = plaidTransaction.AccountId;
-            entity.Pending = plaidTransaction.Pending;
-            entity.AuthorizedAtUtc = plaidTransaction.AuthorizedDate;
-            entity.PostedAtUtc = plaidTransaction.Date;
-            entity.OccurredAtUtc = plaidTransaction.Date ?? plaidTransaction.AuthorizedDate ?? now;
+            entity.Pending = plaidTransaction.Pending ?? false;
+            entity.AuthorizedAtUtc = authorizedDate;
+            entity.PostedAtUtc = postedDate;
+            entity.OccurredAtUtc = postedDate ?? authorizedDate ?? now;
             entity.UpdatedAtUtc = now;
             entity.IsDeleted = false;
             entity.IsSystemGenerated = true;
@@ -347,14 +398,46 @@ namespace BulldogFinance.Functions.Services.Plaid
             return false;
         }
 
-        private static string ResolveCurrency(PlaidBalance balance) =>
-            !string.IsNullOrWhiteSpace(balance.IsoCurrencyCode)
-                ? balance.IsoCurrencyCode!
-                : balance.UnofficialCurrencyCode ?? "CAD";
+        private static void EnsureSuccess(Going.Plaid.ResponseBase response, string path)
+        {
+            if (response.IsSuccessStatusCode)
+            {
+                return;
+            }
+
+            var error = response.Error;
+            var detail = error != null
+                ? $"{error.ErrorType}/{error.ErrorCode}: {error.ErrorMessage}"
+                : response.RawJson ?? "Unknown error";
+            throw new InvalidOperationException(
+                $"Plaid API {path} failed: {(int)response.StatusCode} {detail}");
+        }
+
+        private static string ResolveCurrency(AccountBalance? balance) =>
+            !string.IsNullOrWhiteSpace(balance?.IsoCurrencyCode)
+                ? balance!.IsoCurrencyCode!
+                : balance?.UnofficialCurrencyCode ?? "CAD";
+
+        private static DateTime? DateOnlyToUtcDateTime(DateOnly? date) =>
+            date.HasValue
+                ? DateTime.SpecifyKind(date.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc)
+                : null;
 
         private static long DecimalToCents(decimal? value) =>
             value.HasValue
                 ? (long)decimal.Round(value.Value * 100m, 0, MidpointRounding.AwayFromZero)
                 : 0;
+
+        /// <summary>
+        /// Returns Plaid's wire-format string for an enum value (e.g.
+        /// <c>"credit card"</c> for <see cref="AccountSubtype.CreditCard"/>),
+        /// so the stored <c>type</c>/<c>subtype</c> format stays identical to
+        /// the previous hand-rolled client.
+        /// </summary>
+        private static string EnumToPlaidString<T>(T value) where T : struct, Enum
+        {
+            var json = JsonSerializer.Serialize(value, EnumJsonOptions);
+            return json.Trim('"');
+        }
     }
 }

@@ -3,8 +3,11 @@ using System.Text.Json;
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Plaid;
 using BulldogFinance.Functions.Services.Plaid;
+using Going.Plaid.Entity;
+using Going.Plaid.Link;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Extensions.Configuration;
 
 namespace BulldogFinance.Functions.Functions
 {
@@ -16,11 +19,15 @@ namespace BulldogFinance.Functions.Functions
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        private readonly IPlaidClient _plaidClient;
+        private readonly IPlaidClientFactory _plaidClientFactory;
+        private readonly string? _webhookUrl;
 
-        public CreatePlaidLinkTokenFunction(IPlaidClient plaidClient)
+        public CreatePlaidLinkTokenFunction(
+            IPlaidClientFactory plaidClientFactory,
+            IConfiguration configuration)
         {
-            _plaidClient = plaidClient;
+            _plaidClientFactory = plaidClientFactory;
+            _webhookUrl = configuration["Plaid:WebhookUrl"];
         }
 
         [Function("CreatePlaidLinkToken")]
@@ -43,19 +50,59 @@ namespace BulldogFinance.Functions.Functions
                 }
             }
 
-            var countryCodes = requestModel?.CountryCodes?.Length > 0 ? requestModel.CountryCodes : new[] { "CA" };
-            var products = requestModel?.Products?.Length > 0 ? requestModel.Products : new[] { "transactions" };
-            var result = await _plaidClient.CreateLinkTokenAsync(userId, countryCodes, products);
+            var countryCodes = (requestModel?.CountryCodes?.Length > 0 ? requestModel.CountryCodes : new[] { "CA" })
+                .Select(ParseCountryCode).ToArray();
+            var products = (requestModel?.Products?.Length > 0 ? requestModel.Products : new[] { "transactions" })
+                .Select(ParseProduct).ToArray();
+
+            var plaidRequest = new LinkTokenCreateRequest
+            {
+                ClientName = "Bulldog Finance",
+                Language = Language.English,
+                CountryCodes = countryCodes,
+                Products = products,
+                User = new LinkTokenCreateRequestUser
+                {
+                    ClientUserId = userId
+                }
+            };
+
+            if (!string.IsNullOrWhiteSpace(_webhookUrl))
+            {
+                plaidRequest.Webhook = _webhookUrl;
+            }
+
+            var plaidClient = _plaidClientFactory.Create();
+            var result = await plaidClient.LinkTokenCreateAsync(plaidRequest);
+
+            if (!result.IsSuccessStatusCode)
+            {
+                var detail = result.Error != null
+                    ? $"{result.Error.ErrorType}/{result.Error.ErrorCode}: {result.Error.ErrorMessage}"
+                    : result.RawJson ?? "Unknown error";
+                throw new InvalidOperationException(
+                    $"Plaid API /link/token/create failed: {(int)result.StatusCode} {detail}");
+            }
 
             var response = req.CreateResponse(HttpStatusCode.OK);
             response.Headers.Add("Content-Type", "application/json; charset=utf-8");
             await response.WriteStringAsync(JsonSerializer.Serialize(new CreatePlaidLinkTokenResponse
             {
                 LinkToken = result.LinkToken,
-                Expiration = result.Expiration
+                Expiration = result.Expiration.UtcDateTime
             }, JsonOptions));
 
             return response;
         }
+
+        private static CountryCode ParseCountryCode(string value) =>
+            Enum.TryParse<CountryCode>(value, ignoreCase: true, out var parsed)
+                ? parsed
+                : throw new ArgumentException($"Unsupported Plaid country code '{value}'.");
+
+        private static Products ParseProduct(string value) =>
+            Enum.TryParse<Products>(value, ignoreCase: true, out var parsed)
+                ? parsed
+                : throw new ArgumentException($"Unsupported Plaid product '{value}'.");
     }
 }
