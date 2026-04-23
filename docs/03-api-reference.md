@@ -1,25 +1,40 @@
-# API 参考（当前已实现）
+# API Reference (current implementation)
 
-> Base URL 示例：`http://localhost:7071/api`
+> Base URL (local): `http://localhost:7071/api`
 
-## 1. 鉴权约定
+## 1. Authentication
 
-当前接口在函数层为 `Anonymous`，但业务层会读取用户标识：
+All endpoints (except the native auth proxy endpoints themselves) require a valid Microsoft Entra External ID access token:
 
-- `X-MS-CLIENT-PRINCIPAL-ID`（生产）
-- `X-Debug-UserId`（本地调试）
+```
+Authorization: Bearer <jwt>
+```
 
-缺少 userId 时返回 `401 Unauthorized`。
+Tokens are validated by `BearerTokenAuthenticationMiddleware` against `Auth:Authority`, `Auth:Audience`, and `Auth:ValidIssuers`. A missing or invalid token returns `401 Unauthorized`.
 
 ---
 
-## 2. 用户与 Onboarding
+## 2. Native auth proxy (`/auth/native/*`)
 
-### GET `/me`
+These endpoints forward to the Entra External ID Native Auth API for email/password and social flows so the SPA does not need to talk to Entra directly.
 
-返回当前用户档案与 onboarding 状态。
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/auth/native/signin` | Email + password sign-in |
+| POST | `/auth/native/signup` | Email + password sign-up |
+| POST | `/auth/native/social` | Social provider flow |
+| POST | `/auth/native/token` | Token refresh |
+| POST | `/auth/native/signout` | Sign out / revoke |
+| POST | `/auth/native/password-reset` | Password reset flow |
 
-**Response 200**
+Requests and responses mirror the Entra Native Auth API contract (see `Services/Auth/AuthProxyModels.cs`).
+
+---
+
+## 3. User & onboarding
+
+### `GET /me`
+Returns the authenticated user's profile and onboarding status.
 
 ```json
 {
@@ -31,50 +46,32 @@
 }
 ```
 
-### POST `/onboarding`
-
-提交首次账户初始化数据。
-
-**Request**
+### `POST /onboarding`
+Submits the initial account set.
 
 ```json
 {
   "defaultCurrency": "CAD",
   "accounts": [
-    {
-      "name": "Cash",
-      "type": "cash",
-      "currency": "CAD",
-      "initialBalance": 1000
-    }
+    { "name": "Cash", "type": "cash", "currency": "CAD", "initialBalance": 1000 }
   ]
 }
 ```
 
-**可能返回**
-- `200` 成功
-- `400` 请求格式或内容非法
-- `409` 已完成过 onboarding
+Responses: `200` success, `400` invalid payload, `409` onboarding already completed.
 
 ---
 
-## 3. 账户与交易
+## 4. Accounts & transactions
 
-### GET `/accounts?includeArchived=false`
+### `GET /accounts?includeArchived=false`
+Lists accounts.
 
-返回账户列表。
+### `GET /transactions?accountId=&from=&to=`
+Query transactions. `from`/`to` should be ISO-8601 UTC.
 
-### GET `/transactions?accountId=...&from=...&to=...`
-
-查询交易记录。
-
-- `from`/`to` 建议传 ISO-8601 UTC 时间
-
-### POST `/transactions`
-
-新增交易。
-
-**Request**
+### `POST /transactions`
+Create a manual transaction; updates the source account balance.
 
 ```json
 {
@@ -88,79 +85,102 @@
 }
 ```
 
-**Response 200**
+Response:
 
 ```json
 {
-  "transaction": {
-    "transactionId": "tx-001",
-    "accountId": "acc-001",
-    "type": "EXPENSE",
-    "amount": 36.5,
-    "currency": "CAD",
-    "category": "Food",
-    "note": "Lunch",
-    "occurredAtUtc": "2026-01-01T12:00:00Z",
-    "createdAtUtc": "2026-01-01T12:00:01Z"
-  },
+  "transaction": { "transactionId": "tx-001", "...": "..." },
   "accountBalanceAfter": 963.5
 }
 ```
 
 ---
 
-## 4. 投资与自选股
+## 5. Plaid
 
-### GET `/investments`
+### `POST /plaid/link-token`
+Creates a short-lived Plaid Link token scoped to the current user.
 
-获取用户持仓。
+### `POST /plaid/exchange-public-token`
+Exchanges the public token returned by Plaid Link for an access token. The access token is encrypted with ASP.NET Core Data Protection before being persisted.
 
-### POST `/investments`
+```json
+{ "publicToken": "public-sandbox-..." }
+```
 
-新增/更新持仓。
+### `POST /plaid/refresh-balances`
+Forces a balance refresh for all linked items for the current user.
 
-### DELETE `/investments/{symbol}`
+### `POST /plaid/sync-transactions`
+Pulls new transactions using Plaid's `/transactions/sync` cursor.
 
-删除持仓。
+### `DELETE /plaid/items/{itemId}`
+Unlinks a Plaid item and clears stored tokens.
 
-### GET `/investments/watchlist`
+### `POST /plaid/webhook`
+Webhook endpoint called by Plaid. Verifies the payload and queues the appropriate refresh/sync.
 
-获取自选股列表。
+---
 
-### POST `/investments/watchlist`
+## 6. Investments & watchlist
 
-新增自选股。
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/investments` | List holdings |
+| POST | `/investments` | Upsert a holding |
+| DELETE | `/investments/{symbol}` | Remove a holding |
+| GET | `/investments/watchlist` | List watchlist symbols |
+| POST | `/investments/watchlist` | Add a watchlist entry (`{ "symbol", "exchange" }`) |
+| DELETE | `/investments/watchlist/{symbol}` | Remove a watchlist entry |
+| GET | `/investments/overview` | Holdings valuations + company news; returns popular symbols if the user has no holdings |
+
+---
+
+## 7. Reports
+
+### `GET /reports/{period}/latest`
+- `period`: `weekly` or `monthly`
+- Returns the latest AI-generated markdown report as JSON, or `404` if none exists.
+
+---
+
+## 8. Chat assistant
+
+### `POST /chat`
+Send a user message; the agent may invoke tools before answering.
 
 ```json
 {
-  "symbol": "AAPL",
-  "exchange": "NASDAQ"
+  "conversationId": "optional-conversation-id",
+  "message": "How did my food spending change this month?"
 }
 ```
 
-### DELETE `/investments/watchlist/{symbol}`
+Response:
 
-删除自选股。
+```json
+{
+  "conversationId": "conv-001",
+  "answer": "Food spending rose 12.4% month over month ...",
+  "usedTools": ["get_transactions", "get_user_profile"],
+  "traceId": "00-9d1..."
+}
+```
 
-### GET `/investments/overview`
+### `GET /chat/conversations`
+Lists the user's conversations (summary only).
 
-返回持仓估值与新闻聚合；若用户无持仓，返回 popular symbols 信息。
+### `GET /chat/conversations/{id}`
+Returns the full message history (plus tool calls) for a conversation.
+
+Available agent tools (see `Services/Tools/`):
+`get_user_profile`, `get_accounts`, `get_transactions`, `get_investments`, `get_investment_overview`, `get_watchlist`, `search_finance_news`, `generate_portfolio_report`. Every tool call is scoped to the authenticated `userId`.
 
 ---
 
-## 5. 报告
+## 9. Error contract (target)
 
-### GET `/reports/{period}/latest`
-
-- `period`: `weekly` 或 `monthly`
-
-成功返回 markdown 结构的 JSON 报告；若不存在返回 `404`。
-
----
-
-## 6. 后续建议：统一错误返回规范
-
-建议引入统一错误结构：
+Errors currently return plain problem details. A unified contract is planned:
 
 ```json
 {

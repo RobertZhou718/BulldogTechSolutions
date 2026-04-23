@@ -1,100 +1,116 @@
-# 可观测性与运维 Runbook
+# Observability & Operations Runbook
 
-## 1. 可观测性目标
+Telemetry flows into **Azure Application Insights** via `Microsoft.Azure.Functions.Worker.ApplicationInsights`. Set `APPLICATIONINSIGHTS_CONNECTION_STRING` to enable it.
 
-确保可以回答以下问题：
+## 1. Questions the stack must answer
 
-1. 系统慢在哪里？
-2. 哪个接口或工具失败率最高？
-3. 某条用户回答用到了哪些数据源？
-4. AI 成本是否可控？
+1. Where is the system slow?
+2. Which endpoint or agent tool fails most often?
+3. Which data sources contributed to a given assistant answer?
+4. Is AI / Plaid / Finnhub cost under control?
 
-## 2. 指标体系（建议）
+## 2. Metrics
 
-## 应用层指标
+### Application layer
+- Request rate per endpoint
+- p50 / p95 / p99 latency
+- 4xx / 5xx rates
+- Timeout rate
 
-- API QPS（按 endpoint）
-- p50/p95/p99 latency
-- 4xx / 5xx 比例
-- 超时率
+### Agent / LLM layer
+- `chat.request.count`
+- `chat.response.latency`
+- `agent.tool.call.count{tool=...}`
+- `agent.tool.call.failure{tool=...}`
+- `agent.tool.latency{tool=...}`
+- `llm.tokens.input` / `llm.tokens.output`
+- `llm.cost.estimated`
 
-## MCP/LLM 指标
+### External integrations
+- `plaid.call.count{endpoint=...}` / failure rate
+- `plaid.webhook.count{type=...}`
+- `finnhub.call.count` / failure rate
+- `openai.call.count` / failure rate
 
-- tool 调用次数/失败率（按 tool 维度）
-- tool 平均耗时
-- LLM 输入/输出 token
-- 单请求估算成本
-- fallback 触发率
+### Business
+- DAU
+- Daily chat volume
+- Assistant thumbs-up / thumbs-down ratio (once feedback UI ships)
+- Weekly / monthly report generation success rate
+- Plaid items linked / unlinked per day
 
-## 业务指标
+## 3. Structured logging
 
-- 每日活跃用户（DAU）
-- 聊天日请求量
-- 聊天回答满意度（可通过点赞/点踩）
-- 报告生成成功率（weekly/monthly）
-
-## 3. 日志规范（建议）
-
-统一 JSON 日志结构：
+Emit JSON-friendly log entries (Application Insights customDimensions) for each request:
 
 ```json
 {
-  "timestamp": "2026-02-25T10:00:00Z",
+  "timestamp": "2026-04-23T10:00:00Z",
   "level": "Information",
   "traceId": "00-...",
   "userId": "u-123",
   "endpoint": "/api/chat",
-  "tool": "get_spending_breakdown",
+  "tool": "get_transactions",
   "latencyMs": 120,
   "status": "ok"
 }
 ```
 
-## 4. 分布式追踪
+Never log access tokens, Plaid access tokens, or raw transaction notes at `Information` level.
 
-- 为每次请求生成 `traceId`
-- `chat -> tool -> external api` 贯穿同一 trace
-- 回包中可返回 traceId，便于用户/客服定位问题
+## 4. Distributed tracing
 
-## 5. 告警策略
+- Each request produces a `traceId` (W3C trace context, auto-propagated by Application Insights).
+- The trace spans `HTTP trigger -> service -> tool -> external API`.
+- `traceId` is returned in `/chat` responses to help with user-side debugging.
 
-## 关键告警
+## 5. Alerts
 
-- `/chat` 5xx > 2% 持续 5 分钟
-- MCP tool 超时率 > 5%
-- LLM 错误率 > 3%
-- 报告定时任务失败
+### Critical
+- `/chat` 5xx > 2% for 5 minutes
+- Any agent tool failure rate > 5% for 5 minutes
+- Azure OpenAI error rate > 3%
+- Scheduled report job failure
+- Plaid `/transactions/sync` error rate > 5%
+- Data Protection decryption failure on Plaid tokens (indicates lost / rotated keys)
 
-## 可选告警
+### Warning
+- Token spend above daily budget threshold
+- Unusual per-user request rate (possible abuse)
+- Plaid webhook backlog growing
 
-- 成本突增（超预算阈值）
-- 单用户异常请求频率（疑似滥用）
+## 6. Runbooks
 
-## 6. 运行手册（Runbook）
+### Scenario A — `/chat` 5xx spike
+1. Check recent deploys.
+2. Sample failing requests by `traceId` in Application Insights.
+3. Determine whether failure is in a tool, the LLM call, or conversation persistence.
+4. Mitigate:
+   - Temporarily disable the failing tool by removing its singleton registration
+   - Return a graceful "some data is temporarily unavailable" answer
 
-### 场景 A：chat 接口 500 激增
+### Scenario B — Finnhub unstable
+1. Fall back to the most recent cached snapshot.
+2. Reduce concurrency / request frequency.
+3. Annotate responses with "live quotes unavailable, showing cached data".
 
-1. 查看最近部署变更
-2. 按 traceId 抽样排查失败请求
-3. 判断是 tool 失败还是 LLM 失败
-4. 触发降级：
-   - 临时关闭高耗时工具
-   - 返回“部分数据暂不可用”
+### Scenario C — AI cost spike
+1. Inspect token usage by endpoint.
+2. Reduce `max_tokens` / trim prompt context.
+3. Rate-limit heavy users on `/chat`.
 
-### 场景 B：外部数据源（Finnhub）不稳定
+### Scenario D — Plaid access token decryption failures
+1. Confirm the Data Protection keys directory is intact and hasn't been rotated without re-encryption.
+2. If keys are lost, prompt affected users to re-link accounts; there is no recovery path for old ciphertext.
 
-1. 启用缓存兜底（最近一次成功快照）
-2. 降低工具并发与调用频率
-3. 在回答中标注“实时行情源不可用，以下为缓存数据”
+### Scenario E — Plaid webhook flooding
+1. Verify webhook signatures are passing.
+2. Check `/transactions/sync` cursor progress per item.
+3. If a single item is looping, pause its sync and investigate the cursor in storage.
 
-### 场景 C：AI 成本异常
+## 7. Capacity & cost hygiene
 
-1. 查看 token 消耗 Top endpoints
-2. 调整 max tokens 与 prompt 长度
-3. 限制高频用户请求速率
-
-## 7. 容量建议
-
-- 对 chat 请求做限流（按用户 + 全局）
-- 对热点统计结果做短时缓存（30s~120s）
-- 对新闻类工具做去重缓存
+- Rate-limit `/chat` per user and globally.
+- Short-TTL cache (30–120s) for hot aggregates (accounts summary, investment overview).
+- Deduplicate news queries across users within the same time window.
+- Cap tool output size before returning it to the model.

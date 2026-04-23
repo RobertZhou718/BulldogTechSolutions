@@ -1,89 +1,118 @@
-# 架构总览
+# Architecture Overview
 
-## 1. 目标与边界
+## 1. Goals and scope
 
-Bulldog Finance 的目标是提供一个面向个人用户的“财富视图”应用，覆盖：
+Bulldog Finance is a personal "wealth view" application that covers:
 
-- 身份认证（Microsoft Entra / MSAL）
-- 初始账户配置（Onboarding）
-- 账户与交易管理
-- 投资持仓与市场信息聚合
-- 基于财务快照的 AI 报告
+- Authentication via Microsoft Entra External ID (MSAL) plus a native email/password and social auth proxy
+- First-run onboarding
+- Account and transaction management, including Plaid Link bank connections
+- Investment holdings, watchlist, and market information aggregation
+- AI-generated reports based on financial snapshots
+- An in-app AI assistant (tool-calling agent) that can query the user's financial data and market news
 
-## 2. 系统分层
+## 2. System layers
 
-### 前端（DashboardUI）
+### Frontend (`DashboardUI`)
 
-- 技术：React + Vite + MUI + React Router + MSAL
-- 主要职责：
-  - 登录态控制与页面路由
-  - 调用后端 API
-  - 展示 Dashboard / Transactions / Investments / Onboarding / Login
+- Stack: **React 19**, **Vite 7**, **Tailwind CSS v4**, **React Aria Components**, **React Router 7**, **MSAL Browser 4**, **react-plaid-link 4**, **React Compiler** (babel plugin)
+- Responsibilities:
+  - Session / login state and routing
+  - Backend API calls (via `services/apiClient.js`)
+  - Pages: Dashboard, Transactions, Investments, Onboarding, Assistant (chat), Auth (native sign-in / sign-up / reset)
 
-### 后端（Azure Functions）
+### Backend (Azure Functions)
 
-- 技术：.NET 8 + Azure Functions Isolated Worker
-- 主要职责：
-  - 暴露 REST API（me / onboarding / accounts / transactions / investments / reports）
-  - 调用服务层执行业务逻辑
-  - 定时触发周报与月报生成
+- Stack: **.NET 8**, **Azure Functions v4 Isolated Worker**, **Microsoft.AspNetCore.App** (HTTP integration), **Application Insights**
+- Responsibilities:
+  - REST API surface (`/me`, `/onboarding`, `/accounts`, `/transactions`, `/investments`, `/reports`, `/chat`, `/plaid/*`, `/auth/*`)
+  - Bearer-token middleware that validates Entra JWTs and populates the per-request user context
+  - Native auth proxy (sign-in / sign-up / social / token refresh / password reset) forwarded to the Entra Native Auth API
+  - Plaid webhook handling and timer-triggered balance refresh + transaction sync
+  - Timer triggers for weekly / monthly AI report generation
 
-### 服务层（Services）
+### Service layer
 
-- 业务编排：InvestmentService, InvestmentOverviewService, ReportService
-- 外部集成：
-  - Finnhub（行情 / 新闻）
-  - Azure OpenAI（报告生成）
-- 存储抽象：
-  - IReportStorage
-  - IUserRepository / IAccountRepository / ITransactionRepository
+- Business orchestration: `InvestmentService`, `InvestmentOverviewService`, `ReportService`, `PlaidSyncService`, `ChatAgentService`, `ConversationService`, `ToolExecutor`, `SystemPromptBuilder`
+- External integrations:
+  - **Going.Plaid** (bank linking, transactions, balances)
+  - **Finnhub** (quotes, company news)
+  - **Azure OpenAI** (chat completions + report generation via `AzureOpenAiClient` / `IAiClient`)
+  - **Microsoft Entra External ID Native Auth API** (via `NativeAuthApiProxyService`)
+- Storage abstractions: `IUserRepository`, `IAccountRepository`, `ITransactionRepository`, `IPlaidRepository`, `IReportStorage`
+- Secret protection: **ASP.NET Core Data Protection** wraps Plaid access tokens via `IPlaidTokenProtector`
 
-### 数据层
+### Data layer
 
-- Azure Table Storage：Users / Accounts / Transactions / Investments / Watchlist
-- Azure Blob Storage：reports（weekly/monthly latest 报告）
+- **Azure Table Storage**: `Users`, `Accounts`, `Transactions`, `Investments`, `Watchlist`, `PlaidItems`, `ChatConversations`
+- **Azure Blob Storage**: `reports` container (weekly/monthly latest markdown reports)
+- Credentials: connection string **or** `ServiceUri` + `DefaultAzureCredential` (managed identity friendly; `ManagedIdentity:ClientId` supported)
 
-## 3. 核心业务流程
+### Agent / tool layer
 
-### 流程 A：首次用户 Onboarding
+- `IAgentTool` implementations are registered as singletons and discovered by `ToolExecutor`:
+  - `GetUserProfileTool`
+  - `GetAccountsTool`
+  - `GetTransactionsTool`
+  - `GetInvestmentsTool`
+  - `GetInvestmentOverviewTool`
+  - `GetWatchlistTool`
+  - `SearchFinanceNewsTool`
+  - `GeneratePortfolioReportTool`
+- `ChatAgentService` composes a system prompt (`SystemPromptBuilder`), runs an Azure OpenAI tool-calling loop, and persists conversations via `ConversationService`.
 
-1. 前端登录成功后访问 `/`，由 OnboardingGate 触发 `GET /me`
-2. 若 `onboardingDone=false`，跳转 `/onboarding`
-3. 提交初始账户列表到 `POST /onboarding`
-4. 后端创建用户档案、账户及 INIT 交易
+## 3. Core flows
 
-### 流程 B：交易管理
+### Flow A — First-time onboarding
 
-1. 前端请求 `GET /accounts` 展示账户
-2. 新增交易时调用 `POST /transactions`
-3. 后端写入交易并同步更新账户余额
-4. 历史查询通过 `GET /transactions`（支持 accountId / from / to）
+1. After MSAL (or native) sign-in the SPA calls `GET /me`.
+2. If `onboardingDone=false`, it routes to `/onboarding`.
+3. User submits default currency + initial accounts to `POST /onboarding`.
+4. Backend creates the user profile, accounts, and INIT transactions; may also offer Plaid Link.
 
-### 流程 C：投资总览
+### Flow B — Plaid bank linking
 
-1. 前端请求 `GET /investments/overview`
-2. 后端读取用户持仓
-3. 调用 Finnhub 获取 quote + company-news
-4. 聚合返回 Holdings + Popular 结构
+1. Client calls `POST /plaid/link-token` to get a short-lived link token.
+2. `react-plaid-link` completes the Link flow and returns a public token.
+3. Client exchanges it via `POST /plaid/exchange-public-token`.
+4. Backend encrypts the access token (Data Protection) and persists the item via `PlaidRepository`.
+5. Plaid webhooks hit `/plaid/webhook`; timer triggers refresh balances and sync transactions through `PlaidSyncService`.
 
-### 流程 D：AI 报告
+### Flow C — Transactions
 
-1. Timer 触发每周/每月任务
-2. ReportService 聚合交易快照
-3. 调用 Azure OpenAI 生成 markdown
-4. 存储 latest 到 Blob
-5. 前端可通过 `GET /reports/{period}/latest` 获取最新报告
+1. `GET /accounts` lists the user's accounts.
+2. `POST /transactions` posts a manual transaction; account balance is updated atomically.
+3. `GET /transactions?accountId=&from=&to=` returns history.
 
-## 4. 当前架构优点
+### Flow D — Investment overview
 
-- 前后端边界清晰，职责明确
-- Functions + Services + Repository 分层合理
-- 已具备多数据源整合能力
-- 已有 AI 报告链路，为 Chatbot 奠定基础
+1. `GET /investments/overview`.
+2. Backend loads holdings, pulls quotes + company news from Finnhub, and returns a Holdings + Popular payload.
 
-## 5. 当前架构限制（需在下一阶段解决）
+### Flow E — AI reports
 
-- 鉴权仍是过渡实现（Header 取 userId）
-- 交易查询存在“按用户全量扫描后内存过滤”上限
-- 缺少统一错误码与追踪标准
-- 缺少系统化文档与测试矩阵
+1. Timer trigger runs weekly/monthly.
+2. `ReportService` aggregates transactions into a snapshot.
+3. Azure OpenAI produces a markdown report.
+4. Latest report per period is written to Blob Storage.
+5. SPA fetches with `GET /reports/{period}/latest`.
+
+### Flow F — Chat assistant
+
+1. SPA posts a message to `POST /chat` with an optional `conversationId`.
+2. `ChatAgentService` loads prior turns from `ConversationService`, builds a system prompt, and calls Azure OpenAI with the registered `IAgentTool` catalog.
+3. `ToolExecutor` routes tool calls, always enforcing the authenticated `userId`.
+4. The assistant response + tool trace is persisted and returned to the client.
+
+## 4. Cross-cutting
+
+- **Auth**: `BearerTokenAuthenticationMiddleware` validates `Authorization: Bearer <jwt>` and exposes user claims downstream.
+- **Observability**: Application Insights via `Microsoft.Azure.Functions.Worker.ApplicationInsights`.
+- **Configuration**: `local.settings.json` for dev, environment variables / App Service settings in the cloud.
+
+## 5. Known limitations (tracked in the roadmap)
+
+- Transaction queries still use per-user scans with in-memory filtering; should move to partition-aware filtered queries once volume grows.
+- No uniform error-code contract yet across endpoints.
+- Prompt-injection mitigations for the assistant are basic and need to be hardened.
+- Test matrix (unit/integration/e2e) is still thin.

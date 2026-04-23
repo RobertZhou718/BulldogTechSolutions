@@ -1,19 +1,21 @@
-# 本地开发与环境配置
+# Local Development & Environment Setup
 
-## 1. 目录结构
+## 1. Project layout
 
-- 前端：`BulldogFinance/DashboardUI`
-- 后端：`BulldogFinance/BulldogFinance.Functions/BulldogFinance.Functions`
+- Frontend: [`BulldogFinance/DashboardUI`](../BulldogFinance/DashboardUI)
+- Backend: [`BulldogFinance/BulldogFinance.Functions/BulldogFinance.Functions`](../BulldogFinance/BulldogFinance.Functions/BulldogFinance.Functions)
 
-## 2. 先决条件
+## 2. Prerequisites
 
 - Node.js 20+
 - npm 10+
 - .NET SDK 8.0+
-- Azure Functions Core Tools v4（建议）
-- Azure Storage Emulator / Azurite（本地联调建议）
+- Azure Functions Core Tools v4 (recommended)
+- Azurite (Azure Storage emulator) for local Table/Blob storage
+- A Plaid developer account (sandbox) if you want to exercise bank linking
+- A Microsoft Entra External ID tenant with an SPA app registration + an API app registration
 
-## 3. 前端启动
+## 3. Frontend
 
 ```bash
 cd BulldogFinance/DashboardUI
@@ -21,9 +23,11 @@ npm install
 npm run dev
 ```
 
-默认 Vite 地址通常为 `http://localhost:5173`。
+Vite defaults to `http://localhost:5173`. Other scripts: `npm run build`, `npm run preview`, `npm run lint`.
 
-## 4. 后端启动
+The frontend uses **Tailwind CSS v4** (no `tailwind.config.js` needed — configured through `@tailwindcss/vite`) and **React Aria Components** for accessible primitives. The **React Compiler** is enabled via `babel-plugin-react-compiler`.
+
+## 4. Backend
 
 ```bash
 cd BulldogFinance/BulldogFinance.Functions/BulldogFinance.Functions
@@ -32,42 +36,60 @@ dotnet build
 func start
 ```
 
-如果本地未安装 `func`，可使用：
+If `func` is not installed, `dotnet run` also works.
 
-```bash
-dotnet run
-```
+> Note: timer triggers fire locally too. Watch the log output and disable them if noisy.
 
-> 注意：Timer Trigger 在本地也可能触发，调试时请关注日志输出。
+## 5. Frontend environment variables
 
-## 5. 前端环境变量（建议）
-
-在 `BulldogFinance/DashboardUI` 创建 `.env.local`：
+Create `BulldogFinance/DashboardUI/.env.local` (do not commit):
 
 ```env
+# MSAL (Entra External ID)
 VITE_AUTH_TENANT_NAME=<your-entra-tenant-subdomain>
 VITE_SPA_CLIENT_ID=<your-spa-client-id>
 VITE_REDIRECT_URI=http://localhost:5173
 VITE_API_CLIENT_ID=<your-api-app-client-id>
+
+# Backend API
 VITE_API_BASE_URL=http://localhost:7071/api
 ```
 
-## 6. 后端环境变量（建议）
+## 6. Backend environment variables
 
-在 Functions 项目目录创建 `local.settings.json`（不要提交到仓库）：
+Create `local.settings.json` in the Functions project directory (do not commit):
 
 ```json
 {
   "IsEncrypted": false,
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated"
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "APPLICATIONINSIGHTS_CONNECTION_STRING": "<optional>"
   },
   "TableStorage": {
     "ConnectionString": "UseDevelopmentStorage=true"
   },
   "BlobStorage": {
     "ConnectionString": "UseDevelopmentStorage=true"
+  },
+  "Auth": {
+    "Authority": "https://<tenant>.ciamlogin.com/<tenant-id>/v2.0",
+    "Audience": "<api-app-client-id>",
+    "ValidIssuers": "https://<tenant>.ciamlogin.com/<tenant-id>/v2.0"
+  },
+  "AuthProxy": {
+    "BaseUrl": "https://<tenant>.ciamlogin.com/",
+    "TimeoutSeconds": "30",
+    "ClientId": "<native-auth-client-id>"
+  },
+  "Plaid": {
+    "ClientId": "<plaid-client-id>",
+    "Secret": "<plaid-secret>",
+    "Environment": "Sandbox"
+  },
+  "DataProtection": {
+    "KeysDirectory": "./keys"
   },
   "Finnhub": {
     "BaseUrl": "https://finnhub.io/api/v1/",
@@ -79,7 +101,8 @@ VITE_API_BASE_URL=http://localhost:7071/api
   "AzureOpenAI": {
     "Endpoint": "https://<your-resource>.openai.azure.com/",
     "Key": "<your-key>",
-    "Deployment": "report-writer"
+    "Deployment": "report-writer",
+    "ChatDeployment": "chat-agent"
   },
   "Reports": {
     "ContainerName": "reports"
@@ -87,24 +110,36 @@ VITE_API_BASE_URL=http://localhost:7071/api
 }
 ```
 
-## 7. 本地鉴权调试
+Managed-identity variant (cloud): instead of `ConnectionString`, set `TableStorage:ServiceUri` / `BlobStorage:ServiceUri` and optionally `ManagedIdentity:ClientId`. The Functions host will fall back to `DefaultAzureCredential`.
 
-当前后端通过请求头获取 userId：
+## 7. Authentication in local dev
 
-- 生产建议：`X-MS-CLIENT-PRINCIPAL-ID`
-- 本地调试：`X-Debug-UserId`
+The backend validates real Entra JWTs via `BearerTokenAuthenticationMiddleware`. For local development:
 
-联调时可在 API 调用工具（Postman 等）里带上 `X-Debug-UserId`。
+- Sign in through the SPA to get a real token (MSAL acquires tokens against the API scope defined by `VITE_API_CLIENT_ID`), and pass it as `Authorization: Bearer <jwt>` when calling the API from tools like Postman.
+- Or exercise the native auth endpoints (`/auth/native/*`) via the SPA to obtain tokens without the MSAL redirect flow.
 
-## 8. 常见问题
+There is no anonymous debug-header fallback anymore.
 
-### Q1: 前端报 `No signed-in account`
-- 确认 MSAL 登录成功
-- 确认 `VITE_*` 变量配置正确
+## 8. Plaid sandbox tips
 
-### Q2: 后端报 `Finnhub:ApiKey is not configured`
-- 确认 `local.settings.json` 中 `Finnhub:ApiKey` 已设置
+- Set `Plaid:Environment=Sandbox` and use Plaid's sandbox credentials (e.g. `user_good` / `pass_good`).
+- The Data Protection keys directory (`DataProtection:KeysDirectory`) must be writable; without it the encrypted Plaid access tokens won't survive a host restart.
+- Webhooks can be exercised locally via the Plaid sandbox "fire webhook" endpoints, pointed at a tunnel (ngrok / dev tunnels) to `http://localhost:7071/api/plaid/webhook`.
 
-### Q3: 后端报 Table/Blob 配置错误
-- 至少需要配置 `TableStorage:ConnectionString` 或 `TableStorage:ServiceUri`
-- Blob 同理
+## 9. Common issues
+
+### Q1: Frontend shows `No signed-in account`
+- MSAL login did not complete; check `VITE_*` configuration.
+
+### Q2: Backend logs `Finnhub:ApiKey is not configured`
+- Set `Finnhub:ApiKey` in `local.settings.json`.
+
+### Q3: Backend throws Table/Blob configuration errors
+- You must set either `<Storage>:ConnectionString` or `<Storage>:ServiceUri`.
+
+### Q4: Plaid calls fail with `INVALID_API_KEYS`
+- Confirm `Plaid:ClientId`, `Plaid:Secret`, and `Plaid:Environment` match the same Plaid dashboard environment.
+
+### Q5: `401 Unauthorized` on every call
+- Confirm `Auth:Authority`, `Auth:Audience`, and `Auth:ValidIssuers` match the tenant that issued the token and that the SPA requested the API scope.
