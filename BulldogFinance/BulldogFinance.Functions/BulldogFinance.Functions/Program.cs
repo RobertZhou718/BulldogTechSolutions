@@ -7,6 +7,7 @@ using BulldogFinance.Functions.Services.Auth;
 using BulldogFinance.Functions.Services.Chat;
 using BulldogFinance.Functions.Services.Investments;
 using BulldogFinance.Functions.Services.Plaid;
+using Going.Plaid;
 using BulldogFinance.Functions.Services.Reports;
 using BulldogFinance.Functions.Services.Tools;
 using BulldogFinance.Functions.Services.Transactions;
@@ -115,12 +116,13 @@ var host = new HostBuilder()
             client.BaseAddress = new Uri(baseUrl);
         });
 
-        services.AddHttpClient("Plaid", (sp, client) =>
-        {
-            var config = sp.GetRequiredService<IConfiguration>();
-            var baseUrl = config["Plaid:BaseUrl"] ?? "https://production.plaid.com";
-            client.BaseAddress = new Uri(baseUrl);
-        });
+        // Going.Plaid: bind PlaidOptions + register the named HttpClient, but
+        // skip the singleton PlaidClient registration. PlaidClient.AccessToken
+        // is mutable, so we create short-lived instances via IPlaidClientFactory
+        // to avoid concurrent invocations clobbering each other's token.
+        // Required config keys: Plaid:ClientId, Plaid:Secret, Plaid:Environment.
+        services.Configure<PlaidOptions>(configuration.GetSection("Plaid"));
+        services.AddPlaidHttpClient();
 
         services.AddHttpClient("AuthProxy", (sp, client) =>
         {
@@ -160,7 +162,7 @@ var host = new HostBuilder()
         services.AddSingleton<IInvestmentService, InvestmentService>();
         services.AddSingleton<IInvestmentOverviewService, InvestmentOverviewService>();
         services.AddSingleton<IPlaidTokenProtector, PlaidTokenProtector>();
-        services.AddSingleton<IPlaidClient, PlaidClient>();
+        services.AddSingleton<IPlaidClientFactory, PlaidClientFactory>();
         services.AddSingleton<IPlaidSyncService, PlaidSyncService>();
 
         services.AddSingleton<IAiClient, AzureOpenAiClient>();

@@ -5,6 +5,7 @@ using BulldogFinance.Functions.Models.Plaid;
 using BulldogFinance.Functions.Models.Users;
 using BulldogFinance.Functions.Services.Plaid;
 using BulldogFinance.Functions.Services.Users;
+using Going.Plaid.Item;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
@@ -19,7 +20,7 @@ namespace BulldogFinance.Functions.Functions
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        private readonly IPlaidClient _plaidClient;
+        private readonly IPlaidClientFactory _plaidClientFactory;
         private readonly IPlaidRepository _plaidRepository;
         private readonly IPlaidSyncService _plaidSyncService;
         private readonly IPlaidTokenProtector _tokenProtector;
@@ -27,14 +28,14 @@ namespace BulldogFinance.Functions.Functions
         private readonly ILogger<ExchangePlaidPublicTokenFunction> _logger;
 
         public ExchangePlaidPublicTokenFunction(
-            IPlaidClient plaidClient,
+            IPlaidClientFactory plaidClientFactory,
             IPlaidRepository plaidRepository,
             IPlaidSyncService plaidSyncService,
             IPlaidTokenProtector tokenProtector,
             IUserRepository userRepository,
             ILogger<ExchangePlaidPublicTokenFunction> logger)
         {
-            _plaidClient = plaidClient;
+            _plaidClientFactory = plaidClientFactory;
             _plaidRepository = plaidRepository;
             _plaidSyncService = plaidSyncService;
             _tokenProtector = tokenProtector;
@@ -76,7 +77,21 @@ namespace BulldogFinance.Functions.Functions
             if (requestModel == null || string.IsNullOrWhiteSpace(requestModel.PublicToken))
                 return await ApiResponse.BadRequestAsync(req, "publicToken is required.");
 
-            var exchange = await _plaidClient.ExchangePublicTokenAsync(requestModel.PublicToken);
+            var exchangeClient = _plaidClientFactory.Create();
+            var exchange = await exchangeClient.ItemPublicTokenExchangeAsync(new ItemPublicTokenExchangeRequest
+            {
+                PublicToken = requestModel.PublicToken
+            });
+
+            if (!exchange.IsSuccessStatusCode)
+            {
+                var detail = exchange.Error != null
+                    ? $"{exchange.Error.ErrorType}/{exchange.Error.ErrorCode}: {exchange.Error.ErrorMessage}"
+                    : exchange.RawJson ?? "Unknown error";
+                return await ApiResponse.BadGatewayAsync(req,
+                    $"Plaid API /item/public_token/exchange failed: {(int)exchange.StatusCode} {detail}");
+            }
+
             var now = DateTime.UtcNow;
             var itemEntity = new PlaidItemEntity
             {

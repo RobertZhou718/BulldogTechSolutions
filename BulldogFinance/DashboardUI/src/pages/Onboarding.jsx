@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ConnectBankButton from "@/components/plaid/ConnectBankButton.jsx";
 import Button from "@/components/ui/Button.jsx";
@@ -115,12 +115,18 @@ export default function OnboardingPage() {
     };
 
     const handlePlaidConnected = async () => {
-        // Stay on the onboarding page so the user can see which accounts were
-        // linked, optionally remove any manual rows, and click "Save and continue"
-        // (or "Continue to dashboard") when ready.
+        // Backend flips onboardingDone=true during /plaid/exchange-public-token,
+        // so re-check /me and jump straight to the dashboard if the server has
+        // already considered onboarding complete.
         try {
-            const accounts = await getAccounts().catch(() => []);
+            const [accounts, me] = await Promise.all([
+                getAccounts().catch(() => []),
+                getMe().catch(() => null),
+            ]);
             setLinkedAccounts(Array.isArray(accounts) ? accounts : []);
+            if (me?.onboardingDone) {
+                navigate("/dashboard", { replace: true });
+            }
         } catch (e) {
             console.error("Failed to refresh onboarding state after Plaid link", e);
         }
@@ -161,40 +167,6 @@ export default function OnboardingPage() {
                             you grant permission.
                         </p>
                         <ConnectBankButton className="mt-4" onConnected={handlePlaidConnected} />
-
-                        {linkedAccounts.length > 0 ? (
-                            <div className="mt-4 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-3">
-                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-soft)]">
-                                    Linked accounts
-                                </p>
-                                <ul className="mt-2 space-y-1 text-sm text-[var(--text-main)]">
-                                    {linkedAccounts.map((account) => (
-                                        <li
-                                            key={account.accountId}
-                                            className="flex items-center justify-between gap-2"
-                                        >
-                                            <span className="truncate">
-                                                {account.name}
-                                                {account.mask ? ` •••• ${account.mask}` : ""}
-                                            </span>
-                                            <span className="text-[var(--text-muted)]">
-                                                {formatCurrency(
-                                                    account.currentBalance,
-                                                    account.currency,
-                                                    2
-                                                )}
-                                            </span>
-                                        </li>
-                                    ))}
-                                </ul>
-                                <Button
-                                    className="mt-3"
-                                    onClick={() => navigate("/dashboard", { replace: true })}
-                                >
-                                    Continue to dashboard
-                                </Button>
-                            </div>
-                        ) : null}
                     </div>
 
                     <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] p-5">
@@ -209,6 +181,47 @@ export default function OnboardingPage() {
                         </p>
                     </div>
                 </div>
+
+                {linkedAccounts.length > 0 ? (
+                    <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--card-border)]">
+                        <div className="hidden grid-cols-[minmax(0,2.2fr)_1fr] gap-4 bg-[var(--bg-subtle)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-soft)] md:grid">
+                            <span>Account</span>
+                            <span className="text-right">Balance</span>
+                        </div>
+
+                        <div className="divide-y divide-[var(--card-border)]">
+                            {linkedAccounts.map((account) => (
+                                <div
+                                    key={account.accountId}
+                                    className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,2.2fr)_1fr] md:items-center md:gap-4"
+                                >
+                                    <div>
+                                        <p className="font-semibold text-[var(--text-main)]">
+                                            {account.name}
+                                        </p>
+                                        {account.mask ? (
+                                            <p className="mt-1 text-sm text-[var(--text-muted)]">
+                                                •••• {account.mask}
+                                            </p>
+                                        ) : null}
+                                    </div>
+                                    <div className="text-left md:text-right">
+                                        <p className="font-semibold text-[var(--text-main)]">
+                                            {formatCurrency(
+                                                account.currentBalance,
+                                                account.currency,
+                                                2
+                                            )}
+                                        </p>
+                                        <p className="mt-1 text-xs text-[var(--text-soft)]">
+                                            {account.currency}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : null}
 
                 <div className="mt-6 max-w-xs">
                     <Field label="Default currency">
