@@ -1,60 +1,53 @@
-# 路线图（建议）
+# Roadmap
 
-## Phase 0（当前）
+## Phase 0 — delivered
 
-- ✅ 登录与 Onboarding
-- ✅ 账户与交易
-- ✅ 投资总览与自选
-- ✅ AI 周报/月报
+- Authentication (MSAL + native auth proxy for email/password and social)
+- JWT validation middleware
+- Onboarding
+- Accounts & transactions (manual)
+- Plaid Link, balance refresh, and transaction sync (Going.Plaid)
+- Encrypted Plaid token storage (ASP.NET Core Data Protection)
+- Investment holdings + watchlist + Finnhub aggregation
+- Weekly / monthly AI reports (Azure OpenAI)
+- In-app chat assistant with tool-calling agent and persistent conversations
+- Application Insights telemetry
 
-## Phase 1（2~3 周）Chatbot MVP
+## Phase 1 — assistant depth (in progress)
 
-目标：先可用
+- Streaming responses on `/chat` (SSE)
+- Follow-up / context-aware questions inside a single conversation
+- Thumbs-up / thumbs-down feedback UI and storage
+- Richer tools: budget vs. actual, spending anomalies, category trend
+- Expanded prompt-injection test suite in CI
 
-- 前端：聊天页（输入、消息流、基础错误提示）
-- 后端：`/chat` + 2~4 个 MCP 工具
-- 回包：`answer + citations + usedTools + traceId`
-- 指标：请求量、延迟、错误率、token 消耗
+## Phase 2 — reliability & hardening
 
-交付标准：
+- Key Vault for all runtime secrets
+- Durable Data Protection key storage (Key Vault + Blob)
+- Rate limiting on `/chat` and Plaid endpoints
+- Uniform error contract across all APIs (`{ error: { code, message, traceId } }`)
+- Cached hot aggregates (30–120s TTL) for accounts / overview
+- Complete alerting + runbook coverage per [docs/06](06-observability-operations.md)
 
-- 用户可询问最近支出、账户概览、持仓概览
-- 每条回答可追溯工具来源
+## Phase 3 — experience & growth
 
-## Phase 2（2~4 周）可靠性与安全加固
+- Smart suggestion cards on the dashboard (budget, category trend, anomaly)
+- Plaid investments product (holdings auto-sync)
+- Multi-currency refinements (FX rates, display vs. base currency)
+- Prompt A/B experiments with metric-linked rollout
+- Accessibility audit of React Aria Components usage
 
-目标：可上线试运行
+## Phase 4 — long-term platform
 
-- 鉴权升级（JWT 验签）
-- Prompt 注入防护
-- 限流与缓存
-- 统一错误规范
-- 运行告警与 runbook 完整
+- Plug-in data sources (tax, bills, additional aggregators)
+- Internal tool registry so new `IAgentTool` implementations auto-register
+- Policy engine (budget thresholds, alerts, scheduled plans)
+- Mobile surface (PWA / native shell over the existing React app)
 
-交付标准：
+## Risks & dependencies
 
-- 关键链路无高危安全项
-- chat 失败可降级，系统可恢复
-
-## Phase 3（4~6 周）体验与增长
-
-目标：可规模化
-
-- 流式回答
-- 追问上下文
-- 智能建议卡片（预算、类别趋势、异常波动）
-- 反馈闭环（点赞/点踩）
-- Prompt A/B 实验
-
-## Phase 4（长期）智能运营平台
-
-- 支持多数据源插件化（税务、账单、银行聚合）
-- 形成 MCP tool registry
-- 增加策略引擎（告警阈值、预算计划）
-
-## 风险与依赖
-
-- 外部数据源稳定性（Finnhub）
-- AI 成本波动
-- 身份体系与权限治理
-- 团队测试与运维能力建设
+- External data-source stability (Plaid, Finnhub)
+- AI cost volatility (Azure OpenAI token pricing)
+- Identity & permissions governance (Entra External ID tenant setup, key rotation)
+- Test & operational maturity (coverage, on-call rotation)

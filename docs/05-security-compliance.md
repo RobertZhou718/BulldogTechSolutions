@@ -1,63 +1,65 @@
-# 安全与合规建议
+# Security & Compliance
 
-## 1. 当前状态简评
+## 1. Current state
 
-当前服务通过 Header 提取用户 ID，可用于开发阶段，但在上线前需要升级为更严格的认证授权体系。
+- **JWT validation is live.** `BearerTokenAuthenticationMiddleware` validates issuer / audience / signature against Microsoft Entra External ID. There is no dev-header fallback.
+- **Plaid access tokens are encrypted at rest** using ASP.NET Core Data Protection (`IPlaidTokenProtector`).
+- **Storage access** supports managed identity (`DefaultAzureCredential`) in addition to connection strings.
+- Areas still being hardened: centralized secret storage (Key Vault wiring), prompt-injection defenses for the assistant, rate limiting / abuse detection, and uniform error responses.
 
-## 2. 身份与授权
+## 2. Identity & authorization
 
-## 必做
+### Required
 
-- 后端验证 JWT（issuer/audience/signature）
-- 禁止依赖可伪造的调试 Header
-- 所有读取/写入接口按 `userId` 做强隔离
-- 最小权限原则：Function App / Storage / OpenAI / Finnhub 凭据分离
+- Validate JWTs on every request (done). Reject tokens with the wrong issuer, audience, or signature.
+- Enforce per-user isolation on every read and write path, including every `IAgentTool` — user id always comes from the validated token, never from the request body.
+- Separate credentials per external dependency (Plaid, Finnhub, Azure OpenAI, Storage).
 
-## 建议
+### Recommended
 
-- 使用 APIM 或网关统一身份与限流策略
-- 管理员操作与普通用户操作分离
+- Put API Management (or an equivalent gateway) in front of the Functions app for uniform auth, throttling, and WAF.
+- Keep admin / operational endpoints separate from user-facing ones, with distinct scopes.
 
-## 3. 密钥与配置管理
+## 3. Secret & configuration management
 
-- 禁止在代码库提交明文密钥
-- 使用 Azure Key Vault 存储 API Key / Connection String
-- 配置分环境管理（dev/staging/prod）
-- 定期轮换密钥
+- No secrets in source control.
+- Use **Azure Key Vault** for production API keys and connection strings; reference them from App Service / Functions configuration.
+- Rotate Plaid secrets, Finnhub API keys, Azure OpenAI keys, and signing keys on a schedule.
+- `DataProtection:KeysDirectory` must be a durable, access-controlled path (or replaced with Key Vault + Blob key storage) in production so encrypted Plaid tokens remain decryptable after restarts.
 
-## 4. 数据安全
+## 4. Data protection
 
-- 传输层：HTTPS only
-- 存储层：启用加密（Azure 默认）
-- 日志层：禁止记录敏感字段（邮箱、token、完整交易备注）
-- 报告与聊天记录按最小可见原则存储
+- Transport: HTTPS only.
+- Storage: Azure default encryption; Plaid access tokens additionally wrapped by Data Protection.
+- Logs: never log full tokens, Plaid access tokens, raw transaction notes, or email addresses at `Information` level.
+- Reports and chat history are per-user and never shared across tenants.
 
-## 5. LLM / MCP 安全
+## 5. LLM / agent safety
 
-- Prompt 注入防护
-  - 屏蔽“忽略之前规则”等注入文本
-- Tool 调用白名单
-  - 只允许预定义工具
-- 输出防护
-  - PII 脱敏
-  - 敏感内容过滤
+- System prompt instructs the model not to fabricate data and to ground answers in tool output.
+- Injection mitigations: ignore instructions that try to override the system prompt or exfiltrate credentials; tool outputs are length-capped.
+- Tools are whitelisted — the model can only call registered `IAgentTool` instances, and each receives the authenticated `userId` from the executor.
+- Output review: PII beyond what the user already owns is not generated; no cross-user data reachable.
 
-## 6. 合规建议（按阶段）
+## 6. Compliance posture (by stage)
 
-- 开发阶段：
-  - 建立数据分级（公开/内部/敏感）
-  - 明确日志保留周期
-- 试运行阶段：
-  - 完成 DPIA/隐私影响评估（若面向真实用户）
-- 生产阶段：
-  - 建立审计日志与访问追踪
-  - 建立安全事件响应流程
+- **Development**
+  - Data classification (public / internal / sensitive)
+  - Log retention policy defined
+- **Pilot**
+  - DPIA / privacy impact assessment if onboarding real users
+  - Financial-data handling reviewed (Plaid / PCI-adjacent scope)
+- **Production**
+  - Audit logs traceable by `traceId`
+  - Security incident response runbook
 
-## 7. 最小安全检查清单（上线前）
+## 7. Pre-production checklist
 
-- [ ] JWT 验签已启用
-- [ ] Key Vault 接管密钥
-- [ ] 调试 Header 在生产禁用
-- [ ] 全链路 HTTPS
-- [ ] 审计日志可追溯到 traceId
-- [ ] LLM 输出已做脱敏和引用来源标识
+- [x] JWT validation enforced
+- [x] Plaid access tokens encrypted at rest
+- [ ] Key Vault holds all runtime secrets
+- [ ] Data Protection keys persisted to durable, access-controlled storage
+- [x] HTTPS-only transport
+- [ ] Rate limiting on `/chat` and Plaid endpoints
+- [ ] Audit logs tagged with `traceId`
+- [ ] Assistant prompt-injection suite exercised in CI
