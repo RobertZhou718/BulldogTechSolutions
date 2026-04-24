@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
+import { Bank } from "@untitledui/icons";
 import { Button } from "@/components/ui/button";
 import { useApiClient } from "@/services/apiClient";
 import { toast } from "sonner";
@@ -92,7 +93,9 @@ export default function ConnectBankButton({ onConnected, className }) {
                 loading={isLoading}
                 loadingText={loadingText}
                 disabled={isLoading || !linkToken || !ready}
+                className="group h-10 w-full min-w-[12.5rem] justify-center gap-2 rounded-full bg-[var(--brand)] px-5 text-sm font-semibold text-white shadow-[0_8px_20px_-8px_rgba(21,112,239,0.55)] transition-all duration-200 hover:-translate-y-px hover:bg-[var(--brand-strong)] hover:shadow-[0_12px_24px_-8px_rgba(21,112,239,0.6)] active:translate-y-0 active:shadow-[0_4px_12px_-6px_rgba(21,112,239,0.5)] sm:w-auto"
             >
+                <Bank className="size-4 transition-transform duration-200 group-hover:scale-110" />
                 Connect with bank
             </Button>
         </div>
