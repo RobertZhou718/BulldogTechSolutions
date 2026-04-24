@@ -149,7 +149,7 @@
   border: 1px solid rgba(148, 163, 184, 0.55);
   margin-bottom: 6px;
   font-size: 14px;
-  color: var(--accent-secondary);
+  color: var(--brand-secondary);
 }
 
 .hero-stat-card__value {
@@ -376,7 +376,7 @@
 .login-benefits__icon {
   font-size: 13px;
   margin-top: 2px;
-  color: var(--accent);
+  color: var(--brand);
 }
 
 .login-disclaimer {
@@ -386,7 +386,7 @@
 }
 
 .login-disclaimer a {
-  color: var(--accent-secondary);
+  color: var(--brand-secondary);
   text-decoration: none;
   margin: 0 2px;
 }

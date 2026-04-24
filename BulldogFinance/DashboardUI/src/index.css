@@ -4,6 +4,8 @@
 @plugin "tailwindcss-animate";
 @plugin "tailwindcss-react-aria-components";
 
+@custom-variant dark (&:is(.dark *));
+
 :root {
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   line-height: 1.5;
@@ -20,11 +22,11 @@
   --card-bg-strong: #ffffff;
   --card-border: rgba(208, 213, 221, 0.92);
   --card-border-strong: rgba(152, 162, 179, 0.5);
-  --accent: #1570ef;
-  --accent-strong: #175cd3;
-  --accent-soft: rgba(21, 112, 239, 0.08);
-  --accent-outline: rgba(21, 112, 239, 0.18);
-  --accent-secondary: #12b76a;
+  --brand: #1570ef;
+  --brand-strong: #175cd3;
+  --brand-soft: rgba(21, 112, 239, 0.08);
+  --brand-outline: rgba(21, 112, 239, 0.18);
+  --brand-secondary: #12b76a;
   --text-main: #101828;
   --text-muted: #344054;
   --text-soft: #667085;
@@ -32,6 +34,82 @@
   --focus-ring: rgba(46, 144, 250, 0.18);
   --surface-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.1);
   --surface-shadow-lg: 0 8px 8px -4px rgba(16, 24, 40, 0.03), 0 20px 24px -4px rgba(16, 24, 40, 0.08);
+
+  /* shadcn/ui tokens — mapped to the brand palette so generated components inherit the existing look */
+  --background: #ffffff;
+  --foreground: #101828;
+  --card: #ffffff;
+  --card-foreground: #101828;
+  --popover: #ffffff;
+  --popover-foreground: #101828;
+  --primary: #1570ef;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f4f7;
+  --secondary-foreground: #344054;
+  --muted: #f9fafb;
+  --muted-foreground: #667085;
+  --accent: #eff4ff;
+  --accent-foreground: #175cd3;
+  --destructive: #f04438;
+  --destructive-foreground: #ffffff;
+  --border: #eaecf0;
+  --input: #eaecf0;
+  --ring: rgba(46, 144, 250, 0.45);
+  --radius: 0.75rem;
+  --chart-1: #1570ef;
+  --chart-2: #12b76a;
+  --chart-3: #f79009;
+  --chart-4: #7a5af8;
+  --chart-5: #36bffa;
+}
+
+.dark {
+  --background: #101828;
+  --foreground: #f9fafb;
+  --card: #1d2939;
+  --card-foreground: #f9fafb;
+  --popover: #1d2939;
+  --popover-foreground: #f9fafb;
+  --primary: #528bff;
+  --primary-foreground: #101828;
+  --secondary: #344054;
+  --secondary-foreground: #f2f4f7;
+  --muted: #344054;
+  --muted-foreground: #98a2b3;
+  --accent: #1849a9;
+  --accent-foreground: #eff4ff;
+  --destructive: #f97066;
+  --destructive-foreground: #101828;
+  --border: #344054;
+  --input: #344054;
+  --ring: rgba(82, 139, 255, 0.45);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
 }
 
 *,

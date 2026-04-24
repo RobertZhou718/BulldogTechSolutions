@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
-import Button from "@/components/ui/Button.jsx";
+import { Button } from "@/components/ui/button";
 import { useApiClient } from "@/services/apiClient";
+import { toast } from "sonner";
 
 export default function ConnectBankButton({ onConnected, className }) {
     const { createPlaidLinkToken, exchangePlaidPublicToken } = useApiClient();
     const [linkToken, setLinkToken] = useState("");
     const [loadingToken, setLoadingToken] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState("");
 
     useEffect(() => {
         let cancelled = false;
@@ -16,14 +16,13 @@ export default function ConnectBankButton({ onConnected, className }) {
         (async () => {
             try {
                 setLoadingToken(true);
-                setError("");
                 const result = await createPlaidLinkToken();
                 if (!cancelled) {
                     setLinkToken(result?.linkToken || "");
                 }
             } catch (e) {
                 if (!cancelled) {
-                    setError(e.message || "Failed to create Plaid link token.");
+                    toast.error(e.message || "Failed to create Plaid link token.");
                 }
             } finally {
                 if (!cancelled) {
@@ -41,7 +40,7 @@ export default function ConnectBankButton({ onConnected, className }) {
         token: linkToken || null,
         onSuccess: async (publicToken, metadata) => {
             setSubmitting(true);
-            setError("");
+            const toastId = toast.loading("Linking your bank...");
 
             try {
                 await exchangePlaidPublicToken({
@@ -50,10 +49,17 @@ export default function ConnectBankButton({ onConnected, className }) {
                     institutionName: metadata?.institution?.name || null,
                 });
             } catch (e) {
-                setError(e.message || "Failed to connect bank account.");
+                toast.error(e.message || "Failed to connect bank account.", { id: toastId });
                 setSubmitting(false);
                 return;
             }
+
+            toast.success(
+                metadata?.institution?.name
+                    ? `${metadata.institution.name} connected.`
+                    : "Bank connected.",
+                { id: toastId }
+            );
 
             try {
                 await onConnected?.();
@@ -67,22 +73,28 @@ export default function ConnectBankButton({ onConnected, className }) {
         },
         onExit: (exitError) => {
             if (exitError?.display_message || exitError?.error_message) {
-                setError(exitError.display_message || exitError.error_message);
+                toast.error(exitError.display_message || exitError.error_message);
             }
         },
     });
 
     const handleClick = () => {
-        setError("");
         open();
     };
 
+    const isLoading = loadingToken || submitting;
+    const loadingText = submitting ? "Connecting..." : "Preparing...";
+
     return (
         <div className={className}>
-            <Button onClick={handleClick} disabled={loadingToken || submitting || !linkToken || !ready}>
-                {submitting ? "Connecting..." : "Connect with bank"}
+            <Button
+                onClick={handleClick}
+                loading={isLoading}
+                loadingText={loadingText}
+                disabled={isLoading || !linkToken || !ready}
+            >
+                Connect with bank
             </Button>
-            {error ? <p className="mt-3 text-sm font-medium text-[var(--color-error-500)]">{error}</p> : null}
         </div>
     );
 }

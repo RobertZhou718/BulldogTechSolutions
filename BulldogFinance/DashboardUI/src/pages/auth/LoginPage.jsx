@@ -5,7 +5,8 @@ import AuthLayout from "@/components/auth/AuthLayout.jsx";
 import EmailField from "@/components/auth/EmailField.jsx";
 import GoogleButton from "@/components/auth/GoogleButton.jsx";
 import PasswordField from "@/components/auth/PasswordField.jsx";
-import Button from "@/components/ui/Button.jsx";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 function getRedirectTarget(location) {
     const from = location.state?.from;
@@ -28,6 +29,7 @@ export default function LoginPage() {
         rememberMe: true,
     });
     const [error, setError] = useState("");
+    const [pendingAction, setPendingAction] = useState(null);
 
     const handleFieldChange = (event) => {
         const { name, value } = event.target;
@@ -47,23 +49,27 @@ export default function LoginPage() {
     const handlePasswordSignIn = async (event) => {
         event.preventDefault();
         setError("");
+        setPendingAction("password");
 
         try {
             await signInWithPassword(form.email, form.password, form.rememberMe);
             navigate(redirectTarget, { replace: true });
         } catch (authError) {
             setError(authError.message || "Unable to sign in.");
+            setPendingAction(null);
         }
     };
 
     const handleGoogleSignIn = async () => {
         setError("");
+        setPendingAction("google");
 
         try {
             await signInWithGoogle();
             navigate(redirectTarget, { replace: true });
         } catch (authError) {
             setError(authError.message || "Unable to start Google sign-in.");
+            setPendingAction(null);
         }
     };
 
@@ -91,29 +97,31 @@ export default function LoginPage() {
                             type="checkbox"
                             checked={form.rememberMe}
                             onChange={handleRememberMeChange}
-                            className="h-4 w-4 rounded border-[var(--color-gray-300)] text-[var(--accent)] focus:ring-[var(--focus-ring)]"
+                            className="h-4 w-4 rounded border-[var(--color-gray-300)] text-[var(--brand)] focus:ring-[var(--focus-ring)]"
                         />
                         Remember for 30 days
                     </label>
                     <Link
                         to="/forgot-password"
-                        className="ml-auto text-sm font-semibold text-[var(--accent)]"
+                        className="ml-auto text-sm font-semibold text-[var(--brand)]"
                     >
                         Forgot password
                     </Link>
                 </div>
 
                 {error ? (
-                    <div className="rounded-[12px] border border-[var(--color-error-100)] bg-[var(--color-error-50)] px-4 py-3 text-sm text-[var(--color-error-700)]">
-                        {error}
-                    </div>
+                    <Alert variant="destructive">
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>
                 ) : null}
 
                 <div className="flex flex-col gap-4">
                     <Button
                         type="submit"
-                        className="min-h-11 w-full rounded-[10px] shadow-[var(--shadow-sm)]"
-                        disabled={isLoading}
+                        className="w-full"
+                        loading={isLoading && pendingAction === "password"}
+                        loadingText="Signing in..."
+                        disabled={isLoading && pendingAction !== "password"}
                     >
                         Sign in
                     </Button>
@@ -121,7 +129,9 @@ export default function LoginPage() {
                     <GoogleButton
                         type="button"
                         onClick={handleGoogleSignIn}
-                        disabled={isLoading}
+                        loading={isLoading && pendingAction === "google"}
+                        loadingText="Opening Google..."
+                        disabled={isLoading && pendingAction !== "google"}
                     >
                         Sign in with Google
                     </GoogleButton>
@@ -134,7 +144,7 @@ export default function LoginPage() {
                 </span>
                 <Link
                     to="/signup"
-                    className="text-sm font-semibold text-[var(--accent)]"
+                    className="text-sm font-semibold text-[var(--brand)]"
                 >
                     Sign up
                 </Link>

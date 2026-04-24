@@ -20,6 +20,7 @@ export function ChatbotProvider({ children }) {
     const [isOpen, setIsOpen] = useState(false);
     const [isSending, setIsSending] = useState(false);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+    const [isLoadingConversations, setIsLoadingConversations] = useState(true);
     const [error, setError] = useState("");
 
     useEffect(() => {
@@ -33,6 +34,10 @@ export function ChatbotProvider({ children }) {
                 }
             } catch (err) {
                 console.error("Failed to load chat conversations", err);
+            } finally {
+                if (!cancelled) {
+                    setIsLoadingConversations(false);
+                }
             }
         })();
 
@@ -154,6 +159,7 @@ export function ChatbotProvider({ children }) {
         isOpen,
         isSending,
         isLoadingHistory,
+        isLoadingConversations,
         setDraft,
         setIsOpen,
         openChat: () => setIsOpen(true),
@@ -169,6 +175,7 @@ export function ChatbotProvider({ children }) {
         draft,
         error,
         isLoadingHistory,
+        isLoadingConversations,
         isOpen,
         isSending,
         messages,

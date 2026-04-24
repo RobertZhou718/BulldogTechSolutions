@@ -45,7 +45,7 @@ export default function NewsCard({ overview, loading }) {
 
     return (
         <Card className="h-full">
-            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                 News
             </p>
             <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
@@ -70,7 +70,7 @@ export default function NewsCard({ overview, loading }) {
                             className="block rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-4 transition hover:border-[#b2ddff] hover:bg-white"
                         >
                             <div className="flex items-start gap-3">
-                                <span className="inline-flex rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-xs font-medium text-[var(--accent)]">
+                                <span className="inline-flex rounded-full bg-[var(--brand-soft)] px-2.5 py-1 text-xs font-medium text-[var(--brand)]">
                                     {item.symbol}
                                 </span>
                                 <div className="min-w-0">

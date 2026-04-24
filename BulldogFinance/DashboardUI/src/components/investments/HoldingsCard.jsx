@@ -1,6 +1,13 @@
 import React, { useMemo, useState } from "react";
-import Button from "@/components/ui/Button.jsx";
+import { Button } from "@/components/ui/button";
 import Card from "@/components/ui/Card.jsx";
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { Field, Input } from "@/components/ui/Field.jsx";
 import Spinner from "@/components/ui/Spinner.jsx";
 
@@ -55,7 +62,7 @@ export default function HoldingsCard({
             <Card className="h-full">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div>
-                        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                             Portfolio
                         </p>
                         <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
@@ -151,47 +158,56 @@ export default function HoldingsCard({
                 )}
             </Card>
 
-            {open ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#101828]/45 p-4">
-                    <Card className="w-full max-w-md">
-                        <h3 className="text-xl font-semibold text-[var(--text-main)]">Add investment</h3>
-                        <div className="mt-5 space-y-4">
-                            <Field label="Symbol">
-                                <Input
-                                    autoFocus
-                                    value={form.symbol}
-                                    onChange={handleChange("symbol")}
-                                />
-                            </Field>
-                            <Field label="Quantity">
-                                <Input
-                                    type="number"
-                                    value={form.quantity}
-                                    onChange={handleChange("quantity")}
-                                />
-                            </Field>
-                            <Field label="Avg cost">
-                                <Input
-                                    type="number"
-                                    value={form.avgCost}
-                                    onChange={handleChange("avgCost")}
-                                />
-                            </Field>
-                            <Field label="Currency">
-                                <Input value={form.currency} onChange={handleChange("currency")} />
-                            </Field>
-                        </div>
-                        <div className="mt-6 flex justify-end gap-3">
-                            <Button variant="secondary" onClick={() => setOpen(false)} disabled={saving}>
-                                Cancel
-                            </Button>
-                            <Button onClick={handleSubmit} disabled={saving}>
-                                {saving ? "Saving..." : "Save"}
-                            </Button>
-                        </div>
-                    </Card>
-                </div>
-            ) : null}
+            <Dialog
+                open={open}
+                onOpenChange={(next) => {
+                    if (!saving) setOpen(next);
+                }}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Add investment</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <Field label="Symbol">
+                            <Input
+                                autoFocus
+                                value={form.symbol}
+                                onChange={handleChange("symbol")}
+                            />
+                        </Field>
+                        <Field label="Quantity">
+                            <Input
+                                type="number"
+                                value={form.quantity}
+                                onChange={handleChange("quantity")}
+                            />
+                        </Field>
+                        <Field label="Avg cost">
+                            <Input
+                                type="number"
+                                value={form.avgCost}
+                                onChange={handleChange("avgCost")}
+                            />
+                        </Field>
+                        <Field label="Currency">
+                            <Input value={form.currency} onChange={handleChange("currency")} />
+                        </Field>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="secondary" onClick={() => setOpen(false)} disabled={saving}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleSubmit}
+                            loading={saving}
+                            loadingText="Saving..."
+                        >
+                            Save
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import Button from "@/components/ui/Button.jsx";
+import { Button } from "@/components/ui/button";
 import Card from "@/components/ui/Card.jsx";
 
 export default function NotFoundPage() {
@@ -9,7 +9,7 @@ export default function NotFoundPage() {
     return (
         <div className="flex min-h-[60vh] items-center justify-center">
             <Card className="max-w-lg text-center">
-                <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                     Error
                 </p>
                 <h1 className="mt-3 text-5xl font-semibold tracking-[-0.05em] text-[var(--text-main)]">

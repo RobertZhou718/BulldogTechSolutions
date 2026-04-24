@@ -4,7 +4,8 @@ import { useAuth } from "@/auth/core/authContext.js";
 import AuthLayout from "@/components/auth/AuthLayout.jsx";
 import EmailField from "@/components/auth/EmailField.jsx";
 import PasswordField from "@/components/auth/PasswordField.jsx";
-import Button from "@/components/ui/Button.jsx";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/Field.jsx";
 
 export default function ForgotPasswordPage() {
@@ -16,6 +17,7 @@ export default function ForgotPasswordPage() {
         confirmPassword: "",
     });
     const [error, setError] = useState("");
+    const [pendingAction, setPendingAction] = useState(null);
     const [flowState, setFlowState] = useState(null);
     const [step, setStep] = useState("start");
     const [codeLength, setCodeLength] = useState(6);
@@ -44,74 +46,59 @@ export default function ForgotPasswordPage() {
         setCodeLength(result.codeLength || 6);
     };
 
-    const handleStart = async (event) => {
-        event.preventDefault();
+    const runStep = async (action, fn, fallbackMessage) => {
         setError("");
+        setPendingAction(action);
 
         try {
-            const result = await resetPassword({
-                action: "start",
-                email: form.email,
-            });
-
+            const result = await fn();
             applyResult(result);
         } catch (authError) {
-            setError(authError.message || "Unable to start the password reset flow.");
+            setError(authError.message || fallbackMessage);
+        } finally {
+            setPendingAction(null);
         }
+    };
+
+    const handleStart = async (event) => {
+        event.preventDefault();
+        await runStep(
+            "start",
+            () => resetPassword({ action: "start", email: form.email }),
+            "Unable to start the password reset flow."
+        );
     };
 
     const handleCodeSubmit = async (event) => {
         event.preventDefault();
-        setError("");
-
-        try {
-            const result = await resetPassword({
-                action: "verify_code",
-                code: form.code,
-                flowState,
-            });
-
-            applyResult(result);
-        } catch (authError) {
-            setError(authError.message || "The verification code was rejected.");
-        }
+        await runStep(
+            "verify_code",
+            () => resetPassword({ action: "verify_code", code: form.code, flowState }),
+            "The verification code was rejected."
+        );
     };
 
     const handlePasswordSubmit = async (event) => {
         event.preventDefault();
-        setError("");
 
         if (form.password !== form.confirmPassword) {
             setError("Passwords do not match.");
             return;
         }
 
-        try {
-            const result = await resetPassword({
-                action: "set_password",
-                password: form.password,
-                flowState,
-            });
-
-            applyResult(result);
-        } catch (authError) {
-            setError(authError.message || "Unable to save the new password.");
-        }
+        await runStep(
+            "set_password",
+            () => resetPassword({ action: "set_password", password: form.password, flowState }),
+            "Unable to save the new password."
+        );
     };
 
     const handleResendCode = async () => {
-        setError("");
-
-        try {
-            const result = await resetPassword({
-                action: "resend_code",
-                flowState,
-            });
-
-            applyResult(result);
-        } catch (authError) {
-            setError(authError.message || "Unable to resend the reset code.");
-        }
+        await runStep(
+            "resend_code",
+            () => resetPassword({ action: "resend_code", flowState }),
+            "Unable to resend the reset code."
+        );
     };
 
     const renderStep = () => {
@@ -137,7 +124,7 @@ export default function ForgotPasswordPage() {
                         </span>
                         <button
                             type="button"
-                            className="font-semibold text-[var(--accent)]"
+                            className="font-semibold text-[var(--brand)]"
                             onClick={handleResendCode}
                         >
                             Resend code
@@ -146,8 +133,10 @@ export default function ForgotPasswordPage() {
 
                     <Button
                         type="submit"
-                        className="min-h-11 w-full rounded-[10px] shadow-none"
-                        disabled={isLoading}
+                        className="w-full"
+                        loading={isLoading && pendingAction === "verify_code"}
+                        loadingText="Verifying..."
+                        disabled={isLoading && pendingAction !== "verify_code"}
                     >
                         Verify code
                     </Button>
@@ -176,8 +165,10 @@ export default function ForgotPasswordPage() {
 
                     <Button
                         type="submit"
-                        className="min-h-11 w-full rounded-[10px] shadow-none"
-                        disabled={isLoading}
+                        className="w-full"
+                        loading={isLoading && pendingAction === "set_password"}
+                        loadingText="Saving..."
+                        disabled={isLoading && pendingAction !== "set_password"}
                     >
                         Reset password
                     </Button>
@@ -200,7 +191,7 @@ export default function ForgotPasswordPage() {
 
                     <Link
                         to="/login"
-                        className="inline-flex min-h-11 items-center justify-center rounded-[10px] bg-[var(--accent)] px-4 text-sm font-semibold text-white"
+                        className="inline-flex min-h-11 items-center justify-center rounded-[10px] bg-[var(--brand)] px-4 text-sm font-semibold text-white"
                     >
                         Return to log in
                     </Link>
@@ -217,8 +208,10 @@ export default function ForgotPasswordPage() {
 
                 <Button
                     type="submit"
-                    className="min-h-11 w-full rounded-[10px] shadow-none"
-                    disabled={isLoading}
+                    className="w-full"
+                    loading={isLoading && pendingAction === "start"}
+                    loadingText="Sending code..."
+                    disabled={isLoading && pendingAction !== "start"}
                 >
                     Send reset code
                 </Button>
@@ -233,7 +226,7 @@ export default function ForgotPasswordPage() {
         >
             <div className="space-y-6">
                 <div className="flex items-center justify-between text-sm">
-                    <Link to="/login" className="font-semibold text-[var(--accent)]">
+                    <Link to="/login" className="font-semibold text-[var(--brand)]">
                         Back to log in
                     </Link>
                     <Link to="/signup" className="text-[var(--text-soft)]">
@@ -242,9 +235,9 @@ export default function ForgotPasswordPage() {
                 </div>
 
                 {error ? (
-                    <div className="rounded-[12px] border border-[#fecdca] bg-[#fef3f2] px-4 py-3 text-sm text-[#b42318]">
-                        {error}
-                    </div>
+                    <Alert variant="destructive">
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>
                 ) : null}
 
                 {renderStep()}

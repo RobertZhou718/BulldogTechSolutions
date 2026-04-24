@@ -5,7 +5,8 @@ import AuthLayout from "@/components/auth/AuthLayout.jsx";
 import EmailField from "@/components/auth/EmailField.jsx";
 import GoogleButton from "@/components/auth/GoogleButton.jsx";
 import PasswordField from "@/components/auth/PasswordField.jsx";
-import Button from "@/components/ui/Button.jsx";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/Field.jsx";
 
 function formatAttributeLabel(name) {
@@ -42,6 +43,7 @@ export default function SignupPage() {
         code: "",
     });
     const [error, setError] = useState("");
+    const [pendingAction, setPendingAction] = useState(null);
     const [step, setStep] = useState("details");
     const [flowState, setFlowState] = useState(null);
     const [codeLength, setCodeLength] = useState(6);
@@ -93,109 +95,96 @@ export default function SignupPage() {
         }
     };
 
+    const runStep = async (action, fn, fallbackMessage) => {
+        setError("");
+        setPendingAction(action);
+
+        try {
+            const result = await fn();
+            applyStepResult(result);
+        } catch (authError) {
+            setError(authError.message || fallbackMessage);
+        } finally {
+            setPendingAction(null);
+        }
+    };
+
     const handleSignupStart = async (event) => {
         event.preventDefault();
-        setError("");
 
         if (form.password !== form.confirmPassword) {
             setError("Passwords do not match.");
             return;
         }
 
-        try {
-            const result = await signUp({
+        await runStep(
+            "start",
+            () => signUp({
                 action: "start",
                 email: form.email,
                 password: form.password,
                 givenName: form.givenName,
                 surname: form.surname,
-            });
-
-            applyStepResult(result);
-        } catch (authError) {
-            setError(authError.message || "Unable to create the account.");
-        }
+            }),
+            "Unable to create the account."
+        );
     };
 
     const handleCodeSubmit = async (event) => {
         event.preventDefault();
-        setError("");
-
-        try {
-            const result = await signUp({
-                action: "verify_code",
-                code: form.code,
-                flowState,
-            });
-
-            applyStepResult(result);
-        } catch (authError) {
-            setError(authError.message || "The verification code was rejected.");
-        }
+        await runStep(
+            "verify_code",
+            () => signUp({ action: "verify_code", code: form.code, flowState }),
+            "The verification code was rejected."
+        );
     };
 
     const handlePasswordSubmit = async (event) => {
         event.preventDefault();
-        setError("");
 
         if (form.password !== form.confirmPassword) {
             setError("Passwords do not match.");
             return;
         }
 
-        try {
-            const result = await signUp({
-                action: "set_password",
-                password: form.password,
-                flowState,
-            });
-
-            applyStepResult(result);
-        } catch (authError) {
-            setError(authError.message || "Unable to set the account password.");
-        }
+        await runStep(
+            "set_password",
+            () => signUp({ action: "set_password", password: form.password, flowState }),
+            "Unable to set the account password."
+        );
     };
 
     const handleAttributeSubmit = async (event) => {
         event.preventDefault();
-        setError("");
-
-        try {
-            const result = await signUp({
+        await runStep(
+            "submit_attributes",
+            () => signUp({
                 action: "submit_attributes",
                 attributes: attributeValues,
                 flowState,
-            });
-
-            applyStepResult(result);
-        } catch (authError) {
-            setError(authError.message || "Unable to save the account profile.");
-        }
+            }),
+            "Unable to save the account profile."
+        );
     };
 
     const handleResendCode = async () => {
-        setError("");
-
-        try {
-            const result = await signUp({
-                action: "resend_code",
-                flowState,
-            });
-
-            applyStepResult(result);
-        } catch (authError) {
-            setError(authError.message || "Unable to resend the verification code.");
-        }
+        await runStep(
+            "resend_code",
+            () => signUp({ action: "resend_code", flowState }),
+            "Unable to resend the verification code."
+        );
     };
 
     const handleGoogleSignUp = async () => {
         setError("");
+        setPendingAction("google");
 
         try {
             await signInWithGoogle();
             navigate("/", { replace: true });
         } catch (authError) {
             setError(authError.message || "Unable to start Google sign-up.");
+            setPendingAction(null);
         }
     };
 
@@ -222,7 +211,7 @@ export default function SignupPage() {
                         </span>
                         <button
                             type="button"
-                            className="font-semibold text-[var(--accent)]"
+                            className="font-semibold text-[var(--brand)]"
                             onClick={handleResendCode}
                         >
                             Resend code
@@ -231,8 +220,10 @@ export default function SignupPage() {
 
                     <Button
                         type="submit"
-                        className="min-h-11 w-full rounded-[10px] shadow-none"
-                        disabled={isLoading}
+                        className="w-full"
+                        loading={isLoading && pendingAction === "verify_code"}
+                        loadingText="Verifying..."
+                        disabled={isLoading && pendingAction !== "verify_code"}
                     >
                         Verify email
                     </Button>
@@ -261,8 +252,10 @@ export default function SignupPage() {
 
                     <Button
                         type="submit"
-                        className="min-h-11 w-full rounded-[10px] shadow-none"
-                        disabled={isLoading}
+                        className="w-full"
+                        loading={isLoading && pendingAction === "set_password"}
+                        loadingText="Saving..."
+                        disabled={isLoading && pendingAction !== "set_password"}
                     >
                         Save password
                     </Button>
@@ -290,8 +283,10 @@ export default function SignupPage() {
 
                     <Button
                         type="submit"
-                        className="min-h-11 w-full rounded-[10px] shadow-none"
-                        disabled={isLoading}
+                        className="w-full"
+                        loading={isLoading && pendingAction === "submit_attributes"}
+                        loadingText="Saving..."
+                        disabled={isLoading && pendingAction !== "submit_attributes"}
                     >
                         Complete profile
                     </Button>
@@ -346,8 +341,10 @@ export default function SignupPage() {
                 <div className="space-y-3">
                     <Button
                         type="submit"
-                        className="min-h-11 w-full rounded-[10px] shadow-none"
-                        disabled={isLoading}
+                        className="w-full"
+                        loading={isLoading && pendingAction === "start"}
+                        loadingText="Creating account..."
+                        disabled={isLoading && pendingAction !== "start"}
                     >
                         Create account
                     </Button>
@@ -355,7 +352,9 @@ export default function SignupPage() {
                     <GoogleButton
                         type="button"
                         onClick={handleGoogleSignUp}
-                        disabled={isLoading}
+                        loading={isLoading && pendingAction === "google"}
+                        loadingText="Opening Google..."
+                        disabled={isLoading && pendingAction !== "google"}
                     >
                         Sign up with Google
                     </GoogleButton>
@@ -371,9 +370,9 @@ export default function SignupPage() {
         >
             <div className="flex flex-col gap-6">
                 {error ? (
-                    <div className="rounded-[12px] border border-[#fecdca] bg-[#fef3f2] px-4 py-3 text-sm text-[#b42318]">
-                        {error}
-                    </div>
+                    <Alert variant="destructive">
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>
                 ) : null}
 
                 {renderStep()}
@@ -382,7 +381,7 @@ export default function SignupPage() {
                     <span className="text-sm text-[var(--color-gray-500)]">
                         Already have an account?
                     </span>
-                    <Link to="/login" className="text-sm font-semibold text-[var(--accent)]">
+                    <Link to="/login" className="text-sm font-semibold text-[var(--brand)]">
                         Log in instead
                     </Link>
                 </div>

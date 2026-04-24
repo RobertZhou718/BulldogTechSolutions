@@ -6,10 +6,18 @@ import LatestReportCard from "@/components/reports/LatestReportCard.jsx";
 import EmptyState from "@/components/ui/EmptyState.jsx";
 import MetricCard from "@/components/ui/MetricCard.jsx";
 import PageHeader from "@/components/ui/PageHeader.jsx";
-import Spinner from "@/components/ui/Spinner.jsx";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 import { formatCurrencyBreakdown } from "@/lib/utils";
 import { useApiClient } from "@/services/apiClient";
-import { Field, Select } from "@/components/ui/Field.jsx";
+import { Field } from "@/components/ui/Field.jsx";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 export default function TransactionsPage() {
     const { getAccounts, getTransactions, createTransaction } = useApiClient();
@@ -20,7 +28,6 @@ export default function TransactionsPage() {
     const [transactions, setTransactions] = useState([]);
     const [loadingAccounts, setLoadingAccounts] = useState(true);
     const [loadingTx, setLoadingTx] = useState(false);
-    const [error, setError] = useState("");
     const [filters, setFilters] = useState({ type: "ALL", from: "", to: "", category: "" });
     const [sortField, setSortField] = useState("date");
     const [sortDirection, setSortDirection] = useState("desc");
@@ -47,14 +54,13 @@ export default function TransactionsPage() {
         }
 
         setLoadingTx(true);
-        setError("");
 
         try {
             const data = await getTransactions(buildTransactionQueryParams());
             setTransactions(data || []);
         } catch (e) {
             console.error(e);
-            setError(e.message || "Failed to load transactions.");
+            toast.error(e.message || "Failed to load transactions.");
         } finally {
             setLoadingTx(false);
         }
@@ -71,7 +77,7 @@ export default function TransactionsPage() {
                 }
             } catch (e) {
                 console.error(e);
-                setError(e.message || "Failed to load accounts.");
+                toast.error(e.message || "Failed to load accounts.");
             } finally {
                 setLoadingAccounts(false);
             }
@@ -169,17 +175,33 @@ export default function TransactionsPage() {
     const handleCreateTransaction = async (txInput) => {
         try {
             await createTransaction(txInput);
+            toast.success("Transaction added.");
             await loadTransactions();
         } catch (e) {
             console.error(e);
-            setError(e.message || "Failed to create transaction.");
+            toast.error(e.message || "Failed to create transaction.");
         }
     };
 
     if (loadingAccounts) {
         return (
-            <div className="mt-12 flex justify-center">
-                <Spinner className="h-8 w-8" />
+            <div className="space-y-8">
+                <div className="space-y-4">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-9 w-72" />
+                    <Skeleton className="h-4 w-[28rem] max-w-full" />
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
+                        <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
+                        <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
+                        <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
+                    </div>
+                </div>
+                <div className="grid gap-6">
+                    <Skeleton className="h-40 rounded-[var(--radius-2xl)]" />
+                    <Skeleton className="h-16 rounded-[var(--radius-2xl)]" />
+                    <Skeleton className="h-80 rounded-[var(--radius-2xl)]" />
+                </div>
             </div>
         );
     }
@@ -203,15 +225,20 @@ export default function TransactionsPage() {
                     <div className="min-w-[240px]">
                         <Field label="Viewing">
                             <Select
-                                value={historyAccountId || ""}
-                                onChange={(e) => setHistoryAccountId(e.target.value)}
+                                value={historyAccountId || "ALL"}
+                                onValueChange={setHistoryAccountId}
                             >
-                                <option value="ALL">All accounts</option>
-                                {accounts.map((acc) => (
-                                    <option key={acc.accountId} value={acc.accountId}>
-                                        {acc.name}
-                                    </option>
-                                ))}
+                                <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ALL">All accounts</SelectItem>
+                                    {accounts.map((acc) => (
+                                        <SelectItem key={acc.accountId} value={acc.accountId}>
+                                            {acc.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
                             </Select>
                         </Field>
                     </div>
@@ -230,8 +257,6 @@ export default function TransactionsPage() {
                 </div>
             </PageHeader>
 
-            {error ? <p className="text-sm font-medium text-[var(--color-error-500)]">{error}</p> : null}
-
             <div className="grid gap-6">
                 <LatestReportCard />
 
@@ -249,8 +274,12 @@ export default function TransactionsPage() {
                 />
 
                 {loadingTx ? (
-                    <div className="flex justify-center py-8">
-                        <Spinner className="h-7 w-7" />
+                    <div className="space-y-2">
+                        <Skeleton className="h-10 rounded-[var(--radius-lg)]" />
+                        <Skeleton className="h-10 rounded-[var(--radius-lg)]" />
+                        <Skeleton className="h-10 rounded-[var(--radius-lg)]" />
+                        <Skeleton className="h-10 rounded-[var(--radius-lg)]" />
+                        <Skeleton className="h-10 rounded-[var(--radius-lg)]" />
                     </div>
                 ) : (
                     <TransactionTable

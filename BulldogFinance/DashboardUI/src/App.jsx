@@ -3,6 +3,9 @@ import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
 import PublicOnlyRoute from "@/auth/core/PublicOnlyRoute.jsx";
 import RequireAuth from "@/auth/core/RequireAuth.jsx";
 import Spinner from "@/components/ui/Spinner.jsx";
+import TopProgressBar from "@/components/ui/TopProgressBar.jsx";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 
 const MainLayout = lazy(() => import("@/layout/MainLayout.jsx"));
 const AssistantPage = lazy(() => import("@/pages/Assistant.jsx"));
@@ -27,7 +30,10 @@ function ProtectedShell() {
 export default function App() {
     return (
         <BrowserRouter>
-            <Suspense
+            <TooltipProvider delayDuration={200}>
+                <TopProgressBar />
+                <Toaster position="top-right" richColors closeButton />
+                <Suspense
                 fallback={(
                     <div className="flex min-h-screen items-center justify-center">
                         <Spinner className="h-8 w-8" />
@@ -53,7 +59,8 @@ export default function App() {
                         </Route>
                     </Route>
                 </Routes>
-            </Suspense>
+                </Suspense>
+            </TooltipProvider>
         </BrowserRouter>
     );
 }

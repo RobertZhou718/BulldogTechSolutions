@@ -10,6 +10,7 @@ import {
     buildSessionFromAccountData,
     getCurrentAccountData,
 } from "@/auth/native/nativeClient.js";
+import { begin as beginRequest, end as endRequest } from "@/services/progressBus.js";
 
 function isJwtExpiringSoon(token, skewMs = 0) {
     try {
@@ -65,61 +66,67 @@ export function useApiClient() {
 
     // Centralized request helper that attaches the access token and normalizes API errors.
     const request = useCallback(async (path, options = {}) => {
-        const token = await getAccessToken();
         const { responseType = "json", allowNotFound = false, ...fetchOptions } = options;
 
-        const headers = {
-            "Content-Type": "application/json",
-            ...(fetchOptions.headers || {}),
-            Authorization: `Bearer ${token}`,
-        };
+        beginRequest();
+        try {
+            const token = await getAccessToken();
 
-        const response = await fetch(`${apiConfig.baseUrl}${path}`, {
-            ...fetchOptions,
-            headers,
-        });
+            const headers = {
+                "Content-Type": "application/json",
+                ...(fetchOptions.headers || {}),
+                Authorization: `Bearer ${token}`,
+            };
 
-        if (allowNotFound && response.status === 404) {
-            return null;
-        }
+            const response = await fetch(`${apiConfig.baseUrl}${path}`, {
+                ...fetchOptions,
+                headers,
+            });
 
-        if (response.status === 401) {
-            signOut();
-            throw new Error("Session expired. Please sign in again.");
-        }
-
-        if (!response.ok) {
-            let errorMessage = "";
-            const rawText = await response.text().catch(() => "");
-
-            if (rawText) {
-                try {
-                    const payload = JSON.parse(rawText);
-                    const nestedError =
-                        typeof payload?.error === "object" && payload.error !== null
-                            ? payload.error.message || payload.error.code
-                            : payload?.error;
-                    errorMessage = payload?.message || nestedError || rawText;
-                } catch {
-                    errorMessage = rawText;
-                }
+            if (allowNotFound && response.status === 404) {
+                return null;
             }
 
-            console.error("API error", response.status, errorMessage);
-            throw new Error(
-                errorMessage || `API ${response.status} ${response.statusText}`
-            );
-        }
+            if (response.status === 401) {
+                signOut();
+                throw new Error("Session expired. Please sign in again.");
+            }
 
-        if (response.status === 204) {
-            return null;
-        }
+            if (!response.ok) {
+                let errorMessage = "";
+                const rawText = await response.text().catch(() => "");
 
-        if (responseType === "text") {
-            return response.text();
-        }
+                if (rawText) {
+                    try {
+                        const payload = JSON.parse(rawText);
+                        const nestedError =
+                            typeof payload?.error === "object" && payload.error !== null
+                                ? payload.error.message || payload.error.code
+                                : payload?.error;
+                        errorMessage = payload?.message || nestedError || rawText;
+                    } catch {
+                        errorMessage = rawText;
+                    }
+                }
 
-        return response.json();
+                console.error("API error", response.status, errorMessage);
+                throw new Error(
+                    errorMessage || `API ${response.status} ${response.statusText}`
+                );
+            }
+
+            if (response.status === 204) {
+                return null;
+            }
+
+            if (responseType === "text") {
+                return response.text();
+            }
+
+            return response.json();
+        } finally {
+            endRequest();
+        }
     }, [getAccessToken, signOut]);
 
     // User and account APIs.
