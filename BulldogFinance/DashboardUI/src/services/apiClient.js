@@ -4,12 +4,14 @@ import { useAuth } from "@/auth/core/authContext.js";
 import {
     getStoredAccessToken,
     getStoredAuthSession,
+    hasRefreshableStoredSession,
     saveStoredAuthSession,
 } from "@/auth/core/tokenStore.js";
 import {
     buildSessionFromAccountData,
     getCurrentAccountData,
 } from "@/auth/native/nativeClient.js";
+import { refreshStoredSessionViaProxy } from "@/auth/native/proxyAuthService.js";
 import { begin as beginRequest, end as endRequest } from "@/services/progressBus.js";
 
 function isJwtExpiringSoon(token, skewMs = 0) {
@@ -38,6 +40,19 @@ export function useApiClient() {
             return storedToken;
         }
 
+        const storedSession = getStoredAuthSession();
+
+        if (hasRefreshableStoredSession(storedSession)) {
+            try {
+                const refreshedSession = await refreshStoredSessionViaProxy();
+                if (refreshedSession?.accessToken) {
+                    return refreshedSession.accessToken;
+                }
+            } catch (refreshError) {
+                console.error("Stored refresh token flow failed", refreshError);
+            }
+        }
+
         if (apiConfig.scopes.length > 0) {
             const accountData = await getCurrentAccountData().catch(() => null);
 
@@ -45,7 +60,7 @@ export function useApiClient() {
                 try {
                     const refreshedSession = await buildSessionFromAccountData(
                         accountData,
-                        getStoredAuthSession()?.authMethod || "native"
+                        storedSession?.authMethod || "native"
                     );
                     saveStoredAuthSession(refreshedSession);
                     return refreshedSession.accessToken;

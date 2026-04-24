@@ -4,6 +4,7 @@ import {
     bootstrapStoredAuthSession,
     clearStoredAuthSession,
     getRememberMe,
+    hasRefreshableStoredSession,
     saveStoredAuthSession,
     setRememberMe,
 } from "./tokenStore.js";
@@ -11,6 +12,7 @@ import {
     buildSessionFromAccountData,
     getCurrentAccountData,
 } from "@/auth/native/nativeClient.js";
+import { refreshStoredSessionViaProxy } from "@/auth/native/proxyAuthService.js";
 import { signInWithPassword as signInWithPasswordService } from "@/auth/native/signInService.js";
 import {
     resendResetPasswordCode,
@@ -46,7 +48,8 @@ function isAccessTokenExpired(token) {
 // the UI flashes protected content before initialize() catches up.
 const bootstrappedSession =
     rawBootstrappedSession?.accessToken &&
-    !isAccessTokenExpired(rawBootstrappedSession.accessToken)
+    (!isAccessTokenExpired(rawBootstrappedSession.accessToken) ||
+        hasRefreshableStoredSession(rawBootstrappedSession))
         ? rawBootstrappedSession
         : null;
 
@@ -119,10 +122,24 @@ export default function AuthProvider({ children }) {
                 }
 
                 if (!accountData) {
-                    // MSAL Native Auth doesn't restore its in-memory account state on page
-                    // refresh. If we have a non-expired stored token, keep the user
-                    // authenticated — the API will reject it with 401 if it's actually invalid.
-                    if (bootstrappedSession?.accessToken) {
+                    if (hasRefreshableStoredSession(bootstrappedSession)) {
+                        try {
+                            const refreshedSession = await refreshStoredSessionViaProxy();
+                            if (isActive && refreshedSession) {
+                                applySession(refreshedSession);
+                            } else if (isActive) {
+                                clearSession();
+                            }
+                        } catch (refreshError) {
+                            console.error("Stored session refresh failed", refreshError);
+                            if (isActive) {
+                                clearSession();
+                            }
+                        }
+                    } else if (
+                        bootstrappedSession?.accessToken &&
+                        !isAccessTokenExpired(bootstrappedSession.accessToken)
+                    ) {
                         if (isActive) {
                             setAuthState((current) => ({ ...current, isLoading: false }));
                         }
@@ -189,7 +206,7 @@ export default function AuthProvider({ children }) {
         setBusy(true);
 
         try {
-            const session = await signInWithPasswordService({ email, password });
+            const session = await signInWithPasswordService({ email, password, rememberMe });
             return applySession(session);
         } catch (error) {
             // Revert rememberMe so a failed attempt doesn't mutate the user's preference.
