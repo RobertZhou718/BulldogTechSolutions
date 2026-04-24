@@ -7,6 +7,7 @@
 .env.*
 !.env.example
 !.env.*.example
+!BulldogFinance/DashboardUI/.env.production
 
 # Visual Studio / Azure publish artifacts
 *.pubxml
