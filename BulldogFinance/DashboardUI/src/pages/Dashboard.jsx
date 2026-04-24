@@ -1,13 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ConnectedAccountsCard from "@/components/accounts/ConnectedAccountsCard.jsx";
 import { useAuth } from "@/auth/core/authContext.js";
-import AccountManagementCard from "@/components/accounts/AccountManagementCard.jsx";
 import AccountsPieChart from "@/components/dashboard/AccountsPieChart.jsx";
 import CashFlowChart from "@/components/dashboard/CashFlowChart.jsx";
 import DailyCashFlowCalendar from "@/components/dashboard/DailyCashFlowCalendar.jsx";
-import GreetingCard from "@/components/dashboard/GreetingCard.jsx";
 import InvestmentsChart from "@/components/dashboard/InvestmentsChart.jsx";
-import MetricCard from "@/components/ui/MetricCard.jsx";
 import PageHeader from "@/components/ui/PageHeader.jsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrencyBreakdown } from "@/lib/utils";
@@ -191,27 +188,7 @@ export default function DashboardPage() {
         return Array.from(totals, ([currency, amount]) => ({ currency, amount }));
     }, [accounts, defaultCurrency]);
     const hasMixedAccountCurrencies = accountCurrencyTotals.length > 1;
-    const netWorthLabel = useMemo(
-        () => formatCurrencyBreakdown(accountCurrencyTotals, 0),
-        [accountCurrencyTotals]
-    );
     const hasMixedCashFlowCurrencies = cashFlowData.currencies.length > 1;
-    const latestCashFlowEntries = useMemo(
-        () =>
-            cashFlowData.currencies.map(({ currency, months }) => {
-                const latest = months[months.length - 1];
-                return {
-                    currency,
-                    amount: (latest?.income ?? 0) - (latest?.expense ?? 0),
-                };
-            }),
-        [cashFlowData.currencies]
-    );
-    const latestCashFlowLabel = useMemo(
-        () => formatCurrencyBreakdown(latestCashFlowEntries, 0),
-        [latestCashFlowEntries]
-    );
-    const latestCashFlowPrimaryDelta = latestCashFlowEntries[0]?.amount ?? 0;
     const cashFlowChartSeries = useMemo(
         () =>
             cashFlowData.currencies.flatMap(({ currency, months }, index) => {
@@ -255,11 +232,6 @@ export default function DashboardPage() {
                     <Skeleton className="h-4 w-24" />
                     <Skeleton className="h-9 w-80" />
                     <Skeleton className="h-4 w-[28rem] max-w-full" />
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        <Skeleton className="h-28 rounded-[var(--radius-2xl)]" />
-                        <Skeleton className="h-28 rounded-[var(--radius-2xl)]" />
-                        <Skeleton className="h-28 rounded-[var(--radius-2xl)]" />
-                    </div>
                 </div>
                 <div className="grid gap-6 xl:grid-cols-12">
                     <Skeleton className="h-64 rounded-[var(--radius-2xl)] xl:col-span-12" />
@@ -286,40 +258,11 @@ export default function DashboardPage() {
                 eyebrow="Overview"
                 title={`Welcome back, ${displayName}`}
                 description="Track balances, allocation, and short-term performance from one clean workspace."
-            >
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    <MetricCard
-                        label="Net worth"
-                        value={netWorthLabel}
-                        hint={hasMixedAccountCurrencies ? "Grouped by currency; no FX conversion applied" : "All linked accounts"}
-                    />
-                    <MetricCard
-                        label="Linked accounts"
-                        value={`${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`}
-                    />
-                    <MetricCard
-                        label="Latest cash flow"
-                        value={latestCashFlowLabel}
-                        tone={hasMixedCashFlowCurrencies ? "default" : (latestCashFlowPrimaryDelta >= 0 ? "positive" : "negative")}
-                        hint={hasMixedCashFlowCurrencies ? "Grouped by currency; no FX conversion applied" : undefined}
-                    />
-                </div>
-            </PageHeader>
+            />
 
             <div className="grid gap-6 xl:grid-cols-12">
-                <AccountManagementCard
-                    accounts={accounts}
-                    defaultCurrency={defaultCurrency}
-                    onCreateManualAccount={handleCreateManualAccount}
-                    onPlaidConnected={handlePlaidConnected}
-                />
-                <ConnectedAccountsCard accounts={accounts} onDeleteAccount={handleDeleteAccount} />
                 <div className="xl:col-span-4">
-                    <GreetingCard
-                        isMultiCurrency={hasMixedAccountCurrencies}
-                        name={displayName}
-                        totalLabel={netWorthLabel}
-                    />
+                    <DailyCashFlowCalendar transactions={transactions} />
                 </div>
                 <div className="xl:col-span-8">
                     <AccountsPieChart
@@ -346,9 +289,13 @@ export default function DashboardPage() {
                         portfolioSeries={portfolioSeries}
                     />
                 </div>
-                <div className="xl:col-span-6">
-                    <DailyCashFlowCalendar transactions={transactions} />
-                </div>
+                <ConnectedAccountsCard
+                    accounts={accounts}
+                    defaultCurrency={defaultCurrency}
+                    onCreateManualAccount={handleCreateManualAccount}
+                    onPlaidConnected={handlePlaidConnected}
+                    onDeleteAccount={handleDeleteAccount}
+                />
             </div>
         </div>
     );

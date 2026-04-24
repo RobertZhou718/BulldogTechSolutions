@@ -1,7 +1,6 @@
 import React, { useMemo } from "react";
 import Card from "@/components/ui/Card.jsx";
 import { Calendar } from "@/components/ui/calendar";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 function formatDateKey(date) {
@@ -24,10 +23,33 @@ function formatAmount(amount) {
     return amount < 0 ? `-${body}` : body;
 }
 
+function buildSampleTransactions(referenceDate = new Date()) {
+    const year = referenceDate.getFullYear();
+    const month = referenceDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const makeIso = (day) =>
+        new Date(year, month, Math.min(day, daysInMonth), 12, 0, 0, 0).toISOString();
+
+    return [
+        { transactionId: "sample-income-1", type: "INCOME", amount: 3200, occurredAtUtc: makeIso(2) },
+        { transactionId: "sample-expense-1", type: "EXPENSE", amount: 48, occurredAtUtc: makeIso(4) },
+        { transactionId: "sample-expense-2", type: "EXPENSE", amount: 126, occurredAtUtc: makeIso(8) },
+        { transactionId: "sample-income-2", type: "INCOME", amount: 450, occurredAtUtc: makeIso(11) },
+        { transactionId: "sample-expense-3", type: "EXPENSE", amount: 980, occurredAtUtc: makeIso(15) },
+        { transactionId: "sample-expense-4", type: "EXPENSE", amount: 72, occurredAtUtc: makeIso(19) },
+        { transactionId: "sample-income-3", type: "INCOME", amount: 680, occurredAtUtc: makeIso(23) },
+        { transactionId: "sample-expense-5", type: "EXPENSE", amount: 210, occurredAtUtc: makeIso(27) },
+    ];
+}
+
 export default function DailyCashFlowCalendar({ transactions = [] }) {
+    const sampleTransactions = useMemo(() => buildSampleTransactions(), []);
+    const usingSampleData = import.meta.env.DEV && transactions.length === 0;
+    const displayTransactions = usingSampleData ? sampleTransactions : transactions;
+
     const cashFlowByDate = useMemo(() => {
         const map = new Map();
-        transactions.forEach((tx) => {
+        displayTransactions.forEach((tx) => {
             const occurredAt = tx.occurredAtUtc || tx.occurredAt || tx.createdAtUtc;
             if (!occurredAt) return;
 
@@ -41,9 +63,9 @@ export default function DailyCashFlowCalendar({ transactions = [] }) {
             map.set(key, (map.get(key) ?? 0) + signed);
         });
         return map;
-    }, [transactions]);
+    }, [displayTransactions]);
 
-    const DayButton = ({ day, modifiers, className, children: _children, ...props }) => {
+    const Day = ({ day, modifiers, className, ...props }) => {
         const key = formatDateKey(day.date);
         const hasData = cashFlowByDate.has(key);
         const amount = cashFlowByDate.get(key) ?? 0;
@@ -51,28 +73,29 @@ export default function DailyCashFlowCalendar({ transactions = [] }) {
         const isNegative = hasData && amount < 0;
 
         return (
-            <Button
-                variant="ghost"
-                size="icon"
+            <td
                 data-day={day.date.toLocaleDateString()}
                 className={cn(
-                    "flex aspect-square size-auto w-full min-w-(--cell-size) flex-col items-center justify-center gap-0.5 px-0 leading-none font-normal",
                     className
                 )}
                 {...props}
             >
-                <span className="text-sm">{day.date.getDate()}</span>
-                <span
-                    className={cn(
-                        "text-[10px] tabular-nums",
-                        isPositive && "text-[#12b76a]",
-                        isNegative && "text-[#d92d20]",
-                        !hasData && "text-[var(--text-muted)]"
-                    )}
-                >
-                    {hasData ? formatAmount(amount) : "-"}
-                </span>
-            </Button>
+                {modifiers.hidden ? null : (
+                    <div className="flex aspect-square w-full flex-col items-center justify-center gap-0.5 px-0 leading-none font-normal">
+                        <span className="text-sm">{day.date.getDate()}</span>
+                        <span
+                            className={cn(
+                                "text-[10px] tabular-nums",
+                                isPositive && "text-[#12b76a]",
+                                isNegative && "text-[#d92d20]",
+                                !hasData && "text-[var(--text-muted)]"
+                            )}
+                        >
+                            {hasData ? formatAmount(amount) : "-"}
+                        </span>
+                    </div>
+                )}
+            </td>
         );
     };
 
@@ -85,15 +108,15 @@ export default function DailyCashFlowCalendar({ transactions = [] }) {
                 <h2 className="text-xl font-semibold text-[var(--text-main)]">
                     Net by day
                 </h2>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">
-                    Income minus spending for each day. Green is positive, red is negative, and "-" means no activity.
+                <p className="mt-2 text-sm text-[var(--text-muted)] truncate">
+                    Net income by day{usingSampleData ? " (sample data)" : ""}.
                 </p>
             </div>
-            <div className="mt-4 flex justify-center">
+            <div className="mt-4 flex w-full justify-center">
                 <Calendar
-                    className="[--cell-size:--spacing(14)] w-full"
+                    className="[--cell-size:--spacing(10)] w-full p-0"
                     classNames={{ root: "w-full" }}
-                    components={{ DayButton }}
+                    components={{ Day }}
                 />
             </div>
         </Card>

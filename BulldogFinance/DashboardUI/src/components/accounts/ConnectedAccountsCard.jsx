@@ -1,5 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { Trash01 } from "@untitledui/icons";
+import { Plus, Trash01 } from "@untitledui/icons";
+import { cn } from "@/lib/utils";
+import ConnectBankButton from "@/components/plaid/ConnectBankButton.jsx";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import Card from "@/components/ui/Card.jsx";
 import {
@@ -10,10 +13,27 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { Field, Input } from "@/components/ui/Field.jsx";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatCurrency } from "@/lib/utils";
 
 const DEFAULT_VISIBLE_COUNT = 3;
+
+const ACCOUNT_TYPES = [
+    { value: "cash", label: "Cash" },
+    { value: "bank", label: "Bank account" },
+    { value: "credit", label: "Credit card" },
+    { value: "investment", label: "Investment" },
+];
+
+const CURRENCIES = ["CAD", "USD", "CNY", "EUR"];
 
 function getSourceLabel(account) {
     return account.externalSource === "Plaid" ? "Plaid" : "Manual";
@@ -32,10 +52,26 @@ function getTypeLabel(account) {
         .join(" / ");
 }
 
-export default function ConnectedAccountsCard({ accounts, onDeleteAccount }) {
+export default function ConnectedAccountsCard({
+    accounts,
+    defaultCurrency = "CAD",
+    onCreateManualAccount,
+    onPlaidConnected,
+    onDeleteAccount,
+}) {
     const [expanded, setExpanded] = useState(false);
     const [pendingAccount, setPendingAccount] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [showAddForm, setShowAddForm] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [formError, setFormError] = useState("");
+    const [form, setForm] = useState({
+        name: "",
+        type: "cash",
+        currency: defaultCurrency,
+        initialBalance: "",
+    });
+
     const hiddenCount = Math.max(accounts.length - DEFAULT_VISIBLE_COUNT, 0);
     const visibleAccounts = useMemo(
         () => (expanded ? accounts : accounts.slice(0, DEFAULT_VISIBLE_COUNT)),
@@ -69,10 +105,46 @@ export default function ConnectedAccountsCard({ accounts, onDeleteAccount }) {
         }
     };
 
+    const handleFormChange = (field, value) => {
+        setForm((current) => ({ ...current, [field]: value }));
+    };
+
+    const handleFormSubmit = async (event) => {
+        event.preventDefault();
+        setFormError("");
+
+        if (!form.name.trim()) {
+            setFormError("Account name is required.");
+            return;
+        }
+
+        try {
+            setSaving(true);
+            await onCreateManualAccount?.({
+                name: form.name.trim(),
+                type: form.type,
+                currency: form.currency || defaultCurrency,
+                initialBalance: parseFloat(form.initialBalance || "0") || 0,
+            });
+
+            setForm({
+                name: "",
+                type: "cash",
+                currency: defaultCurrency,
+                initialBalance: "",
+            });
+            setShowAddForm(false);
+        } catch (e) {
+            setFormError(e.message || "Failed to add account.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
     return (
         <Card className="xl:col-span-12">
-            <div className="flex items-start justify-between gap-4">
-                <div>
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="max-w-2xl">
                     <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                         Accounts
                     </p>
@@ -80,10 +152,106 @@ export default function ConnectedAccountsCard({ accounts, onDeleteAccount }) {
                         Connected and manual accounts
                     </h2>
                     <p className="mt-2 text-sm text-[var(--text-muted)]">
-                        Review each account source, institution, and current balance in one place.
+                        Review each account source, institution, and current balance.
+                        Connect another bank or add a manual account at any time.
+                        Current total: {accounts.length} {accounts.length === 1 ? "account" : "accounts"}.
                     </p>
                 </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row md:flex-col md:items-end">
+                    <ConnectBankButton onConnected={onPlaidConnected} />
+                    <Button
+                        variant="ghost"
+                        onClick={() => {
+                            setShowAddForm((current) => !current);
+                            setFormError("");
+                        }}
+                        className="group h-10 w-full min-w-[12.5rem] justify-center gap-2 rounded-full border border-[var(--brand-outline)] bg-[var(--brand-soft)] px-5 text-sm font-semibold text-[var(--brand)] shadow-[0_1px_0_rgba(16,24,40,0.02)] transition-all duration-200 hover:-translate-y-px hover:border-[var(--brand)]/40 hover:bg-[var(--brand)]/12 hover:text-[var(--brand-strong)] hover:shadow-[0_8px_20px_-10px_rgba(21,112,239,0.4)] active:translate-y-0 sm:w-auto"
+                    >
+                        <Plus
+                            className={cn(
+                                "size-4 transition-transform duration-300",
+                                showAddForm ? "rotate-45" : "group-hover:rotate-90"
+                            )}
+                        />
+                        {showAddForm ? "Cancel" : "Add manual account"}
+                    </Button>
+                </div>
             </div>
+
+            {showAddForm ? (
+                <form
+                    onSubmit={handleFormSubmit}
+                    className="mt-6 border-t border-[var(--card-border)] pt-6"
+                >
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_1.2fr_1fr_1fr_auto]">
+                        <Field label="Account name">
+                            <Input
+                                value={form.name}
+                                onChange={(e) => handleFormChange("name", e.target.value)}
+                                placeholder="Emergency fund"
+                            />
+                        </Field>
+
+                        <Field label="Type">
+                            <Select
+                                value={form.type}
+                                onValueChange={(value) => handleFormChange("type", value)}
+                            >
+                                <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {ACCOUNT_TYPES.map((type) => (
+                                        <SelectItem key={type.value} value={type.value}>
+                                            {type.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </Field>
+
+                        <Field label="Currency">
+                            <Select
+                                value={form.currency || defaultCurrency}
+                                onValueChange={(value) => handleFormChange("currency", value)}
+                            >
+                                <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {CURRENCIES.map((currency) => (
+                                        <SelectItem key={currency} value={currency}>
+                                            {currency}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </Field>
+
+                        <Field label="Initial balance">
+                            <Input
+                                type="number"
+                                value={form.initialBalance}
+                                onChange={(e) => handleFormChange("initialBalance", e.target.value)}
+                                placeholder="0.00"
+                            />
+                        </Field>
+
+                        <div className="flex items-end">
+                            <Button type="submit" disabled={saving}>
+                                {saving ? "Adding..." : "Add account"}
+                            </Button>
+                        </div>
+                    </div>
+
+                    {formError ? (
+                        <Alert variant="destructive" className="mt-4">
+                            <AlertDescription>{formError}</AlertDescription>
+                        </Alert>
+                    ) : null}
+                </form>
+            ) : null}
 
             <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--card-border)]">
                 <div className="hidden grid-cols-[minmax(0,2.2fr)_1fr_1fr_1.2fr_1.1fr_auto] gap-4 bg-[var(--bg-subtle)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-soft)] md:grid">
