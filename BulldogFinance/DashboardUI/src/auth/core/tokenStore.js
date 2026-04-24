@@ -1,5 +1,6 @@
 const STORAGE_KEY = "bulldogfinance.auth.session";
 const REMEMBER_KEY = "bulldogfinance.auth.remember";
+const REMEMBER_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export function getRememberMe() {
     try {
@@ -95,6 +96,9 @@ export function getStoredAuthSession() {
 
         return {
             accessToken: parsed.accessToken,
+            refreshToken: parsed.refreshToken || null,
+            expiresAt: Number.isFinite(parsed.expiresAt) ? parsed.expiresAt : null,
+            rememberUntil: Number.isFinite(parsed.rememberUntil) ? parsed.rememberUntil : null,
             authMethod: parsed.authMethod || null,
             user,
         };
@@ -117,6 +121,13 @@ export function saveStoredAuthSession(session) {
 
     const normalizedSession = {
         accessToken: session.accessToken,
+        refreshToken: session.refreshToken || null,
+        expiresAt: Number.isFinite(session.expiresAt) ? session.expiresAt : null,
+        rememberUntil: getRememberMe()
+            ? Number.isFinite(session.rememberUntil)
+                ? session.rememberUntil
+                : Date.now() + REMEMBER_DURATION_MS
+            : null,
         authMethod: session.authMethod || null,
         user,
     };
@@ -144,6 +155,22 @@ export function clearStoredAuthSession() {
 
 export function getStoredAccessToken() {
     return getStoredAuthSession()?.accessToken || null;
+}
+
+export function getStoredRefreshToken() {
+    return getStoredAuthSession()?.refreshToken || null;
+}
+
+export function isStoredRememberWindowActive(session = getStoredAuthSession()) {
+    if (!session?.rememberUntil) {
+        return false;
+    }
+
+    return Date.now() < session.rememberUntil;
+}
+
+export function hasRefreshableStoredSession(session = getStoredAuthSession()) {
+    return Boolean(session?.refreshToken && isStoredRememberWindowActive(session));
 }
 
 export function getStoredUser() {
