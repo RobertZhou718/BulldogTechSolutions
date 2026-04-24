@@ -4,8 +4,10 @@ import NewsCard from "@/components/investments/NewsCard.jsx";
 import WatchlistCard from "@/components/investments/WatchlistCard.jsx";
 import MetricCard from "@/components/ui/MetricCard.jsx";
 import PageHeader from "@/components/ui/PageHeader.jsx";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { useApiClient } from "@/services/apiClient";
+import { toast } from "sonner";
 
 export default function InvestmentsPage() {
     const {
@@ -21,18 +23,16 @@ export default function InvestmentsPage() {
     const [watchlist, setWatchlist] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [error, setError] = useState("");
 
     const loadAll = useCallback(async () => {
         setLoading(true);
-        setError("");
         try {
             const [o, w] = await Promise.all([getInvestmentOverview(), getWatchlist()]);
             setOverview(o || {});
             setWatchlist(Array.isArray(w) ? w : []);
         } catch (err) {
             console.error("Failed to load investments data", err);
-            setError(err.message || "Failed to load investments data.");
+            toast.error(err.message || "Failed to load investments data.");
         } finally {
             setLoading(false);
         }
@@ -58,17 +58,38 @@ export default function InvestmentsPage() {
 
     const withSave = async (operation, fallbackMessage) => {
         setSaving(true);
-        setError("");
         try {
             await operation();
             await loadAll();
         } catch (err) {
             console.error(fallbackMessage, err);
-            setError(err.message || fallbackMessage);
+            toast.error(err.message || fallbackMessage);
         } finally {
             setSaving(false);
         }
     };
+
+    if (loading && !overview) {
+        return (
+            <div className="space-y-8">
+                <div className="space-y-4">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-9 w-72" />
+                    <Skeleton className="h-4 w-[28rem] max-w-full" />
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
+                        <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
+                        <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
+                    </div>
+                </div>
+                <div className="grid gap-6 xl:grid-cols-12">
+                    <Skeleton className="h-80 rounded-[var(--radius-2xl)] xl:col-span-7" />
+                    <Skeleton className="h-80 rounded-[var(--radius-2xl)] xl:col-span-5" />
+                    <Skeleton className="h-64 rounded-[var(--radius-2xl)] xl:col-span-5 xl:col-start-8" />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8">
@@ -90,8 +111,6 @@ export default function InvestmentsPage() {
                     <MetricCard label="Positions" value={totals.positions} />
                 </div>
             </PageHeader>
-
-            {error ? <p className="text-sm font-medium text-[var(--color-error-500)]">{error}</p> : null}
 
             <div className="grid gap-6 xl:grid-cols-12">
                 <div className="xl:col-span-7">

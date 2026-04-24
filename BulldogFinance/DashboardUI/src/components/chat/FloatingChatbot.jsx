@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import Button from "@/components/ui/Button.jsx";
+import { Button } from "@/components/ui/button";
 import { useLocation } from "react-router-dom";
 import { useChatbot } from "./chatbotContext.js";
 import ChatbotPanel from "./ChatbotPanel.jsx";

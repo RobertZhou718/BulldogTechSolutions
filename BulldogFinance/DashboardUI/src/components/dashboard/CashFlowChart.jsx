@@ -16,7 +16,7 @@ export default function CashFlowChart({
 
     return (
         <Card className="h-full">
-            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                 Cash flow
             </p>
             <div className="mt-2">

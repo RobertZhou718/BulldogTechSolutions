@@ -1,8 +1,16 @@
 import React, { useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { Trash01 } from "@untitledui/icons";
-import Button from "@/components/ui/Button.jsx";
+import { Button } from "@/components/ui/button";
 import Card from "@/components/ui/Card.jsx";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatCurrency } from "@/lib/utils";
 
 const DEFAULT_VISIBLE_COUNT = 3;
@@ -65,7 +73,7 @@ export default function ConnectedAccountsCard({ accounts, onDeleteAccount }) {
         <Card className="xl:col-span-12">
             <div className="flex items-start justify-between gap-4">
                 <div>
-                    <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                    <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                         Accounts
                     </p>
                     <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text-main)]">
@@ -129,15 +137,20 @@ export default function ConnectedAccountsCard({ accounts, onDeleteAccount }) {
                             </div>
 
                             <div className="flex justify-start md:justify-end">
-                                <Button
-                                    variant="ghost"
-                                    className="min-h-10 min-w-10 rounded-full px-0 py-0"
-                                    onClick={() => setPendingAccount(account)}
-                                    aria-label={`Delete ${account.name}`}
-                                    title={`Delete ${account.name}`}
-                                >
-                                    <Trash01 className="h-5 w-5" />
-                                </Button>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="rounded-full"
+                                            onClick={() => setPendingAccount(account)}
+                                            aria-label={`Delete ${account.name}`}
+                                        >
+                                            <Trash01 className="h-5 w-5" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Delete {account.name}</TooltipContent>
+                                </Tooltip>
                             </div>
                         </div>
                     ))}
@@ -156,59 +169,43 @@ export default function ConnectedAccountsCard({ accounts, onDeleteAccount }) {
                 </div>
             ) : null}
 
-            {pendingAccount && typeof document !== "undefined"
-                ? createPortal(
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="delete-account-title"
-                    onClick={closeConfirm}
-                >
-                    <div
-                        className="w-full max-w-md rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 shadow-xl"
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <h3
-                            id="delete-account-title"
-                            className="text-lg font-semibold text-[var(--text-main)]"
-                        >
-                            Delete {pendingAccount.name}?
-                        </h3>
-                        <p className="mt-2 text-sm text-[var(--text-muted)]">
+            <Dialog
+                open={Boolean(pendingAccount)}
+                onOpenChange={(open) => {
+                    if (!open) closeConfirm();
+                }}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Delete {pendingAccount?.name}?</DialogTitle>
+                        <DialogDescription>
                             {isPlaidPending
                                 ? "We'll disconnect this account and stop syncing new transactions."
                                 : "We'll disconnect this account and stop tracking new activity."}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {isPlaidPending ? (
+                        <p className="text-sm text-muted-foreground">
+                            {isLastPlaidForInstitution
+                                ? `This is your last linked account at ${pendingAccount.institutionName || "this institution"}, so we'll also disconnect from the institution.`
+                                : `Your other accounts at ${pendingAccount.institutionName || "this institution"} will stay connected.`}
                         </p>
-                        {isPlaidPending ? (
-                            <p className="mt-3 text-sm text-[var(--text-muted)]">
-                                {isLastPlaidForInstitution
-                                    ? `This is your last linked account at ${pendingAccount.institutionName || "this institution"}, so we'll also disconnect from the institution.`
-                                    : `Your other accounts at ${pendingAccount.institutionName || "this institution"} will stay connected.`}
-                            </p>
-                        ) : null}
-                        <div className="mt-6 flex justify-end gap-2">
-                            <Button
-                                variant="ghost"
-                                className="min-h-10 rounded-full px-4"
-                                onClick={closeConfirm}
-                                disabled={isDeleting}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                className="min-h-10 rounded-full bg-red-600 px-4 text-white hover:bg-red-700"
-                                onClick={confirmDelete}
-                                disabled={isDeleting}
-                            >
-                                {isDeleting ? "Deleting..." : "Delete"}
-                            </Button>
-                        </div>
-                    </div>
-                </div>,
-                document.body
-            )
-                : null}
+                    ) : null}
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={closeConfirm} disabled={isDeleting}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={confirmDelete}
+                            loading={isDeleting}
+                            loadingText="Deleting..."
+                        >
+                            Delete
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Card>
     );
 }

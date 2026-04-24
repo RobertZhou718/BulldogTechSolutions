@@ -1,10 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ConnectBankButton from "@/components/plaid/ConnectBankButton.jsx";
-import Button from "@/components/ui/Button.jsx";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import Card from "@/components/ui/Card.jsx";
-import { Field, Input, Select } from "@/components/ui/Field.jsx";
-import Spinner from "@/components/ui/Spinner.jsx";
+import { Field, Input } from "@/components/ui/Field.jsx";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 import { useApiClient } from "@/services/apiClient";
 import { formatCurrency } from "@/lib/utils";
 
@@ -134,8 +143,10 @@ export default function OnboardingPage() {
 
     if (loadingMe) {
         return (
-            <div className="mt-12 flex justify-center">
-                <Spinner className="h-8 w-8" />
+            <div className="mx-auto max-w-5xl space-y-6 py-6">
+                <Skeleton className="h-56 rounded-[var(--radius-2xl)]" />
+                <Skeleton className="h-40 rounded-[var(--radius-2xl)]" />
+                <Skeleton className="h-10 w-40 rounded-full" />
             </div>
         );
     }
@@ -143,7 +154,7 @@ export default function OnboardingPage() {
     return (
         <div className="mx-auto max-w-5xl py-6">
             <Card>
-                <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                     Onboarding
                 </p>
                 <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--text-main)]">
@@ -156,7 +167,7 @@ export default function OnboardingPage() {
 
                 <div className="mt-6 grid gap-4 md:grid-cols-2">
                     <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] p-5">
-                        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                             Recommended
                         </p>
                         <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
@@ -227,19 +238,23 @@ export default function OnboardingPage() {
                     <Field label="Default currency">
                         <Select
                             value={defaultCurrency}
-                            onChange={(e) => {
-                                const value = e.target.value;
+                            onValueChange={(value) => {
                                 setDefaultCurrency(value);
                                 setRows((prev) =>
                                     prev.map((row) => ({ ...row, currency: row.currency || value }))
                                 );
                             }}
                         >
-                            {CURRENCIES.map((currency) => (
-                                <option key={currency} value={currency}>
-                                    {currency}
-                                </option>
-                            ))}
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {CURRENCIES.map((currency) => (
+                                    <SelectItem key={currency} value={currency}>
+                                        {currency}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
                         </Select>
                     </Field>
                 </div>
@@ -273,41 +288,51 @@ export default function OnboardingPage() {
                                 <Field label="Type">
                                     <Select
                                         value={row.type}
-                                        onChange={(e) => handleRowChange(row.id, "type", e.target.value)}
+                                        onValueChange={(value) => handleRowChange(row.id, "type", value)}
                                     >
-                                        {ACCOUNT_TYPES.map((type) => (
-                                            <option key={type.value} value={type.value}>
-                                                {type.label}
-                                            </option>
-                                        ))}
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {ACCOUNT_TYPES.map((type) => (
+                                                <SelectItem key={type.value} value={type.value}>
+                                                    {type.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
                                     </Select>
                                 </Field>
 
                                 <Field label="Currency">
                                     <Select
                                         value={row.currency || defaultCurrency}
-                                        onChange={(e) => handleRowChange(row.id, "currency", e.target.value)}
+                                        onValueChange={(value) => handleRowChange(row.id, "currency", value)}
                                     >
-                                        {CURRENCIES.map((currency) => (
-                                            <option key={currency} value={currency}>
-                                                {currency}
-                                            </option>
-                                        ))}
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {CURRENCIES.map((currency) => (
+                                                <SelectItem key={currency} value={currency}>
+                                                    {currency}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
                                     </Select>
                                 </Field>
 
                                 <Field label="Initial balance">
-                                    <div className="flex overflow-hidden rounded-xl border border-[var(--card-border)] bg-white shadow-xs">
-                                        <span className="flex items-center border-r border-[var(--card-border)] px-3 text-sm text-[var(--text-soft)]">
+                                    <div className="relative">
+                                        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center border-r border-input px-3 text-sm text-muted-foreground">
                                             {row.currency || defaultCurrency}
                                         </span>
-                                        <input
-                                            className="w-full px-3.5 py-2.5 text-sm outline-none"
+                                        <Input
                                             type="number"
                                             value={row.initialBalance}
                                             onChange={(e) =>
                                                 handleRowChange(row.id, "initialBalance", e.target.value)
                                             }
+                                            className="pl-16"
                                         />
                                     </div>
                                 </Field>

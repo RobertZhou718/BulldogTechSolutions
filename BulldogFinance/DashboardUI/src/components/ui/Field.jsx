@@ -1,5 +1,7 @@
 import React from "react";
 import { cn } from "@/lib/utils";
+import { Input as ShadcnInput } from "@/components/ui/input";
+import { Textarea as ShadcnTextarea } from "@/components/ui/textarea";
 
 export function Field({ label, hint, error, children, className }) {
     return (
@@ -17,44 +19,10 @@ export function Field({ label, hint, error, children, className }) {
     );
 }
 
-export function Input({ className, size = "md", ...props }) {
-    const sizeClassName = size === "sm" ? "px-3 py-2" : "px-3.5 py-2.5";
+export const Input = React.forwardRef(function Input(props, ref) {
+    return <ShadcnInput ref={ref} {...props} />;
+});
 
-    return (
-        <input
-            className={cn(
-                "w-full rounded-lg bg-white text-sm text-[var(--color-gray-900)] shadow-[var(--shadow-xs)] ring-1 ring-inset ring-[var(--color-gray-300)] outline-none transition duration-100 ease-linear placeholder:text-[var(--color-gray-500)] hover:ring-[var(--color-gray-400)] focus:ring-2 focus:ring-[var(--color-brand-500)] disabled:cursor-not-allowed disabled:bg-[var(--color-gray-100)] disabled:text-[var(--color-gray-400)] disabled:ring-[var(--color-gray-300)]",
-                sizeClassName,
-                className
-            )}
-            {...props}
-        />
-    );
-}
-
-export function Select({ className, size = "md", ...props }) {
-    const sizeClassName = size === "sm" ? "px-3 py-2" : "px-3.5 py-2.5";
-
-    return (
-        <select
-            className={cn(
-                "w-full rounded-lg bg-white text-sm text-[var(--color-gray-900)] shadow-[var(--shadow-xs)] ring-1 ring-inset ring-[var(--color-gray-300)] outline-none transition duration-100 ease-linear hover:ring-[var(--color-gray-400)] focus:ring-2 focus:ring-[var(--color-brand-500)] disabled:cursor-not-allowed disabled:bg-[var(--color-gray-100)] disabled:text-[var(--color-gray-400)] disabled:ring-[var(--color-gray-300)]",
-                sizeClassName,
-                className
-            )}
-            {...props}
-        />
-    );
-}
-
-export function Textarea({ className, ...props }) {
-    return (
-        <textarea
-            className={cn(
-                "w-full rounded-lg bg-white px-3.5 py-2.5 text-sm text-[var(--color-gray-900)] shadow-[var(--shadow-xs)] ring-1 ring-inset ring-[var(--color-gray-300)] outline-none transition duration-100 ease-linear placeholder:text-[var(--color-gray-500)] hover:ring-[var(--color-gray-400)] focus:ring-2 focus:ring-[var(--color-brand-500)] disabled:cursor-not-allowed disabled:bg-[var(--color-gray-100)] disabled:text-[var(--color-gray-400)] disabled:ring-[var(--color-gray-300)]",
-                className
-            )}
-            {...props}
-        />
-    );
-}
+export const Textarea = React.forwardRef(function Textarea(props, ref) {
+    return <ShadcnTextarea ref={ref} {...props} />;
+});

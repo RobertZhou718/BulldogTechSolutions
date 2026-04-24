@@ -1,7 +1,15 @@
 import React from "react";
-import Button from "@/components/ui/Button.jsx";
+import { Button } from "@/components/ui/button";
 import Card from "@/components/ui/Card.jsx";
-import { Field, Input, Select } from "@/components/ui/Field.jsx";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Field, Input } from "@/components/ui/Field.jsx";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 const TYPE_FILTER_OPTIONS = [
     { value: "ALL", label: "All" },
@@ -19,7 +27,7 @@ export default function TransactionFilters({ filters, onChange, onReset }) {
 
     return (
         <Card>
-            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                 Filters
             </p>
             <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
@@ -33,29 +41,32 @@ export default function TransactionFilters({ filters, onChange, onReset }) {
                 <Field label="Type">
                     <Select
                         value={filters.type}
-                        onChange={(e) => handleChange("type", e.target.value)}
+                        onValueChange={(value) => handleChange("type", value)}
                     >
-                        {TYPE_FILTER_OPTIONS.map((item) => (
-                            <option key={item.value} value={item.value}>
-                                {item.label}
-                            </option>
-                        ))}
+                        <SelectTrigger className="w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {TYPE_FILTER_OPTIONS.map((item) => (
+                                <SelectItem key={item.value} value={item.value}>
+                                    {item.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
                     </Select>
                 </Field>
 
                 <Field label="From">
-                    <Input
-                        type="date"
+                    <DatePicker
                         value={filters.from}
-                        onChange={(e) => handleChange("from", e.target.value)}
+                        onChange={(value) => handleChange("from", value)}
                     />
                 </Field>
 
                 <Field label="To">
-                    <Input
-                        type="date"
+                    <DatePicker
                         value={filters.to}
-                        onChange={(e) => handleChange("to", e.target.value)}
+                        onChange={(value) => handleChange("to", value)}
                     />
                 </Field>
 

@@ -1,7 +1,15 @@
 import React, { useState } from "react";
-import Button from "@/components/ui/Button.jsx";
+import { Button } from "@/components/ui/button";
 import Card from "@/components/ui/Card.jsx";
-import { Field, Input, Select } from "@/components/ui/Field.jsx";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Field, Input } from "@/components/ui/Field.jsx";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 const TYPE_OPTIONS = [
     { value: "EXPENSE", label: "Expense" },
@@ -57,7 +65,7 @@ export default function TransactionForm({
 
     return (
         <Card className="h-full">
-            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                 Create
             </p>
             <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
@@ -71,52 +79,67 @@ export default function TransactionForm({
                 <Field label="Account" className="xl:col-span-2">
                     <Select
                         value={accountId}
-                        onChange={(e) => onAccountChange?.(e.target.value)}
+                        onValueChange={(value) => onAccountChange?.(value)}
                     >
-                        {accounts.map((acc) => (
-                            <option key={acc.accountId} value={acc.accountId}>
-                                {acc.name}
-                            </option>
-                        ))}
+                        <SelectTrigger className="w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {accounts.map((acc) => (
+                                <SelectItem key={acc.accountId} value={acc.accountId}>
+                                    {acc.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
                     </Select>
                 </Field>
 
                 <Field label="Type">
-                    <Select value={type} onChange={(e) => setType(e.target.value)}>
-                        {TYPE_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                                {option.label}
-                            </option>
-                        ))}
+                    <Select value={type} onValueChange={setType}>
+                        <SelectTrigger className="w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {TYPE_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
                     </Select>
                 </Field>
 
                 <Field label="Date">
-                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                    <DatePicker value={date} onChange={setDate} />
                 </Field>
 
                 <Field label="Amount">
-                    <div className="flex overflow-hidden rounded-xl border border-[var(--card-border)] bg-white shadow-xs">
-                        <span className="flex items-center border-r border-[var(--card-border)] px-3 text-sm text-[var(--text-soft)]">
+                    <div className="relative">
+                        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center border-r border-input px-3 text-sm text-muted-foreground">
                             {currency}
                         </span>
-                        <input
-                            className="w-full px-3.5 py-2.5 text-sm outline-none"
+                        <Input
                             type="number"
                             step="0.01"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
+                            className="pl-16"
                         />
                     </div>
                 </Field>
 
                 <Field label="Category">
-                    <Select value={category} onChange={(e) => setCategory(e.target.value)}>
-                        {DEFAULT_CATEGORIES.map((item) => (
-                            <option key={item} value={item}>
-                                {item}
-                            </option>
-                        ))}
+                    <Select value={category} onValueChange={setCategory}>
+                        <SelectTrigger className="w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {DEFAULT_CATEGORIES.map((item) => (
+                                <SelectItem key={item} value={item}>
+                                    {item}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
                     </Select>
                 </Field>
 

@@ -9,6 +9,33 @@ const navItems = [
     { label: "Bulldog assistance", path: "/assistant", icon: MessageChatCircle },
 ];
 
+export function NavItems({ onNavigate }) {
+    return (
+        <nav className="space-y-1">
+            {navItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                    <NavLink
+                        key={item.path}
+                        to={item.path}
+                        onClick={onNavigate}
+                        className={({ isActive }) =>
+                            `flex items-center gap-3 rounded-[var(--radius-xl)] px-3 py-3 text-sm font-medium transition ${
+                                isActive
+                                    ? "border border-[var(--brand-outline)] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[var(--shadow-xs)]"
+                                    : "border border-transparent text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-main)]"
+                            }`
+                        }
+                    >
+                        <Icon className="h-5 w-5" />
+                        {item.label}
+                    </NavLink>
+                );
+            })}
+        </nav>
+    );
+}
+
 export default function SideNav() {
     return (
         <aside className="hidden w-[280px] shrink-0 lg:block">
@@ -17,27 +44,9 @@ export default function SideNav() {
                     <p className="text-xs font-semibold text-[var(--text-soft)]">Workspace</p>
                     <p className="mt-1 text-sm text-[var(--text-muted)]">Portfolio management</p>
                 </div>
-                <nav className="mt-3 space-y-1">
-                    {navItems.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                            <NavLink
-                                key={item.path}
-                                to={item.path}
-                                className={({ isActive }) =>
-                                    `flex items-center gap-3 rounded-[var(--radius-xl)] px-3 py-3 text-sm font-medium transition ${
-                                        isActive
-                                            ? "border border-[var(--accent-outline)] bg-[var(--accent-soft)] text-[var(--accent)] shadow-[var(--shadow-xs)]"
-                                            : "border border-transparent text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-main)]"
-                                    }`
-                                }
-                            >
-                                <Icon className="h-5 w-5" />
-                                {item.label}
-                            </NavLink>
-                        );
-                    })}
-                </nav>
+                <div className="mt-3">
+                    <NavItems />
+                </div>
             </div>
         </aside>
     );

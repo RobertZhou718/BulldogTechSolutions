@@ -1,8 +1,16 @@
 import React, { useMemo, useState } from "react";
 import ConnectBankButton from "@/components/plaid/ConnectBankButton.jsx";
-import Button from "@/components/ui/Button.jsx";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import Card from "@/components/ui/Card.jsx";
-import { Field, Input, Select } from "@/components/ui/Field.jsx";
+import { Field, Input } from "@/components/ui/Field.jsx";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 const ACCOUNT_TYPES = [
     { value: "cash", label: "Cash" },
@@ -72,7 +80,7 @@ export default function AccountManagementCard({
         <Card className="xl:col-span-12">
             <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
                 <div className="max-w-2xl">
-                    <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                    <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                         Account management
                     </p>
                     <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text-main)]">
@@ -106,26 +114,36 @@ export default function AccountManagementCard({
                     <Field label="Type">
                         <Select
                             value={form.type}
-                            onChange={(e) => handleChange("type", e.target.value)}
+                            onValueChange={(value) => handleChange("type", value)}
                         >
-                            {ACCOUNT_TYPES.map((type) => (
-                                <option key={type.value} value={type.value}>
-                                    {type.label}
-                                </option>
-                            ))}
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {ACCOUNT_TYPES.map((type) => (
+                                    <SelectItem key={type.value} value={type.value}>
+                                        {type.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
                         </Select>
                     </Field>
 
                     <Field label="Currency">
                         <Select
                             value={nextDefaultCurrency}
-                            onChange={(e) => handleChange("currency", e.target.value)}
+                            onValueChange={(value) => handleChange("currency", value)}
                         >
-                            {CURRENCIES.map((currency) => (
-                                <option key={currency} value={currency}>
-                                    {currency}
-                                </option>
-                            ))}
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {CURRENCIES.map((currency) => (
+                                    <SelectItem key={currency} value={currency}>
+                                        {currency}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
                         </Select>
                     </Field>
 
@@ -146,7 +164,9 @@ export default function AccountManagementCard({
                 </div>
 
                 {error ? (
-                    <p className="mt-4 text-sm font-medium text-[var(--color-error-500)]">{error}</p>
+                    <Alert variant="destructive" className="mt-4">
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>
                 ) : null}
             </form>
         </Card>

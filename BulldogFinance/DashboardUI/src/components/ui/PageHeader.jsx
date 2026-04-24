@@ -6,7 +6,7 @@ export default function PageHeader({ eyebrow, title, description, actions, child
             <div className="flex flex-col gap-5 rounded-[var(--radius-2xl)] border border-[var(--card-border)] bg-white/70 px-6 py-6 shadow-[var(--shadow-xs)] ring-1 ring-white/70 backdrop-blur-sm xl:flex-row xl:items-end xl:justify-between">
                 <div className="max-w-3xl">
                     {eyebrow ? (
-                        <p className="text-sm font-semibold text-[var(--accent)]">
+                        <p className="text-sm font-semibold text-[var(--brand)]">
                             {eyebrow}
                         </p>
                     ) : null}

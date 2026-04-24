@@ -4,13 +4,15 @@ import { useAuth } from "@/auth/core/authContext.js";
 import AccountManagementCard from "@/components/accounts/AccountManagementCard.jsx";
 import AccountsPieChart from "@/components/dashboard/AccountsPieChart.jsx";
 import CashFlowChart from "@/components/dashboard/CashFlowChart.jsx";
+import DailyCashFlowCalendar from "@/components/dashboard/DailyCashFlowCalendar.jsx";
 import GreetingCard from "@/components/dashboard/GreetingCard.jsx";
 import InvestmentsChart from "@/components/dashboard/InvestmentsChart.jsx";
 import MetricCard from "@/components/ui/MetricCard.jsx";
 import PageHeader from "@/components/ui/PageHeader.jsx";
-import Spinner from "@/components/ui/Spinner.jsx";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrencyBreakdown } from "@/lib/utils";
 import { useApiClient } from "@/services/apiClient.js";
+import { toast } from "sonner";
 
 const CASH_FLOW_PALETTE = [
     { income: "#12b76a", expense: "#1570ef" },
@@ -30,7 +32,7 @@ export default function DashboardPage() {
     const [transactions, setTransactions] = useState([]);
     const [overview, setOverview] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [loadError, setLoadError] = useState(null);
 
     const loadDashboard = useCallback(async () => {
         const end = new Date();
@@ -58,7 +60,7 @@ export default function DashboardPage() {
                 await loadDashboard();
             } catch (e) {
                 console.error(e);
-                setError(e.message ?? "Failed to load accounts");
+                setLoadError(e.message ?? "Failed to load accounts");
             } finally {
                 setLoading(false);
             }
@@ -66,22 +68,35 @@ export default function DashboardPage() {
     }, [loadDashboard]);
 
     const refreshDashboard = async () => {
-        setError(null);
+        setLoadError(null);
         await loadDashboard();
     };
 
     const handleCreateManualAccount = async (payload) => {
-        await createAccount(payload);
-        await refreshDashboard();
+        try {
+            await createAccount(payload);
+            toast.success("Account created.");
+            await refreshDashboard();
+        } catch (e) {
+            toast.error(e.message || "Failed to create account.");
+            throw e;
+        }
     };
 
     const handlePlaidConnected = async () => {
+        toast.success("Bank connected.");
         await refreshDashboard();
     };
 
     const handleDeleteAccount = async (accountId) => {
-        await deleteAccount(accountId);
-        await refreshDashboard();
+        try {
+            await deleteAccount(accountId);
+            toast.success("Account removed.");
+            await refreshDashboard();
+        } catch (e) {
+            toast.error(e.message || "Failed to remove account.");
+            throw e;
+        }
     };
 
     const cashFlowData = useMemo(() => {
@@ -235,14 +250,34 @@ export default function DashboardPage() {
 
     if (loading) {
         return (
-            <div className="mt-12 flex justify-center">
-                <Spinner className="h-8 w-8" />
+            <div className="space-y-8">
+                <div className="space-y-4">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-9 w-80" />
+                    <Skeleton className="h-4 w-[28rem] max-w-full" />
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        <Skeleton className="h-28 rounded-[var(--radius-2xl)]" />
+                        <Skeleton className="h-28 rounded-[var(--radius-2xl)]" />
+                        <Skeleton className="h-28 rounded-[var(--radius-2xl)]" />
+                    </div>
+                </div>
+                <div className="grid gap-6 xl:grid-cols-12">
+                    <Skeleton className="h-64 rounded-[var(--radius-2xl)] xl:col-span-12" />
+                    <Skeleton className="h-64 rounded-[var(--radius-2xl)] xl:col-span-4" />
+                    <Skeleton className="h-64 rounded-[var(--radius-2xl)] xl:col-span-8" />
+                    <Skeleton className="h-64 rounded-[var(--radius-2xl)] xl:col-span-6" />
+                    <Skeleton className="h-64 rounded-[var(--radius-2xl)] xl:col-span-6" />
+                </div>
             </div>
         );
     }
 
-    if (error) {
-        return <p className="mt-12 text-sm font-medium text-[var(--color-error-500)]">{error}</p>;
+    if (loadError) {
+        return (
+            <div className="mt-12 rounded-[var(--radius-xl)] border border-[var(--color-error-100)] bg-[var(--color-error-50)] p-4 text-sm font-medium text-[var(--color-error-700)]">
+                {loadError}
+            </div>
+        );
     }
 
     return (
@@ -310,6 +345,9 @@ export default function DashboardPage() {
                         dates={investmentLabels}
                         portfolioSeries={portfolioSeries}
                     />
+                </div>
+                <div className="xl:col-span-6">
+                    <DailyCashFlowCalendar transactions={transactions} />
                 </div>
             </div>
         </div>

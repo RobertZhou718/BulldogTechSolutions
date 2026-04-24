@@ -34,7 +34,7 @@ export default function TransactionTable({
 
     return (
         <Card>
-            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                 History
             </p>
             <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">

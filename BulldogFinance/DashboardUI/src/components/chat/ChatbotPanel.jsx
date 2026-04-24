@@ -1,6 +1,6 @@
 import React from "react";
 import Card from "@/components/ui/Card.jsx";
-import Button from "@/components/ui/Button.jsx";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/Field.jsx";
 import { useChatbot } from "./chatbotContext.js";
 import chatbotAvatar from "@/assets/BulldogFinance.png";
@@ -28,7 +28,7 @@ export default function ChatbotPanel({
                     className="h-11 w-11 rounded-2xl border border-[var(--card-border)] bg-white object-cover p-1"
                 />
                 <div className="min-w-0">
-                    <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                    <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                         Assistant
                     </p>
                     <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
@@ -52,7 +52,7 @@ export default function ChatbotPanel({
                             <div
                                 className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
                                     message.role === "user"
-                                        ? "bg-[var(--accent)] text-white"
+                                        ? "bg-[var(--brand)] text-white"
                                         : "border border-[var(--card-border)] bg-[var(--bg-main)] text-[var(--text-main)]"
                                 }`}
                             >

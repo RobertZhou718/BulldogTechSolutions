@@ -7,7 +7,7 @@ export default function GreetingCard({ isMultiCurrency = false, name, totalLabel
             <span className="inline-flex rounded-full border border-[var(--card-border)] bg-white px-3 py-1 text-xs font-medium text-[var(--text-muted)]">
                 All linked accounts
             </span>
-            <p className="mt-5 text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+            <p className="mt-5 text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                 Overview
             </p>
             <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text-main)]">

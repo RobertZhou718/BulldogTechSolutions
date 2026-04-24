@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Card from "@/components/ui/Card.jsx";
-import Button from "@/components/ui/Button.jsx";
+import { Button } from "@/components/ui/button";
 import Spinner from "@/components/ui/Spinner.jsx";
 import { useApiClient } from "@/services/apiClient";
 
@@ -55,7 +55,7 @@ export default function LatestReportCard() {
         <Card>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                    <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                    <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                         Reports
                     </p>
                     <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
@@ -69,7 +69,7 @@ export default function LatestReportCard() {
                     {["weekly", "monthly"].map((period) => (
                         <Button
                             key={period}
-                            variant={activePeriod === period ? "primary" : "secondary"}
+                            variant={activePeriod === period ? "default" : "secondary"}
                             onClick={() => setActivePeriod(period)}
                         >
                             {formatPeriodLabel(period)}

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import Button from "@/components/ui/Button.jsx";
+import { Button } from "@/components/ui/button";
 import Card from "@/components/ui/Card.jsx";
 import { Field, Input } from "@/components/ui/Field.jsx";
 import Spinner from "@/components/ui/Spinner.jsx";
@@ -18,7 +18,7 @@ export default function WatchlistCard({ items, loading, saving, onAdd, onDelete 
 
     return (
         <Card className="h-full">
-            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+            <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                 Watchlist
             </p>
             <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">Tracked symbols</h2>

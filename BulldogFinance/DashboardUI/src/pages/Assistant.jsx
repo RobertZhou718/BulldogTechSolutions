@@ -3,7 +3,8 @@ import ChatbotPanel from "@/components/chat/ChatbotPanel.jsx";
 import { useChatbot } from "@/components/chat/chatbotContext.js";
 import Card from "@/components/ui/Card.jsx";
 import PageHeader from "@/components/ui/PageHeader.jsx";
-import Button from "@/components/ui/Button.jsx";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 const starterPrompts = [
     "Summarize my latest spending patterns.",
@@ -20,6 +21,7 @@ export default function AssistantPage() {
         openConversation,
         startNewConversation,
         isLoadingHistory,
+        isLoadingConversations,
     } = useChatbot();
 
     return (
@@ -35,7 +37,7 @@ export default function AssistantPage() {
                     <Card className="flex h-[720px] min-h-0 flex-col">
                         <div>
                             <div className="flex items-center justify-between">
-                                <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--accent)]">
+                                <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                                     Chat history
                                 </p>
                                 <Button variant="secondary" className="shrink-0 whitespace-nowrap" onClick={startNewConversation}>
@@ -49,7 +51,14 @@ export default function AssistantPage() {
                         </div>
 
                         <div className="mt-6 flex-1 space-y-3 overflow-y-auto pr-1">
-                            {conversations.length === 0 ? (
+                            {isLoadingConversations ? (
+                                <div className="space-y-3">
+                                    <Skeleton className="h-16 rounded-2xl" />
+                                    <Skeleton className="h-16 rounded-2xl" />
+                                    <Skeleton className="h-16 rounded-2xl" />
+                                    <Skeleton className="h-16 rounded-2xl" />
+                                </div>
+                            ) : conversations.length === 0 ? (
                                 <p className="rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-4 text-sm text-[var(--text-muted)]">
                                     No saved chats yet.
                                 </p>
