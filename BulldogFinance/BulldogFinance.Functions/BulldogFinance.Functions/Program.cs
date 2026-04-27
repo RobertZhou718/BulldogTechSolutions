@@ -9,6 +9,7 @@ using BulldogFinance.Functions.Services.Investments;
 using BulldogFinance.Functions.Services.Plaid;
 using Going.Plaid;
 using BulldogFinance.Functions.Services.Reports;
+using BulldogFinance.Functions.Services.SavingsGoals;
 using BulldogFinance.Functions.Services.Tools;
 using BulldogFinance.Functions.Services.Transactions;
 using BulldogFinance.Functions.Services.Users;
@@ -154,6 +155,7 @@ var host = new HostBuilder()
         services.AddSingleton<IUserRepository, UserRepository>();
         services.AddSingleton<IAccountRepository, AccountRepository>();
         services.AddSingleton<ITransactionRepository, TransactionRepository>();
+        services.AddSingleton<ISavingsGoalRepository, SavingsGoalRepository>();
         services.AddSingleton<IPlaidRepository, PlaidRepository>();
 
         services.AddSingleton<IExternalAuthProxyService, ExternalAuthProxyService>();

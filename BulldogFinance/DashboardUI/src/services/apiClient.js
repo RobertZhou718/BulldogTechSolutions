@@ -173,6 +173,34 @@ export function useApiClient() {
         });
     }, [request]);
 
+    // Savings goal APIs.
+    const getActiveSavingsGoal = useCallback(() => {
+        return request("/savings-goals/active", {
+            method: "GET",
+            allowNotFound: true,
+        });
+    }, [request]);
+
+    const createSavingsGoal = useCallback((payload) => {
+        return request("/savings-goals", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    }, [request]);
+
+    const updateSavingsGoal = useCallback((goalId, payload) => {
+        return request(`/savings-goals/${encodeURIComponent(goalId)}`, {
+            method: "PATCH",
+            body: JSON.stringify(payload),
+        });
+    }, [request]);
+
+    const archiveSavingsGoal = useCallback((goalId) => {
+        return request(`/savings-goals/${encodeURIComponent(goalId)}/archive`, {
+            method: "POST",
+        });
+    }, [request]);
+
     // Transaction APIs.
     const getTransactions = useCallback((params = {}) => {
         const search = new URLSearchParams();
@@ -292,6 +320,10 @@ export function useApiClient() {
         getAccounts,
         createAccount,
         deleteAccount,
+        getActiveSavingsGoal,
+        createSavingsGoal,
+        updateSavingsGoal,
+        archiveSavingsGoal,
         getTransactions,
         createTransaction,
         createPlaidLinkToken,
@@ -313,11 +345,13 @@ export function useApiClient() {
         addToWatchlist,
         createPlaidLinkToken,
         createAccount,
+        createSavingsGoal,
         createTransaction,
         deleteAccount,
         deleteInvestment,
         exchangePlaidPublicToken,
         getAccounts,
+        getActiveSavingsGoal,
         getChatConversation,
         getChatConversations,
         getInvestmentOverview,
@@ -327,10 +361,12 @@ export function useApiClient() {
         getTransactions,
         getWatchlist,
         postOnboarding,
+        archiveSavingsGoal,
         refreshPlaidBalances,
         removeFromWatchlist,
         sendChatMessage,
         syncPlaidTransactions,
+        updateSavingsGoal,
         upsertInvestment,
     ]);
 }

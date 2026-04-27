@@ -5,6 +5,7 @@ import AccountsPieChart from "@/components/dashboard/AccountsPieChart.jsx";
 import CashFlowChart from "@/components/dashboard/CashFlowChart.jsx";
 import DailyCashFlowCalendar from "@/components/dashboard/DailyCashFlowCalendar.jsx";
 import InvestmentsChart from "@/components/dashboard/InvestmentsChart.jsx";
+import SavingsGoalCard from "@/components/savings/SavingsGoalCard.jsx";
 import PageHeader from "@/components/ui/PageHeader.jsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrencyBreakdown } from "@/lib/utils";
@@ -19,7 +20,17 @@ const CASH_FLOW_PALETTE = [
 ];
 
 export default function DashboardPage() {
-    const { getAccounts, getTransactions, getInvestmentOverview, createAccount, deleteAccount } = useApiClient();
+    const {
+        getAccounts,
+        getTransactions,
+        getInvestmentOverview,
+        getActiveSavingsGoal,
+        createSavingsGoal,
+        updateSavingsGoal,
+        archiveSavingsGoal,
+        createAccount,
+        deleteAccount,
+    } = useApiClient();
     const { user } = useAuth();
 
     const displayName = user?.givenName || user?.name || user?.username || "Friend";
@@ -28,6 +39,7 @@ export default function DashboardPage() {
     const [accounts, setAccounts] = useState([]);
     const [transactions, setTransactions] = useState([]);
     const [overview, setOverview] = useState(null);
+    const [savingsGoal, setSavingsGoal] = useState(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(null);
 
@@ -37,19 +49,21 @@ export default function DashboardPage() {
         start.setMonth(end.getMonth() - 5);
         start.setDate(1);
 
-        const [accountsData, transactionsData, overviewData] = await Promise.all([
+        const [accountsData, transactionsData, overviewData, savingsGoalData] = await Promise.all([
             getAccounts(),
             getTransactions({
                 from: start.toISOString(),
                 to: end.toISOString(),
             }),
             getInvestmentOverview(),
+            getActiveSavingsGoal(),
         ]);
 
         setAccounts(accountsData || []);
         setTransactions(transactionsData || []);
         setOverview(overviewData || null);
-    }, [getAccounts, getInvestmentOverview, getTransactions]);
+        setSavingsGoal(savingsGoalData || null);
+    }, [getAccounts, getActiveSavingsGoal, getInvestmentOverview, getTransactions]);
 
     useEffect(() => {
         (async () => {
@@ -92,6 +106,39 @@ export default function DashboardPage() {
             await refreshDashboard();
         } catch (e) {
             toast.error(e.message || "Failed to remove account.");
+            throw e;
+        }
+    };
+
+    const handleCreateSavingsGoal = async (payload) => {
+        try {
+            await createSavingsGoal(payload);
+            toast.success("Savings goal created.");
+            await refreshDashboard();
+        } catch (e) {
+            toast.error(e.message || "Failed to create savings goal.");
+            throw e;
+        }
+    };
+
+    const handleUpdateSavingsGoal = async (goalId, payload) => {
+        try {
+            await updateSavingsGoal(goalId, payload);
+            toast.success("Savings goal updated.");
+            await refreshDashboard();
+        } catch (e) {
+            toast.error(e.message || "Failed to update savings goal.");
+            throw e;
+        }
+    };
+
+    const handleArchiveSavingsGoal = async (goalId) => {
+        try {
+            await archiveSavingsGoal(goalId);
+            toast.success("Savings goal archived.");
+            await refreshDashboard();
+        } catch (e) {
+            toast.error(e.message || "Failed to archive savings goal.");
             throw e;
         }
     };
@@ -261,6 +308,14 @@ export default function DashboardPage() {
             />
 
             <div className="grid gap-6 xl:grid-cols-12">
+                <SavingsGoalCard
+                    goal={savingsGoal}
+                    accounts={accounts}
+                    defaultCurrency={defaultCurrency}
+                    onCreateGoal={handleCreateSavingsGoal}
+                    onUpdateGoal={handleUpdateSavingsGoal}
+                    onArchiveGoal={handleArchiveSavingsGoal}
+                />
                 <div className="xl:col-span-4">
                     <DailyCashFlowCalendar transactions={transactions} />
                 </div>
