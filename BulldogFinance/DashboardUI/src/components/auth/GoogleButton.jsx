@@ -11,7 +11,7 @@ export default function GoogleButton({
         <Button
             variant="secondary"
             className={cn(
-                "min-h-11 w-full rounded-[10px] border-[var(--card-border)] bg-white text-[var(--text-muted)] shadow-none hover:bg-[var(--bg-subtle)]",
+                "min-h-11 w-full rounded-[10px] border border-[#dadce0] bg-white text-[#3c4043] shadow-none hover:bg-[#f8fafd]",
                 className
             )}
             {...props}
