@@ -13,6 +13,9 @@
     "@azure/msal-browser": "^4.26.1",
     "@hookform/resolvers": "^5.2.2",
     "@react-stately/utils": "^3.12.0",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.0",
+    "@react-three/rapier": "^2.2.0",
     "@tailwindcss/vite": "^4.2.2",
     "@untitledui/icons": "^0.0.22",
     "class-variance-authority": "^0.7.1",
@@ -35,6 +38,7 @@
     "tailwindcss": "^4.2.2",
     "tailwindcss-animate": "^1.0.7",
     "tailwindcss-react-aria-components": "^2.0.1",
+    "three": "^0.184.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
