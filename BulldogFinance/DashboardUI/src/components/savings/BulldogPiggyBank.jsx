@@ -1,41 +1,33 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { ContactShadows, Environment, Html, useGLTF, useTexture } from "@react-three/drei";
+import { Canvas, useThree } from "@react-three/fiber";
+import { ContactShadows, Environment, Html, OrbitControls, useGLTF } from "@react-three/drei";
+import { Physics, RigidBody, CuboidCollider, CylinderCollider } from "@react-three/rapier";
 import * as THREE from "three";
 import bulldogLogo from "@/assets/BulldogFinance.png";
 
 const MODEL_PATH = "/models/bulldog-piggy-bank.glb";
-const MAX_COINS = 52;
+const MAX_COINS = 200;
+const COIN_SPAWN_INTERVAL_MS = 60;
+const COIN_DROP_Y = 0.55;
+
+const COIN_VARIANTS = [
+    { radius: 0.075, height: 0.018, color: "#f5cf52", weight: 0.5 },
+    { radius: 0.066, height: 0.016, color: "#d99a3a", weight: 0.3 },
+    { radius: 0.084, height: 0.020, color: "#b8862e", weight: 0.2 },
+];
 
 function clampProgress(progressPercent) {
     return Math.max(0, Math.min(100, Number(progressPercent) || 0));
 }
 
-function buildCoinTargets(progressPercent) {
-    const normalized = clampProgress(progressPercent);
-    const visibleCount = Math.round((normalized / 100) * MAX_COINS);
-
-    return Array.from({ length: visibleCount }, (_, index) => {
-        const layer = Math.floor(index / 7);
-        const slot = index % 7;
-        const rowCount = Math.min(7, visibleCount - layer * 7);
-        const rowWidth = (rowCount - 1) * 0.078;
-        const rowOffset = layer % 2 === 0 ? 0 : 0.034;
-        const x = slot * 0.078 - rowWidth / 2 + rowOffset;
-        const z = ((index * 5) % 5 - 2) * 0.026;
-        const y = -0.46 + layer * 0.045 + ((index * 11) % 4) * 0.004;
-
-        return {
-            id: `coin-${index}`,
-            position: [x, y, z],
-            rotation: [
-                THREE.MathUtils.degToRad(82 + ((index * 13) % 16)),
-                THREE.MathUtils.degToRad((index * 47) % 360),
-                THREE.MathUtils.degToRad(((index * 29) % 50) - 25),
-            ],
-            delay: (index % 10) * 0.035,
-        };
-    });
+function pickVariant(seed) {
+    const r = ((seed * 9301 + 49297) % 233280) / 233280;
+    let acc = 0;
+    for (const variant of COIN_VARIANTS) {
+        acc += variant.weight;
+        if (r < acc) return variant;
+    }
+    return COIN_VARIANTS[0];
 }
 
 function useReducedMotion() {
@@ -43,12 +35,10 @@ function useReducedMotion() {
 
     useEffect(() => {
         const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-        const updatePreference = () => setPrefersReducedMotion(query.matches);
-
-        updatePreference();
-        query.addEventListener("change", updatePreference);
-
-        return () => query.removeEventListener("change", updatePreference);
+        const update = () => setPrefersReducedMotion(query.matches);
+        update();
+        query.addEventListener("change", update);
+        return () => query.removeEventListener("change", update);
     }, []);
 
     return prefersReducedMotion;
@@ -77,22 +67,38 @@ function BulldogModel({ compact }) {
             object.castShadow = true;
             object.receiveShadow = true;
 
+            const name = (object.name || "").toLowerCase();
+            const isDarkDetail = /eye|pupil|nose|nostril|slot/.test(name);
+
+            if (isDarkDetail) {
+                object.material = new THREE.MeshPhysicalMaterial({
+                    color: new THREE.Color("#0b0b0f"),
+                    metalness: 0.2,
+                    roughness: 0.18,
+                    clearcoat: 1,
+                    clearcoatRoughness: 0.08,
+                });
+                return;
+            }
+
             const sourceMaterial = Array.isArray(object.material) ? object.material[0] : object.material;
             object.material = new THREE.MeshPhysicalMaterial({
                 map: sourceMaterial?.map || null,
-                color: new THREE.Color("#eef8ff"),
+                color: new THREE.Color("#f4faff"),
                 transparent: true,
-                opacity: 0.34,
-                transmission: 0.82,
-                thickness: 0.24,
-                ior: 1.48,
-                roughness: 0.035,
+                opacity: 0.22,
+                transmission: 0.96,
+                thickness: 0.42,
+                ior: 1.5,
+                roughness: 0.02,
                 metalness: 0,
                 clearcoat: 1,
-                clearcoatRoughness: 0.04,
-                envMapIntensity: 1.85,
+                clearcoatRoughness: 0.02,
+                envMapIntensity: 2.1,
                 depthWrite: false,
                 side: THREE.DoubleSide,
+                attenuationColor: new THREE.Color("#dceeff"),
+                attenuationDistance: 1.4,
             });
         });
     }, [model]);
@@ -104,111 +110,121 @@ function BulldogModel({ compact }) {
     );
 }
 
-function Coin({ target, logoTexture, reducedMotion }) {
-    const groupRef = useRef(null);
-    const materialRef = useRef(null);
-
-    useFrame((state, delta) => {
-        if (!groupRef.current) return;
-
-        const targetPosition = target.position;
-        const coinLift = reducedMotion ? 0 : Math.sin(state.clock.elapsedTime * 1.2 + target.delay * 14) * 0.0025;
-
-        groupRef.current.position.set(
-            targetPosition[0],
-            targetPosition[1] + coinLift,
-            targetPosition[2],
-        );
-        groupRef.current.rotation.x = target.rotation[0];
-        groupRef.current.rotation.y = target.rotation[1] + (reducedMotion ? 0 : Math.sin(state.clock.elapsedTime * 0.7 + target.delay) * 0.08);
-        groupRef.current.rotation.z = target.rotation[2];
-
-        if (materialRef.current) {
-            materialRef.current.emissiveIntensity = THREE.MathUtils.damp(
-                materialRef.current.emissiveIntensity,
-                0.06,
-                8,
-                delta,
-            );
-        }
-    });
-
+// Invisible basin inside the bulldog's belly so coins pile up instead of falling through.
+// Floor + 4 walls roughly tracing the inner cavity.
+function BellyBasin() {
+    // Length (X) extended 1.6x toward the rear (-X). Width (Z) extended 1.5x symmetrically.
+    // X range: -0.506 ~ +0.23 (length 0.736). Z range: -0.27 ~ +0.27 (width 0.54).
     return (
-        <group ref={groupRef}>
-            <mesh castShadow receiveShadow>
-                <cylinderGeometry args={[0.043, 0.043, 0.014, 42]} />
-                <meshStandardMaterial
-                    ref={materialRef}
-                    color="#f5b841"
-                    emissive="#9a5b00"
-                    emissiveIntensity={0.08}
-                    metalness={0.72}
-                    roughness={0.26}
-                />
-            </mesh>
-            <mesh position={[0, 0.0076, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                <circleGeometry args={[0.036, 42]} />
-                <meshStandardMaterial
-                    map={logoTexture}
-                    color="#fff6d4"
-                    metalness={0.18}
-                    roughness={0.36}
-                    polygonOffset
-                    polygonOffsetFactor={-1}
-                />
-            </mesh>
-            <mesh position={[0, -0.0076, 0]} rotation={[Math.PI / 2, 0, 0]}>
-                <circleGeometry args={[0.036, 42]} />
-                <meshStandardMaterial
-                    map={logoTexture}
-                    color="#fff6d4"
-                    metalness={0.18}
-                    roughness={0.36}
-                    polygonOffset
-                    polygonOffsetFactor={-1}
-                />
-            </mesh>
-        </group>
+        <RigidBody type="fixed" colliders={false} friction={0.8} restitution={0.02}>
+            <CuboidCollider position={[-0.138, -0.5, 0]} args={[0.368, 0.02, 0.27]} />
+            <CuboidCollider position={[0.30, 0.0, 0]} args={[0.02, 0.5, 0.27]} />
+            <CuboidCollider position={[-0.500, 0.0, 0]} args={[0.02, 0.5, 0.27]} />
+            <CuboidCollider position={[-0.138, 0.0, 0.28]} args={[0.368, 0.5, 0.02]} />
+            <CuboidCollider position={[-0.138, 0.0, -0.28]} args={[0.368, 0.5, 0.02]} />
+        </RigidBody>
     );
 }
 
-function CoinStack({ progressPercent, compact, reducedMotion }) {
-    const logoTexture = useTexture(bulldogLogo);
-    const coins = useMemo(() => buildCoinTargets(progressPercent), [progressPercent]);
+function PhysicsCoin({ variant, spawnPos, spawnRot }) {
+    return (
+        <RigidBody
+            colliders={false}
+            position={spawnPos}
+            rotation={spawnRot}
+            mass={0.04}
+            friction={0.6}
+            restitution={0.02}
+            linearDamping={0.6}
+            angularDamping={0.9}
+            ccd={false}
+        >
+            <CylinderCollider args={[variant.height / 2, variant.radius]} />
+            <mesh castShadow receiveShadow>
+                <cylinderGeometry args={[variant.radius, variant.radius, variant.height, 14]} />
+                <meshStandardMaterial
+                    color={variant.color}
+                    metalness={0.78}
+                    roughness={0.32}
+                />
+            </mesh>
+        </RigidBody>
+    );
+}
+
+function CoinPile({ progressPercent }) {
+    const targetCount = Math.round((clampProgress(progressPercent) / 100) * MAX_COINS);
+    const [coins, setCoins] = useState([]);
+    const queueRef = useRef(0);
+    const nextIdRef = useRef(0);
+
+    useEffect(() => {
+        const pending = queueRef.current;
+        const total = coins.length + pending;
+
+        if (targetCount > total) {
+            queueRef.current += targetCount - total;
+        } else if (targetCount < coins.length) {
+            queueRef.current = 0;
+            setCoins((prev) => prev.slice(0, targetCount));
+        } else if (targetCount < total) {
+            queueRef.current = Math.max(0, targetCount - coins.length);
+        }
+    }, [targetCount, coins.length]);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (queueRef.current <= 0) return;
+            const batchSize = Math.min(queueRef.current, queueRef.current > 20 ? 5 : 1);
+            queueRef.current -= batchSize;
+            const newCoins = [];
+            for (let i = 0; i < batchSize; i++) {
+                const id = nextIdRef.current++;
+                const variant = pickVariant(id);
+                const spawnPos = [
+                    -0.1 + (Math.random() - 0.5) * 0.55,
+                    COIN_DROP_Y + Math.random() * 0.05 + i * 0.022,
+                    (Math.random() - 0.5) * 0.15,
+                ];
+                const spawnRot = [
+                    Math.random() * Math.PI,
+                    Math.random() * Math.PI,
+                    Math.random() * Math.PI,
+                ];
+                newCoins.push({ id, variant, spawnPos, spawnRot });
+            }
+            setCoins((prev) => [...prev, ...newCoins]);
+        }, COIN_SPAWN_INTERVAL_MS);
+
+        return () => clearInterval(interval);
+    }, []);
 
     return (
-        <group scale={compact ? 0.78 : 0.86} position={[0.03, compact ? -0.1 : -0.08, 0.03]}>
+        <>
+            <BellyBasin />
             {coins.map((coin) => (
-                <Coin
+                <PhysicsCoin
                     key={coin.id}
-                    target={coin}
-                    logoTexture={logoTexture}
-                    reducedMotion={reducedMotion}
+                    variant={coin.variant}
+                    spawnPos={coin.spawnPos}
+                    spawnRot={coin.spawnRot}
                 />
             ))}
-        </group>
+        </>
     );
 }
 
-function Celebration({ active, reducedMotion }) {
-    const sparkleRef = useRef(null);
-
-    useFrame((state) => {
-        if (!sparkleRef.current || reducedMotion) return;
-        sparkleRef.current.rotation.y = state.clock.elapsedTime * 0.8;
-        sparkleRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 1.4) * 0.18;
-    });
-
+function Celebration({ active }) {
     if (!active) return null;
 
     return (
-        <group ref={sparkleRef} position={[0.58, 0.48, 0.04]}>
+        <group position={[0, 0.62, 0.04]}>
             {[0, 1, 2, 3, 4].map((index) => (
                 <mesh
                     key={index}
                     position={[
-                        Math.cos(index * 1.25) * 0.16,
-                        Math.sin(index * 1.7) * 0.08,
+                        Math.cos(index * 1.25) * 0.18,
+                        Math.sin(index * 1.7) * 0.06,
                         Math.sin(index) * 0.08,
                     ]}
                 >
@@ -225,17 +241,7 @@ function Celebration({ active, reducedMotion }) {
 }
 
 function PiggyBankScene({ progressPercent, compact, reducedMotion }) {
-    const groupRef = useRef(null);
     const normalized = clampProgress(progressPercent);
-
-    useFrame((state) => {
-        if (!groupRef.current) return;
-
-        const idleLift = reducedMotion ? 0 : Math.sin(state.clock.elapsedTime * 0.9) * 0.012;
-
-        groupRef.current.rotation.y = reducedMotion ? -0.18 : state.clock.elapsedTime * 0.38 - 0.18;
-        groupRef.current.position.y = idleLift;
-    });
 
     return (
         <>
@@ -250,11 +256,11 @@ function PiggyBankScene({ progressPercent, compact, reducedMotion }) {
             />
             <pointLight position={[-1.8, 1.2, 1.6]} intensity={1.05} color="#84caff" />
             <pointLight position={[1.6, 0.5, -1.5]} intensity={0.8} color="#ffffff" />
-            <group ref={groupRef}>
-                <CoinStack progressPercent={progressPercent} compact={compact} reducedMotion={reducedMotion} />
-                <BulldogModel compact={compact} />
-                <Celebration active={normalized >= 100} reducedMotion={reducedMotion} />
-            </group>
+            <Physics gravity={[0, -3.2, 0]} timeStep={1 / 60} paused={reducedMotion}>
+                <CoinPile progressPercent={normalized} />
+            </Physics>
+            <BulldogModel compact={compact} />
+            <Celebration active={normalized >= 100} />
             <ContactShadows
                 position={[0, -0.56, 0]}
                 opacity={0.22}
@@ -263,6 +269,16 @@ function PiggyBankScene({ progressPercent, compact, reducedMotion }) {
                 far={1.2}
             />
             <Environment preset="studio" />
+            <OrbitControls
+                enableZoom={false}
+                enablePan={false}
+                enableDamping
+                dampingFactor={0.12}
+                rotateSpeed={0.9}
+                target={[0, -0.04, 0]}
+                minPolarAngle={Math.PI / 2.6}
+                maxPolarAngle={Math.PI / 1.7}
+            />
         </>
     );
 }
