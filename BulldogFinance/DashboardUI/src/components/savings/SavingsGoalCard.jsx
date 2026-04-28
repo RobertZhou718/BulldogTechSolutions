@@ -39,6 +39,20 @@ function normalizeType(type) {
     return String(type || "").trim().toLowerCase();
 }
 
+function accountTypeMatches(accountType, includedTypes) {
+    const normalized = normalizeType(accountType);
+    if (!normalized) return false;
+
+    if (includedTypes.has(normalized)) return true;
+
+    const [primaryType] = normalized.split(":");
+    return (
+        includedTypes.has(primaryType) ||
+        (includedTypes.has("bank") && primaryType === "depository") ||
+        (includedTypes.has("investment") && primaryType === "investment")
+    );
+}
+
 function getInitialForm(goal, defaultCurrency) {
     if (goal) {
         return {
@@ -73,11 +87,6 @@ function formatDateTime(value) {
     });
 }
 
-function getProgressLabel(goal) {
-    if (!goal) return "0%";
-    return `${Math.max(0, Math.min(100, Number(goal.progressPercent) || 0)).toFixed(0)}%`;
-}
-
 export default function SavingsGoalCard({
     goal,
     accounts,
@@ -94,6 +103,8 @@ export default function SavingsGoalCard({
 
     const progressPercent = Math.max(0, Math.min(100, Number(goal?.progressPercent) || 0));
     const hasGoal = Boolean(goal);
+    const progressMarkerPosition = hasGoal ? progressPercent : 0;
+    const progressMarkerLabel = `${progressMarkerPosition.toFixed(0)}%`;
     const isEditing = dialogMode === "edit";
     const configLocked = isEditing && goal && !goal.canEditConfig;
     const nextEditAt = formatDateTime(goal?.nextConfigEditAtUtc);
@@ -111,7 +122,7 @@ export default function SavingsGoalCard({
         return accounts.filter(
             (account) =>
                 account.currency === form.currency &&
-                typeSet.has(normalizeType(account.type))
+                accountTypeMatches(account.type, typeSet)
         ).length;
     }, [accounts, form.currency, form.includedAccountTypes]);
 
@@ -212,14 +223,10 @@ export default function SavingsGoalCard({
     return (
         <Card className="overflow-hidden p-0 xl:col-span-12">
             <div className="grid gap-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(22rem,0.95fr)]">
-                <div className="relative flex min-h-[26rem] items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_30%_12%,rgba(255,255,255,0.95),rgba(239,244,255,0.62)_36%,rgba(209,250,223,0.42)_100%)] p-6 sm:p-8">
+                <div className="relative flex min-h-[28rem] items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_30%_12%,rgba(255,255,255,0.95),rgba(239,244,255,0.62)_36%,rgba(209,250,223,0.42)_100%)] p-4 sm:p-6">
                     <div className="absolute inset-x-8 top-8 h-24 rounded-full bg-white/70 blur-3xl" />
                     <div className="relative w-full">
                         <BulldogPiggyBank progressPercent={progressPercent} />
-                    </div>
-                    <div className="absolute bottom-5 left-6 right-6 flex items-center justify-between rounded-full border border-white/70 bg-white/72 px-4 py-2 text-sm font-semibold text-[var(--text-main)] shadow-sm backdrop-blur-md">
-                        <span>Bulldog Piggy Bank</span>
-                        <span className="text-[var(--brand)]">{getProgressLabel(goal)} full</span>
                     </div>
                 </div>
 
@@ -280,14 +287,25 @@ export default function SavingsGoalCard({
                         ) : null}
 
                         <div className="mt-7">
-                            <div className="h-3 overflow-hidden rounded-full bg-[var(--color-gray-100)]">
+                            <div className="relative pt-7">
                                 <div
-                                    className="h-full rounded-full bg-[linear-gradient(90deg,#1570ef,#12b76a,#f79009)] transition-all duration-700"
-                                    style={{ width: `${hasGoal ? progressPercent : 0}%` }}
-                                />
+                                    className="absolute top-0 flex -translate-x-1/2 flex-col items-center text-xs font-semibold text-[var(--brand)] transition-[left] duration-700"
+                                    style={{
+                                        left: `clamp(1.25rem, ${progressMarkerPosition}%, calc(100% - 1.25rem))`,
+                                    }}
+                                >
+                                    <span>{progressMarkerLabel}</span>
+                                    <span className="mt-1 h-0 w-0 border-x-[5px] border-t-[7px] border-x-transparent border-t-[var(--brand)]" />
+                                </div>
+                                <div className="h-3 overflow-hidden rounded-full bg-[var(--color-gray-100)]">
+                                    <div
+                                        className="h-full rounded-full bg-[linear-gradient(90deg,#1570ef,#12b76a,#f79009)] transition-all duration-700"
+                                        style={{ width: `${hasGoal ? progressPercent : 0}%` }}
+                                    />
+                                </div>
                             </div>
-                            <div className="mt-3 grid grid-cols-4 gap-2 text-xs font-medium text-[var(--text-soft)]">
-                                {[25, 50, 75, 100].map((milestone) => (
+                            <div className="mt-3 flex items-center justify-between text-xs font-medium text-[var(--text-soft)]">
+                                {[0, 25, 50, 75, 100].map((milestone) => (
                                     <span
                                         key={milestone}
                                         className={progressPercent >= milestone ? "text-[var(--brand)]" : ""}

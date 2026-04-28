@@ -393,8 +393,27 @@ namespace BulldogFinance.Functions.Functions
                 .Where(a => string.Equals(a.Currency, currency, StringComparison.OrdinalIgnoreCase))
                 .Where(a => idSet != null
                     ? idSet.Contains(a.RowKey)
-                    : typeSet == null || typeSet.Contains((a.Type ?? string.Empty).Trim().ToLowerInvariant()))
+                    : typeSet == null || MatchesIncludedAccountType(a.Type, typeSet))
                 .Sum(a => a.CurrentBalanceCents);
+        }
+
+        private static bool MatchesIncludedAccountType(string? accountType, HashSet<string> includedTypes)
+        {
+            var normalized = (accountType ?? string.Empty).Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return false;
+            }
+
+            if (includedTypes.Contains(normalized))
+            {
+                return true;
+            }
+
+            var primaryType = normalized.Split(':', 2)[0];
+            return includedTypes.Contains(primaryType)
+                || (includedTypes.Contains("bank") && primaryType == "depository")
+                || (includedTypes.Contains("investment") && primaryType == "investment");
         }
 
         private static bool CanEditConfig(SavingsGoalEntity goal, DateTime now)
