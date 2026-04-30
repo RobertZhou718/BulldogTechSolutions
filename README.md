@@ -22,7 +22,7 @@ Bulldog Finance is a full-stack personal finance application centered on **perso
 
 The core product loop is in place:
 
-1. Authentication (Microsoft Entra External ID / MSAL, plus native email-password and social flows via the backend auth proxy) and user onboarding
+1. Authentication (Microsoft Entra External ID / MSAL Custom Native Auth via the `/api/native-auth` gateway) and user onboarding
 2. Account & transaction management (manual + Plaid Link with automated balance refresh and transaction sync)
 3. Investment holdings, watchlist, and aggregated market news (Finnhub)
 4. Scheduled weekly / monthly AI reports (Azure OpenAI)

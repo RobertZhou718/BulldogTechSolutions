@@ -47,6 +47,7 @@ Create `BulldogFinance/DashboardUI/.env.local` (do not commit):
 ```env
 # MSAL (Entra External ID)
 VITE_AUTH_TENANT_NAME=<your-entra-tenant-subdomain>
+VITE_AUTH_TENANT_ID=<your-entra-tenant-id>
 VITE_SPA_CLIENT_ID=<your-spa-client-id>
 VITE_REDIRECT_URI=http://localhost:5173
 VITE_API_CLIENT_ID=<your-api-app-client-id>
@@ -74,14 +75,9 @@ Create `local.settings.json` in the Functions project directory (do not commit):
     "ConnectionString": "UseDevelopmentStorage=true"
   },
   "Auth": {
-    "Authority": "https://<tenant>.ciamlogin.com/<tenant-id>/v2.0",
-    "Audience": "<api-app-client-id>",
-    "ValidIssuers": "https://<tenant>.ciamlogin.com/<tenant-id>/v2.0"
-  },
-  "AuthProxy": {
-    "BaseUrl": "https://<tenant>.ciamlogin.com/",
-    "TimeoutSeconds": "30",
-    "ClientId": "<native-auth-client-id>"
+    "TenantId": "<tenant-id>",
+    "TenantSubdomain": "<tenant-subdomain>",
+    "ApiClientId": "<api-app-client-id>"
   },
   "Plaid": {
     "ClientId": "<plaid-client-id>",
@@ -117,9 +113,9 @@ Managed-identity variant (cloud): instead of `ConnectionString`, set `TableStora
 The backend validates real Entra JWTs via `BearerTokenAuthenticationMiddleware`. For local development:
 
 - Sign in through the SPA to get a real token (MSAL acquires tokens against the API scope defined by `VITE_API_CLIENT_ID`), and pass it as `Authorization: Bearer <jwt>` when calling the API from tools like Postman.
-- Or exercise the native auth endpoints (`/auth/native/*`) via the SPA to obtain tokens without the MSAL redirect flow.
+- The SPA's custom email/password sign-in and sign-up UI uses the MSAL Custom Native Auth SDK, which forwards CIAM native auth requests through `POST /api/native-auth/{*path}`.
 
-There is no anonymous debug-header fallback anymore.
+There is no anonymous debug-header or EasyAuth-header fallback. Business endpoints require a valid bearer token; only `NativeAuthProxy` and `PlaidWebhook` are intentionally anonymous.
 
 ## 8. Plaid sandbox tips
 
@@ -142,4 +138,4 @@ There is no anonymous debug-header fallback anymore.
 - Confirm `Plaid:ClientId`, `Plaid:Secret`, and `Plaid:Environment` match the same Plaid dashboard environment.
 
 ### Q5: `401 Unauthorized` on every call
-- Confirm `Auth:Authority`, `Auth:Audience`, and `Auth:ValidIssuers` match the tenant that issued the token and that the SPA requested the API scope.
+- Confirm `Auth:TenantId`, `Auth:TenantSubdomain`, and `Auth:ApiClientId` match the tenant and API app registration that issued the token, and that the SPA requested the `api://<api-client-id>/api.access` scope.

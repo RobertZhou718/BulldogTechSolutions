@@ -4,30 +4,28 @@
 
 ## 1. Authentication
 
-All endpoints (except the native auth proxy endpoints themselves) require a valid Microsoft Entra External ID access token:
+All business endpoints require a valid Microsoft Entra External ID access token:
 
 ```
 Authorization: Bearer <jwt>
 ```
 
-Tokens are validated by `BearerTokenAuthenticationMiddleware` against `Auth:Authority`, `Auth:Audience`, and `Auth:ValidIssuers`. A missing or invalid token returns `401 Unauthorized`.
+Tokens are validated by `BearerTokenAuthenticationMiddleware` against the tenant metadata derived from `Auth:TenantId` + `Auth:TenantSubdomain` and the configured API audience (`Auth:ApiClientId` or `Auth:Audience`). A missing or invalid token returns `401 Unauthorized`.
 
 ---
 
-## 2. Native auth proxy (`/auth/native/*`)
+## 2. Native auth gateway (`/native-auth/{*path}`)
 
-These endpoints forward to the Entra External ID Native Auth API for email/password and social flows so the SPA does not need to talk to Entra directly.
+`POST /native-auth/{*path}` is intentionally anonymous because it is used before sign-in. It is a constrained gateway for the MSAL Custom Native Auth SDK and forwards only whitelisted Entra External ID Native Auth API paths, such as:
 
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/auth/native/signin` | Email + password sign-in |
-| POST | `/auth/native/signup` | Email + password sign-up |
-| POST | `/auth/native/social` | Social provider flow |
-| POST | `/auth/native/token` | Token refresh |
-| POST | `/auth/native/signout` | Sign out / revoke |
-| POST | `/auth/native/password-reset` | Password reset flow |
+- `/oauth2/v2.0/initiate`
+- `/oauth2/v2.0/challenge`
+- `/oauth2/v2.0/token`
+- `/signup/v1.0/*`
+- `/resetpassword/v1.0/*`
+- `/register/v1.0/*`
 
-Requests and responses mirror the Entra Native Auth API contract (see `Services/Auth/AuthProxyModels.cs`).
+The application no longer exposes `/auth/native/signin`, `/auth/native/signup`, `/auth/native/token`, or other backend-normalized auth proxy endpoints. Email/password login, sign-up, and reset are driven by the frontend MSAL Custom Native Auth SDK through this gateway.
 
 ---
 

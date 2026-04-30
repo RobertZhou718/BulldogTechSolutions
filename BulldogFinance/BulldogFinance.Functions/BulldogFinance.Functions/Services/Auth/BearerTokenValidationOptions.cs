@@ -18,14 +18,11 @@ namespace BulldogFinance.Functions.Services.Auth
 
         public static BearerTokenValidationOptions FromConfiguration(IConfiguration configuration)
         {
-            var tenantId = FirstNonEmpty(
-                configuration["Auth:TenantId"],
-                configuration["AuthProxy:TenantId"]);
+            var tenantId = FirstNonEmpty(configuration["Auth:TenantId"]);
 
             var tenantSubdomain = FirstNonEmpty(
                 configuration["Auth:TenantSubdomain"],
-                configuration["Auth:TenantName"],
-                configuration["AuthProxy:TenantSubdomain"]);
+                configuration["Auth:TenantName"]);
 
             var metadataAddress = FirstNonEmpty(configuration["Auth:MetadataAddress"]);
             if (string.IsNullOrWhiteSpace(metadataAddress)
@@ -35,14 +32,11 @@ namespace BulldogFinance.Functions.Services.Auth
                 metadataAddress = $"https://{tenantSubdomain}.ciamlogin.com/{tenantId}/v2.0/.well-known/openid-configuration";
             }
 
-            var explicitAudience = FirstNonEmpty(
-                configuration["Auth:Audience"],
-                configuration["AuthProxy:Audience"]);
+            var explicitAudience = FirstNonEmpty(configuration["Auth:Audience"]);
 
             var apiClientId = FirstNonEmpty(
                 configuration["Auth:ApiClientId"],
-                configuration["Auth:ClientId"],
-                configuration["AuthProxy:ClientId"]);
+                configuration["Auth:ClientId"]);
 
             var audiences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             AddDelimitedValues(audiences, explicitAudience);

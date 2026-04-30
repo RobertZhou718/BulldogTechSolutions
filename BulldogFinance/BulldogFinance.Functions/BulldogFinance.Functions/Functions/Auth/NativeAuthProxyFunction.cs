@@ -36,7 +36,7 @@ namespace BulldogFinance.Functions.Functions.Auth
             string path,
             CancellationToken cancellationToken)
         {
-            var correlationId = AuthProxyJson.GetCorrelationId(req);
+            var correlationId = GetCorrelationId(req);
 
             try
             {
@@ -105,6 +105,25 @@ namespace BulldogFinance.Functions.Functions.Auth
             }
 
             response.Headers.TryAddWithoutValidation(headerName, values);
+        }
+
+        private static string GetCorrelationId(HttpRequestData req)
+        {
+            string[] candidates = { "x-correlation-id", "x-ms-correlation-id", "x-ms-client-request-id" };
+
+            foreach (var name in candidates)
+            {
+                if (req.Headers.TryGetValues(name, out var values))
+                {
+                    var value = values.FirstOrDefault(static v => !string.IsNullOrWhiteSpace(v));
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        return value.Trim();
+                    }
+                }
+            }
+
+            return Guid.NewGuid().ToString("N");
         }
     }
 }

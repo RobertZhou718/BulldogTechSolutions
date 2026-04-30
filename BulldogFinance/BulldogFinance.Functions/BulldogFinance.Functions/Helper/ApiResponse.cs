@@ -6,7 +6,6 @@ namespace BulldogFinance.Functions.Helper
 {
     /// <summary>
     /// Unified JSON error response helper for all business-logic Functions.
-    /// Auth Functions use their own AuthProxyResponse protocol and are excluded.
     /// </summary>
     /// <remarks>
     /// All errors are serialized as:

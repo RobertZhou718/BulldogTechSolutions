@@ -125,23 +125,6 @@ var host = new HostBuilder()
         services.Configure<PlaidOptions>(configuration.GetSection("Plaid"));
         services.AddPlaidHttpClient();
 
-        services.AddHttpClient("AuthProxy", (sp, client) =>
-        {
-            var config = sp.GetRequiredService<IConfiguration>();
-            var baseUrl = config["AuthProxy:BaseUrl"];
-            var timeoutSeconds = int.TryParse(config["AuthProxy:TimeoutSeconds"], out var parsedTimeout)
-                && parsedTimeout > 0
-                ? parsedTimeout
-                : 30;
-
-            if (!string.IsNullOrWhiteSpace(baseUrl))
-            {
-                client.BaseAddress = new Uri(baseUrl);
-            }
-
-            client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
-        });
-
         var dataProtectionBuilder = services
             .AddDataProtection()
             .SetApplicationName("BulldogFinance.Functions");
@@ -158,7 +141,6 @@ var host = new HostBuilder()
         services.AddSingleton<ISavingsGoalRepository, SavingsGoalRepository>();
         services.AddSingleton<IPlaidRepository, PlaidRepository>();
 
-        services.AddSingleton<IExternalAuthProxyService, ExternalAuthProxyService>();
         services.AddSingleton<IAuthTokenValidator, AuthTokenValidator>();
         services.AddSingleton<INativeAuthApiProxyService, NativeAuthApiProxyService>();
         services.AddSingleton<IInvestmentService, InvestmentService>();

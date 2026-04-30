@@ -47,12 +47,10 @@ namespace BulldogFinance.Functions.Services.Auth
             _httpClientFactory = httpClientFactory;
             _logger = logger;
 
-            var tenantId = configuration["Auth:TenantId"]?.Trim()
-                ?? configuration["AuthProxy:TenantId"]?.Trim();
+            var tenantId = configuration["Auth:TenantId"]?.Trim();
 
             var tenantSubdomain = configuration["Auth:TenantSubdomain"]?.Trim()
-                ?? configuration["Auth:TenantName"]?.Trim()
-                ?? configuration["AuthProxy:TenantSubdomain"]?.Trim();
+                ?? configuration["Auth:TenantName"]?.Trim();
 
             if (!string.IsNullOrWhiteSpace(tenantSubdomain))
             {

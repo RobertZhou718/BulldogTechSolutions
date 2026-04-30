@@ -4,24 +4,8 @@ import {
     getAuthErrorMessage,
     getNativeAuthClient,
 } from "./nativeClient.js";
-import {
-    AuthProxyUnavailableError,
-    signInWithPasswordViaProxy,
-} from "./proxyAuthService.js";
 
-export async function signInWithPassword({ email, password, rememberMe = false }) {
-    try {
-        const proxySession = await signInWithPasswordViaProxy({ email, password });
-
-        if (proxySession.refreshToken || !rememberMe) {
-            return proxySession;
-        }
-    } catch (error) {
-        if (!(error instanceof AuthProxyUnavailableError)) {
-            throw error;
-        }
-    }
-
+export async function signInWithPassword({ email, password }) {
     const username = email?.trim() || "";
     const authClient = await getNativeAuthClient();
     const result = await authClient.signIn({

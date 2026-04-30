@@ -188,15 +188,15 @@ namespace BulldogFinance.Functions.Services.Auth
         private static string? ResolveUserId(ClaimsPrincipal principal)
         {
             var userId = FirstNonEmpty(
+                GetClaim(principal, "oid"),
+                GetClaim(principal, "http://schemas.microsoft.com/identity/claims/objectidentifier"),
+                GetClaim(principal, "sub"),
+                GetClaim(principal, ClaimTypes.NameIdentifier),
                 GetClaim(principal, "upn"),
                 GetClaim(principal, "preferred_username"),
                 GetClaim(principal, ClaimTypes.Upn),
                 GetClaim(principal, ClaimTypes.Email),
-                GetClaim(principal, "email"),
-                GetClaim(principal, "sub"),
-                GetClaim(principal, "oid"),
-                GetClaim(principal, "http://schemas.microsoft.com/identity/claims/objectidentifier"),
-                GetClaim(principal, ClaimTypes.NameIdentifier));
+                GetClaim(principal, "email"));
 
             return string.IsNullOrWhiteSpace(userId)
                 ? null

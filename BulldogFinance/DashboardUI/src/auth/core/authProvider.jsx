@@ -4,7 +4,6 @@ import {
     bootstrapStoredAuthSession,
     clearStoredAuthSession,
     getRememberMe,
-    hasRefreshableStoredSession,
     saveStoredAuthSession,
     setRememberMe,
 } from "./tokenStore.js";
@@ -12,7 +11,6 @@ import {
     buildSessionFromAccountData,
     getCurrentAccountData,
 } from "@/auth/native/nativeClient.js";
-import { refreshStoredSessionViaProxy } from "@/auth/native/proxyAuthService.js";
 import { signInWithPassword as signInWithPasswordService } from "@/auth/native/signInService.js";
 import {
     resendResetPasswordCode,
@@ -48,8 +46,7 @@ function isAccessTokenExpired(token) {
 // the UI flashes protected content before initialize() catches up.
 const bootstrappedSession =
     rawBootstrappedSession?.accessToken &&
-    (!isAccessTokenExpired(rawBootstrappedSession.accessToken) ||
-        hasRefreshableStoredSession(rawBootstrappedSession))
+    !isAccessTokenExpired(rawBootstrappedSession.accessToken)
         ? rawBootstrappedSession
         : null;
 
@@ -122,21 +119,7 @@ export default function AuthProvider({ children }) {
                 }
 
                 if (!accountData) {
-                    if (hasRefreshableStoredSession(bootstrappedSession)) {
-                        try {
-                            const refreshedSession = await refreshStoredSessionViaProxy();
-                            if (isActive && refreshedSession) {
-                                applySession(refreshedSession);
-                            } else if (isActive) {
-                                clearSession();
-                            }
-                        } catch (refreshError) {
-                            console.error("Stored session refresh failed", refreshError);
-                            if (isActive) {
-                                clearSession();
-                            }
-                        }
-                    } else if (
+                    if (
                         bootstrappedSession?.accessToken &&
                         !isAccessTokenExpired(bootstrappedSession.accessToken)
                     ) {
