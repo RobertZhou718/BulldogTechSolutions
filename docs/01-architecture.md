@@ -4,7 +4,7 @@
 
 Bulldog Finance is a personal "wealth view" application that covers:
 
-- Authentication via Microsoft Entra External ID (MSAL) plus a native email/password and social auth proxy
+- Authentication via Microsoft Entra External ID and MSAL Custom Native Auth, with a backend `/api/native-auth` gateway for CIAM native auth calls
 - First-run onboarding
 - Account and transaction management, including Plaid Link bank connections
 - Investment holdings, watchlist, and market information aggregation
@@ -25,9 +25,9 @@ Bulldog Finance is a personal "wealth view" application that covers:
 
 - Stack: **.NET 8**, **Azure Functions v4 Isolated Worker**, **Microsoft.AspNetCore.App** (HTTP integration), **Application Insights**
 - Responsibilities:
-  - REST API surface (`/me`, `/onboarding`, `/accounts`, `/transactions`, `/investments`, `/reports`, `/chat`, `/plaid/*`, `/auth/*`)
+  - REST API surface (`/me`, `/onboarding`, `/accounts`, `/transactions`, `/investments`, `/reports`, `/chat`, `/plaid/*`, `/native-auth/*`)
   - Bearer-token middleware that validates Entra JWTs and populates the per-request user context
-  - Native auth proxy (sign-in / sign-up / social / token refresh / password reset) forwarded to the Entra Native Auth API
+  - Native auth gateway (`/api/native-auth/{*path}`) that forwards MSAL Custom Native Auth SDK calls to the Entra Native Auth API
   - Plaid webhook handling and timer-triggered balance refresh + transaction sync
   - Timer triggers for weekly / monthly AI report generation
 
@@ -65,7 +65,7 @@ Bulldog Finance is a personal "wealth view" application that covers:
 
 ### Flow A — First-time onboarding
 
-1. After MSAL (or native) sign-in the SPA calls `GET /me`.
+1. After MSAL Custom Native Auth sign-in the SPA calls `GET /me`.
 2. If `onboardingDone=false`, it routes to `/onboarding`.
 3. User submits default currency + initial accounts to `POST /onboarding`.
 4. Backend creates the user profile, accounts, and INIT transactions; may also offer Plaid Link.

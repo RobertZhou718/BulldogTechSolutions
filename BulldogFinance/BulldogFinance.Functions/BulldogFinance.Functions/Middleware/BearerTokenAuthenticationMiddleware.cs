@@ -9,6 +9,14 @@ namespace BulldogFinance.Functions.Middleware
 {
     public sealed class BearerTokenAuthenticationMiddleware : IFunctionsWorkerMiddleware
     {
+        // HTTP functions that intentionally accept anonymous traffic. Everything else
+        // requires a valid bearer token; missing/invalid tokens get 401 here.
+        private static readonly HashSet<string> AnonymousFunctions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "NativeAuthProxy", // CIAM native-auth gateway, used pre-login
+            "PlaidWebhook"     // Plaid webhook, validates its own signature
+        };
+
         private readonly IAuthTokenValidator _authTokenValidator;
         private readonly ILogger<BearerTokenAuthenticationMiddleware> _logger;
 
@@ -23,9 +31,30 @@ namespace BulldogFinance.Functions.Middleware
         public async Task Invoke(FunctionContext context, FunctionExecutionDelegate next)
         {
             var request = await context.GetHttpRequestDataAsync();
-            if (request == null || !TryGetBearerToken(request, out var bearerToken))
+
+            // Non-HTTP triggers bypass auth (queue, timer, etc.).
+            if (request == null)
             {
                 await next(context);
+                return;
+            }
+
+            var functionName = context.FunctionDefinition.Name;
+            var isAnonymous = AnonymousFunctions.Contains(functionName);
+
+            if (!TryGetBearerToken(request, out var bearerToken))
+            {
+                if (isAnonymous)
+                {
+                    await next(context);
+                    return;
+                }
+
+                _logger.LogWarning(
+                    "Rejecting request without bearer token. Function={FunctionName}",
+                    functionName);
+
+                await WriteUnauthorizedAsync(context, request, "A bearer token is required.");
                 return;
             }
 
@@ -34,7 +63,7 @@ namespace BulldogFinance.Functions.Middleware
             {
                 _logger.LogWarning(
                     "Rejecting request with invalid bearer token. Function={FunctionName} StatusCode={StatusCode}",
-                    context.FunctionDefinition.Name,
+                    functionName,
                     (int)result.StatusCode);
 
                 var response = request.CreateResponse(result.StatusCode);
@@ -50,6 +79,16 @@ namespace BulldogFinance.Functions.Middleware
             }
 
             await next(context);
+        }
+
+        private static async Task WriteUnauthorizedAsync(
+            FunctionContext context,
+            HttpRequestData request,
+            string message)
+        {
+            var response = request.CreateResponse(System.Net.HttpStatusCode.Unauthorized);
+            await response.WriteStringAsync(message);
+            context.GetInvocationResult().Value = response;
         }
 
         private static bool TryGetBearerToken(HttpRequestData request, out string bearerToken)
