@@ -3,7 +3,7 @@ import { BarChartSquare02, Coins01, HomeLine, MessageChatCircle } from "@untitle
 import { NavLink } from "react-router-dom";
 
 const navItems = [
-    { label: "Dashboard", path: "/", icon: HomeLine },
+    { label: "Dashboard", path: "/dashboard", icon: HomeLine },
     { label: "Transactions", path: "/transactions", icon: Coins01 },
     { label: "Investments", path: "/investments", icon: BarChartSquare02 },
     { label: "Bulldog assistance", path: "/assistant", icon: MessageChatCircle },
@@ -39,7 +39,7 @@ export function NavItems({ onNavigate }) {
 export default function SideNav() {
     return (
         <aside className="hidden w-[280px] shrink-0 lg:block">
-            <div className="sticky top-[104px] rounded-[var(--radius-2xl)] border border-[var(--card-border)] bg-white/78 p-4 shadow-[var(--surface-shadow)] ring-1 ring-white/70 backdrop-blur-sm">
+            <div className="sticky top-[104px] rounded-[var(--radius-2xl)] border border-[var(--card-border)] bg-[var(--card-bg)] p-4 shadow-[var(--surface-shadow)] ring-1 ring-[var(--card-border)] backdrop-blur-sm">
                 <div className="px-3 py-2">
                     <p className="text-xs font-semibold text-[var(--text-soft)]">Workspace</p>
                     <p className="mt-1 text-sm text-[var(--text-muted)]">Portfolio management</p>

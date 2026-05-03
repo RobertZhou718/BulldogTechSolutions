@@ -36,13 +36,13 @@ export default function FloatingChatbot() {
             <button
                 type="button"
                 onClick={openChat}
-                className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-3 rounded-full border border-[var(--card-border)] bg-white px-3 py-3 shadow-lg transition hover:bg-[var(--bg-elevated)] lg:bottom-6 lg:right-6"
+                className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-3 rounded-full border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-3 text-[var(--text-main)] shadow-lg transition hover:bg-[var(--bg-elevated)] lg:bottom-6 lg:right-6"
                 aria-label="Open Bulldog Finance chat"
             >
                 <img
                     src={chatbotAvatar}
                     alt=""
-                    className="h-10 w-10 rounded-full border border-[var(--card-border)] bg-white object-cover p-1"
+                    className="h-10 w-10 rounded-full border border-[var(--card-border)] bg-[var(--card-bg-strong)] object-cover p-1"
                 />
                 <span className="hidden pr-1 text-sm font-semibold text-[var(--text-main)] sm:inline">
                     Chat

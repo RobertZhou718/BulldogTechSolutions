@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { LogOut01 } from "@untitledui/icons";
-import { Menu } from "lucide-react";
+import { Menu, Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useAuth } from "@/auth/core/authContext.js";
 import BulldogLogo from "@/assets/BulldogFinance.png";
 import { Button } from "@/components/ui/button";
@@ -19,10 +20,39 @@ import {
     SheetTitle,
     SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { NavItems } from "./SideNav.jsx";
 
 export const APP_BAR_HEIGHT = 72;
 export const DRAWER_WIDTH = 280;
+
+function SceneModeToggle() {
+    const { theme, setTheme } = useTheme();
+    const isNightMode = theme === "dark";
+    const label = isNightMode ? "Switch to day mode" : "Switch to night mode";
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={label}
+                    className="rounded-full border border-[var(--card-border)] bg-[var(--card-bg-strong)] text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-main)]"
+                    onClick={() => setTheme(isNightMode ? "light" : "dark")}
+                >
+                    {isNightMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent sideOffset={8}>{label}</TooltipContent>
+        </Tooltip>
+    );
+}
 
 export default function TopBar() {
     const { isLoading, signOut, user } = useAuth();
@@ -32,7 +62,7 @@ export default function TopBar() {
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
     return (
-        <header className="sticky top-0 z-40 border-b border-[var(--card-border)] bg-white/80 backdrop-blur-xl">
+        <header className="sticky top-0 z-40 border-b border-[var(--card-border)] bg-[var(--card-bg)] backdrop-blur-xl">
             <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between gap-4 px-4 lg:px-6">
                 <div className="flex items-center gap-3">
                     <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
@@ -76,6 +106,7 @@ export default function TopBar() {
                     <span className="hidden rounded-full border border-[var(--color-success-100)] bg-[var(--color-success-50)] px-3 py-1 text-sm font-medium text-[var(--color-success-700)] sm:inline-flex">
                         Live
                     </span>
+                    <SceneModeToggle />
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <button
