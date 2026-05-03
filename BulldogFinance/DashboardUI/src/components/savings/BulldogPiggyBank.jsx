@@ -1,14 +1,28 @@
-import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ContactShadows, Environment, Html, OrbitControls, useGLTF } from "@react-three/drei";
 import { Physics, RigidBody, CuboidCollider, CylinderCollider } from "@react-three/rapier";
 import * as THREE from "three";
+import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib.js";
 import bulldogLogo from "@/assets/BulldogFinance.png";
+import shakeIcon from "@/assets/ShakeIconButton.png";
+
+RectAreaLightUniformsLib.init();
 
 const MODEL_PATH = "/models/bulldog-piggy-bank.glb";
 const MAX_COINS = 200;
 const COIN_SPAWN_INTERVAL_MS = 60;
-const COIN_DROP_Y = 0.55;
+const COIN_SLOT_DROP_POSITION = [0.16, 0.62, 0.02];
+const COIN_SLOT_SPREAD = [0.045, 0.018, 0.018];
+const BANK_SHAKE_BUTTON_COOLDOWN_MS = 80;
+const BANK_SHAKE_DURATION_MS = 900;
+const BANK_SHAKE_AMPLITUDE = 0.032;
+const BANK_SHAKE_ROLL = 0.08;
+const BANK_SHAKE_PITCH = 0.028;
+const BANK_SHAKE_BUTTON_INTENSITY = 1.35;
+const BANK_MODEL_SCALE = 1.12;
+const BANK_COMPACT_SCALE = 0.98;
+const GLASS_EDGE_SCALE = 1.012;
 
 const COIN_VARIANTS = [
     { radius: 0.075, height: 0.018, color: "#f5cf52", weight: 0.5 },
@@ -30,6 +44,30 @@ function pickVariant(seed) {
     return COIN_VARIANTS[0];
 }
 
+function getBankShakeMotion(shakeState) {
+    const startedAt = shakeState?.startedAt;
+    if (startedAt === null || startedAt === undefined) return null;
+
+    const elapsed = performance.now() - startedAt;
+    if (elapsed >= BANK_SHAKE_DURATION_MS) {
+        shakeState.startedAt = null;
+        return null;
+    }
+
+    const phase = elapsed / BANK_SHAKE_DURATION_MS;
+    const envelope = Math.sin(phase * Math.PI);
+    const swing = Math.sin(phase * Math.PI * 8) * envelope;
+    const counterSwing = Math.cos(phase * Math.PI * 7) * envelope * shakeState.direction;
+    const intensity = shakeState.intensity || 1;
+
+    return {
+        x: swing * BANK_SHAKE_AMPLITUDE * intensity,
+        z: counterSwing * BANK_SHAKE_AMPLITUDE * 0.42 * intensity,
+        roll: swing * BANK_SHAKE_ROLL * intensity,
+        pitch: counterSwing * BANK_SHAKE_PITCH * intensity,
+    };
+}
+
 function useReducedMotion() {
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
@@ -48,7 +86,7 @@ function SceneCamera({ compact }) {
     const { camera } = useThree();
 
     useEffect(() => {
-        camera.position.set(0.02, compact ? 0.08 : 0.06, compact ? 2.65 : 2.42);
+        camera.position.set(0.02, compact ? 0.08 : 0.06, compact ? 2.65 : 2.35);
         camera.lookAt(0, -0.04, 0);
         camera.updateProjectionMatrix();
     }, [camera, compact]);
@@ -56,9 +94,12 @@ function SceneCamera({ compact }) {
     return null;
 }
 
-function BulldogModel({ compact }) {
+function BulldogModel({ compact, shakeStateRef }) {
     const { scene } = useGLTF(MODEL_PATH);
+    const groupRef = useRef(null);
     const model = useMemo(() => scene.clone(true), [scene]);
+    const edgeModel = useMemo(() => scene.clone(true), [scene]);
+    const baseY = compact ? -0.05 : -0.04;
 
     useMemo(() => {
         model.traverse((object) => {
@@ -72,11 +113,12 @@ function BulldogModel({ compact }) {
 
             if (isDarkDetail) {
                 object.material = new THREE.MeshPhysicalMaterial({
-                    color: new THREE.Color("#0b0b0f"),
-                    metalness: 0.2,
-                    roughness: 0.18,
+                    color: new THREE.Color("#03050a"),
+                    metalness: 0.04,
+                    roughness: 0.08,
                     clearcoat: 1,
-                    clearcoatRoughness: 0.08,
+                    clearcoatRoughness: 0.02,
+                    envMapIntensity: 2.2,
                 });
                 return;
             }
@@ -84,44 +126,119 @@ function BulldogModel({ compact }) {
             const sourceMaterial = Array.isArray(object.material) ? object.material[0] : object.material;
             object.material = new THREE.MeshPhysicalMaterial({
                 map: sourceMaterial?.map || null,
-                color: new THREE.Color("#f4faff"),
+                color: new THREE.Color("#f8fcff"),
                 transparent: true,
-                opacity: 0.22,
-                transmission: 0.96,
-                thickness: 0.42,
-                ior: 1.5,
-                roughness: 0.02,
+                opacity: 0.54,
+                transmission: 0.58,
+                thickness: 1.18,
+                ior: 1.47,
+                roughness: 0.018,
                 metalness: 0,
                 clearcoat: 1,
-                clearcoatRoughness: 0.02,
-                envMapIntensity: 2.1,
+                clearcoatRoughness: 0.006,
+                envMapIntensity: 5,
+                reflectivity: 0.82,
+                specularIntensity: 1,
+                specularColor: new THREE.Color("#ffffff"),
                 depthWrite: false,
                 side: THREE.DoubleSide,
-                attenuationColor: new THREE.Color("#dceeff"),
-                attenuationDistance: 1.4,
+                attenuationColor: new THREE.Color("#d5e8f7"),
+                attenuationDistance: 0.42,
             });
         });
     }, [model]);
 
+    useMemo(() => {
+        edgeModel.traverse((object) => {
+            if (!object.isMesh) return;
+
+            const name = (object.name || "").toLowerCase();
+            const isDarkDetail = /eye|pupil|nose|nostril|slot/.test(name);
+            if (isDarkDetail) {
+                object.visible = false;
+                return;
+            }
+
+            object.castShadow = false;
+            object.receiveShadow = false;
+            object.material = new THREE.MeshBasicMaterial({
+                color: new THREE.Color("#d7e8f7"),
+                transparent: true,
+                opacity: 0.24,
+                depthWrite: false,
+                side: THREE.BackSide,
+            });
+        });
+    }, [edgeModel]);
+
+    useFrame(() => {
+        const group = groupRef.current;
+        if (!group) return;
+
+        const motion = getBankShakeMotion(shakeStateRef.current);
+        if (!motion) {
+            group.position.set(0, baseY, 0);
+            group.rotation.set(0, 0, 0);
+            return;
+        }
+
+        group.position.set(motion.x, baseY, motion.z);
+        group.rotation.set(motion.pitch, 0, motion.roll);
+    });
+
     return (
-        <group scale={compact ? 0.98 : 1.16} position={[0, compact ? -0.05 : -0.04, 0]}>
+        <group ref={groupRef} position={[0, baseY, 0]}>
+            <primitive object={edgeModel} scale={GLASS_EDGE_SCALE} />
             <primitive object={model} />
         </group>
     );
 }
 
-// Invisible basin inside the bulldog's belly so coins pile up instead of falling through.
-// Floor + 4 walls roughly tracing the inner cavity.
-function BellyBasin() {
-    // Length (X) extended 1.6x toward the rear (-X). Width (Z) extended 1.5x symmetrically.
-    // X range: -0.506 ~ +0.23 (length 0.736). Z range: -0.27 ~ +0.27 (width 0.54).
+// Invisible closed volume inside the bulldog's belly. The segmented lid leaves
+// a narrow slot chute so new coins can enter while settled coins stay contained.
+function BellyBasin({ shakeStateRef }) {
+    const bodyRef = useRef(null);
+    const rotationRef = useRef(new THREE.Quaternion());
+
+    useFrame(() => {
+        const body = bodyRef.current;
+        if (!body) return;
+
+        const motion = getBankShakeMotion(shakeStateRef.current);
+        if (!motion) {
+            body.setNextKinematicTranslation({ x: 0, y: 0, z: 0 });
+            body.setNextKinematicRotation({ x: 0, y: 0, z: 0, w: 1 });
+            return;
+        }
+
+        rotationRef.current.setFromEuler(new THREE.Euler(motion.pitch, 0, motion.roll));
+        body.setNextKinematicTranslation({ x: motion.x, y: 0, z: motion.z });
+        body.setNextKinematicRotation(rotationRef.current);
+    });
+
     return (
-        <RigidBody type="fixed" colliders={false} friction={0.8} restitution={0.02}>
-            <CuboidCollider position={[-0.138, -0.5, 0]} args={[0.368, 0.02, 0.27]} />
-            <CuboidCollider position={[0.30, 0.0, 0]} args={[0.02, 0.5, 0.27]} />
-            <CuboidCollider position={[-0.500, 0.0, 0]} args={[0.02, 0.5, 0.27]} />
-            <CuboidCollider position={[-0.138, 0.0, 0.28]} args={[0.368, 0.5, 0.02]} />
-            <CuboidCollider position={[-0.138, 0.0, -0.28]} args={[0.368, 0.5, 0.02]} />
+        <RigidBody
+            ref={bodyRef}
+            type="kinematicPosition"
+            colliders={false}
+            friction={0.82}
+            restitution={0.01}
+        >
+            <CuboidCollider position={[-0.105, -0.5, 0]} args={[0.315, 0.02, 0.27]} />
+            <CuboidCollider position={[0.24, 0.0, 0]} args={[0.02, 0.5, 0.27]} />
+            <CuboidCollider position={[-0.430, 0.0, 0]} args={[0.02, 0.5, 0.27]} />
+            <CuboidCollider position={[-0.105, 0.0, 0.28]} args={[0.315, 0.5, 0.02]} />
+            <CuboidCollider position={[-0.105, 0.0, -0.28]} args={[0.315, 0.5, 0.02]} />
+
+            <CuboidCollider position={[-0.205, 0.52, 0]} args={[0.215, 0.02, 0.27]} />
+            <CuboidCollider position={[0.235, 0.52, 0]} args={[0.025, 0.02, 0.27]} />
+            <CuboidCollider position={[0.13, 0.52, 0.19]} args={[0.10, 0.02, 0.09]} />
+            <CuboidCollider position={[0.13, 0.52, -0.19]} args={[0.10, 0.02, 0.09]} />
+
+            <CuboidCollider position={[0.000, 0.62, 0]} args={[0.012, 0.10, 0.11]} />
+            <CuboidCollider position={[0.255, 0.62, 0]} args={[0.012, 0.10, 0.11]} />
+            <CuboidCollider position={[0.13, 0.62, 0.115]} args={[0.125, 0.10, 0.012]} />
+            <CuboidCollider position={[0.13, 0.62, -0.115]} args={[0.125, 0.10, 0.012]} />
         </RigidBody>
     );
 }
@@ -137,63 +254,75 @@ function PhysicsCoin({ variant, spawnPos, spawnRot }) {
             restitution={0.02}
             linearDamping={0.6}
             angularDamping={0.9}
-            ccd={false}
+            ccd
         >
             <CylinderCollider args={[variant.height / 2, variant.radius]} />
             <mesh castShadow receiveShadow>
                 <cylinderGeometry args={[variant.radius, variant.radius, variant.height, 14]} />
                 <meshStandardMaterial
                     color={variant.color}
-                    metalness={0.78}
-                    roughness={0.32}
+                    metalness={0.86}
+                    roughness={0.22}
+                    envMapIntensity={1.6}
                 />
             </mesh>
         </RigidBody>
     );
 }
 
-function CoinPile({ progressPercent }) {
+function CoinPile({ progressPercent, shakeStateRef }) {
     const targetCount = Math.round((clampProgress(progressPercent) / 100) * MAX_COINS);
     const [coins, setCoins] = useState([]);
     const queueRef = useRef(0);
     const nextIdRef = useRef(0);
+    const coinCountRef = useRef(0);
+    const targetCountRef = useRef(targetCount);
 
     useEffect(() => {
+        targetCountRef.current = targetCount;
         const pending = queueRef.current;
-        const total = coins.length + pending;
+        const total = coinCountRef.current + pending;
 
         if (targetCount > total) {
             queueRef.current += targetCount - total;
-        } else if (targetCount < coins.length) {
+        } else if (targetCount < coinCountRef.current) {
             queueRef.current = 0;
-            setCoins((prev) => prev.slice(0, targetCount));
         } else if (targetCount < total) {
-            queueRef.current = Math.max(0, targetCount - coins.length);
+            queueRef.current = Math.max(0, targetCount - coinCountRef.current);
         }
-    }, [targetCount, coins.length]);
+    }, [targetCount]);
 
     useEffect(() => {
         const interval = setInterval(() => {
-            if (queueRef.current <= 0) return;
-            const batchSize = Math.min(queueRef.current, queueRef.current > 20 ? 5 : 1);
-            queueRef.current -= batchSize;
-            const newCoins = [];
-            for (let i = 0; i < batchSize; i++) {
-                const id = nextIdRef.current++;
-                const variant = pickVariant(id);
-                const spawnPos = [
-                    -0.1 + (Math.random() - 0.5) * 0.55,
-                    COIN_DROP_Y + Math.random() * 0.05 + i * 0.022,
-                    (Math.random() - 0.5) * 0.15,
-                ];
-                const spawnRot = [
-                    Math.random() * Math.PI,
-                    Math.random() * Math.PI,
-                    Math.random() * Math.PI,
-                ];
-                newCoins.push({ id, variant, spawnPos, spawnRot });
+            const currentTarget = targetCountRef.current;
+            if (coinCountRef.current > currentTarget) {
+                setCoins((prev) => {
+                    const next = prev.slice(0, currentTarget);
+                    coinCountRef.current = next.length;
+                    return next;
+                });
+                return;
             }
-            setCoins((prev) => [...prev, ...newCoins]);
+
+            if (queueRef.current <= 0) return;
+            queueRef.current -= 1;
+            const id = nextIdRef.current++;
+            const variant = pickVariant(id);
+            const spawnPos = [
+                COIN_SLOT_DROP_POSITION[0] + (Math.random() - 0.5) * COIN_SLOT_SPREAD[0],
+                COIN_SLOT_DROP_POSITION[1] + Math.random() * COIN_SLOT_SPREAD[1],
+                COIN_SLOT_DROP_POSITION[2] + (Math.random() - 0.5) * COIN_SLOT_SPREAD[2],
+            ];
+            const spawnRot = [
+                Math.PI / 2 + (Math.random() - 0.5) * 0.28,
+                Math.random() * Math.PI,
+                (Math.random() - 0.5) * 0.18,
+            ];
+            setCoins((prev) => {
+                const next = [...prev, { id, variant, spawnPos, spawnRot }];
+                coinCountRef.current = next.length;
+                return next;
+            });
         }, COIN_SPAWN_INTERVAL_MS);
 
         return () => clearInterval(interval);
@@ -201,7 +330,7 @@ function CoinPile({ progressPercent }) {
 
     return (
         <>
-            <BellyBasin />
+            <BellyBasin shakeStateRef={shakeStateRef} />
             {coins.map((coin) => (
                 <PhysicsCoin
                     key={coin.id}
@@ -240,32 +369,57 @@ function Celebration({ active }) {
     );
 }
 
-function PiggyBankScene({ progressPercent, compact, reducedMotion }) {
+function PiggyBankScene({ progressPercent, compact, reducedMotion, manualShakeSignal }) {
     const normalized = clampProgress(progressPercent);
+    const shakeStateRef = useRef({ startedAt: null, direction: 1, intensity: 1 });
+    const lastShakeAtRef = useRef(0);
+    const bankScale = compact ? BANK_COMPACT_SCALE : BANK_MODEL_SCALE;
+
+    const triggerBankShake = useCallback((cooldownMs, intensity = 1) => {
+        if (reducedMotion) return;
+
+        const now = performance.now();
+        if (now - lastShakeAtRef.current < cooldownMs) return;
+
+        lastShakeAtRef.current = now;
+        shakeStateRef.current.startedAt = now;
+        shakeStateRef.current.direction = Math.random() > 0.5 ? 1 : -1;
+        shakeStateRef.current.intensity = intensity;
+    }, [reducedMotion]);
+
+    useEffect(() => {
+        if (!manualShakeSignal) return;
+        triggerBankShake(BANK_SHAKE_BUTTON_COOLDOWN_MS, BANK_SHAKE_BUTTON_INTENSITY);
+    }, [manualShakeSignal, triggerBankShake]);
 
     return (
         <>
             <SceneCamera compact={compact} />
-            <ambientLight intensity={0.78} />
+            <ambientLight intensity={0.22} />
+            <hemisphereLight args={["#ffffff", "#d7e7f7", 0.72]} />
             <directionalLight
                 castShadow
-                position={[2.4, 3.2, 3.4]}
-                intensity={2.45}
+                position={[0.2, 4.6, 1.3]}
+                intensity={1.75}
                 shadow-mapSize-width={1024}
                 shadow-mapSize-height={1024}
             />
-            <pointLight position={[-1.8, 1.2, 1.6]} intensity={1.05} color="#84caff" />
-            <pointLight position={[1.6, 0.5, -1.5]} intensity={0.8} color="#ffffff" />
-            <Physics gravity={[0, -3.2, 0]} timeStep={1 / 60} paused={reducedMotion}>
-                <CoinPile progressPercent={normalized} />
-            </Physics>
-            <BulldogModel compact={compact} />
+            <rectAreaLight position={[-0.72, 2.25, 1.15]} rotation={[-0.78, -0.24, -0.08]} width={0.18} height={1.35} intensity={6.2} color="#ffffff" />
+            <rectAreaLight position={[0.74, 2.05, 1.02]} rotation={[-0.82, 0.28, 0.1]} width={0.16} height={1.12} intensity={4.4} color="#eef8ff" />
+            <rectAreaLight position={[0, 2.65, 0.2]} rotation={[-Math.PI / 2, 0, 0]} width={1.25} height={0.34} intensity={3.6} color="#ffffff" />
+            <spotLight position={[0, 3.2, 1.35]} angle={0.5} penumbra={0.74} intensity={1.2} color="#ffffff" />
+            <group scale={bankScale}>
+                <Physics gravity={[0, -3.2, 0]} timeStep={1 / 60} paused={reducedMotion}>
+                    <CoinPile progressPercent={normalized} shakeStateRef={shakeStateRef} />
+                </Physics>
+                <BulldogModel compact={compact} shakeStateRef={shakeStateRef} />
+            </group>
             <Celebration active={normalized >= 100} />
             <ContactShadows
                 position={[0, -0.56, 0]}
-                opacity={0.22}
-                scale={compact ? 1.45 : 1.7}
-                blur={2.4}
+                opacity={0.46}
+                scale={compact ? 1.22 : 1.46}
+                blur={1.85}
                 far={1.2}
             />
             <Environment preset="studio" />
@@ -332,46 +486,61 @@ function supportsWebGL() {
 
 export default function BulldogPiggyBank({ progressPercent = 0, compact = false }) {
     const [webGLReady, setWebGLReady] = useState(() => supportsWebGL());
+    const [manualShakeSignal, setManualShakeSignal] = useState(0);
     const normalized = clampProgress(progressPercent);
     const reducedMotion = useReducedMotion();
-    const shimmerOpacity = normalized >= 80 ? 0.58 : 0.28;
+    const canShake = webGLReady && !reducedMotion;
 
     return (
-        <div
-            className="relative mx-auto aspect-[1.4] w-full max-w-[36rem] overflow-visible"
-            role="img"
-            aria-label={`Bulldog savings bank ${normalized.toFixed(0)} percent full`}
-        >
-            {webGLReady ? (
-                <Canvas
-                    shadows
-                    dpr={[1, compact ? 1.35 : 1.6]}
-                    camera={{ fov: compact ? 34 : 32, near: 0.1, far: 20 }}
-                    gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
-                    className="h-full w-full overflow-visible drop-shadow-[0_24px_34px_rgba(16,24,40,0.14)]"
-                    onCreated={({ gl }) => {
-                        gl.outputColorSpace = THREE.SRGBColorSpace;
-                        gl.toneMapping = THREE.ACESFilmicToneMapping;
-                        gl.toneMappingExposure = 1.08;
-                    }}
-                    onError={() => setWebGLReady(false)}
-                >
-                    <Suspense fallback={<LoadingBank normalized={normalized} />}>
-                        <PiggyBankScene
-                            progressPercent={normalized}
-                            compact={compact}
-                            reducedMotion={reducedMotion}
-                        />
-                    </Suspense>
-                </Canvas>
-            ) : (
-                <WebGLFallback normalized={normalized} compact={compact} />
-            )}
-
+        <div className={`${compact ? "mx-auto aspect-[1.4] max-w-[36rem]" : "h-full min-h-[24rem]"} relative isolate w-full overflow-visible`}>
             <div
-                className="pointer-events-none absolute inset-x-[10%] top-[8%] h-[42%] rounded-full bg-white blur-2xl"
-                style={{ opacity: compact ? shimmerOpacity * 0.45 : shimmerOpacity }}
-            />
+                className="relative h-full w-full"
+                role="img"
+                aria-label={`Bulldog savings bank ${normalized.toFixed(0)} percent full`}
+            >
+                {webGLReady ? (
+                    <Canvas
+                        shadows
+                        dpr={[1, compact ? 1.35 : 1.6]}
+                        camera={{ fov: compact ? 34 : 48, near: 0.1, far: 20 }}
+                        gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+                        className="h-full w-full overflow-visible"
+                        onCreated={({ gl }) => {
+                            gl.outputColorSpace = THREE.SRGBColorSpace;
+                            gl.toneMapping = THREE.ACESFilmicToneMapping;
+                            gl.toneMappingExposure = 0.96;
+                        }}
+                        onError={() => setWebGLReady(false)}
+                    >
+                        <Suspense fallback={<LoadingBank normalized={normalized} />}>
+                            <PiggyBankScene
+                                progressPercent={normalized}
+                                compact={compact}
+                                reducedMotion={reducedMotion}
+                                manualShakeSignal={manualShakeSignal}
+                            />
+                        </Suspense>
+                    </Canvas>
+                ) : (
+                    <WebGLFallback normalized={normalized} compact={compact} />
+                )}
+            </div>
+
+            <button
+                type="button"
+                className={`${compact ? "left-3 top-3 size-10" : "left-4 top-4 size-12"} absolute z-20 inline-flex items-center justify-center rounded-full border border-white/18 bg-white/12 shadow-[0_12px_28px_rgba(2,8,23,0.24)] backdrop-blur-md transition hover:bg-white/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45 disabled:cursor-not-allowed disabled:opacity-45`}
+                aria-label="Shake coins"
+                title="Shake coins"
+                disabled={!canShake}
+                onClick={() => setManualShakeSignal((value) => value + 1)}
+            >
+                <img
+                    src={shakeIcon}
+                    alt=""
+                    className={`${compact ? "size-7" : "size-9"} object-contain drop-shadow-[0_1px_2px_rgba(255,255,255,0.28)]`}
+                    draggable="false"
+                />
+            </button>
         </div>
     );
 }

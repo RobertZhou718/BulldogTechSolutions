@@ -21,7 +21,7 @@ export default defineConfig({
     },
   },
   build: {
-    chunkSizeWarningLimit: 800,
+    chunkSizeWarningLimit: 2500,
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -35,6 +35,10 @@ export default defineConfig({
           ) return "framework";
           if (id.includes("@azure/msal")) return "msal";
           if (id.includes("react-plaid-link") || id.includes("plaid")) return "plaid";
+          if (id.includes("@react-three/fiber") || id.includes("@react-three/drei")) return "react-three";
+          if (id.includes("@dimforge/rapier3d")) return "rapier";
+          if (id.includes("@react-three/rapier")) return "react-three-rapier";
+          if (/[\\/]three[\\/]/.test(id)) return "three";
           if (id.includes("react-aria") || id.includes("@react-stately") || id.includes("@react-aria")) return "react-aria";
           if (id.includes("react-router")) return "router";
           if (id.includes("sonner")) return "sonner";

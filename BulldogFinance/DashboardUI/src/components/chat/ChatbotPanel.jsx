@@ -25,7 +25,7 @@ export default function ChatbotPanel({
                 <img
                     src={chatbotAvatar}
                     alt="Bulldog Finance assistant"
-                    className="h-11 w-11 rounded-2xl border border-[var(--card-border)] bg-white object-cover p-1"
+                    className="h-11 w-11 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg-strong)] object-cover p-1"
                 />
                 <div className="min-w-0">
                     <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
@@ -92,7 +92,7 @@ export default function ChatbotPanel({
                                     type="button"
                                     onClick={() => submitMessage(prompt)}
                                     disabled={isSending || isLoadingHistory}
-                                    className="rounded-full border border-[var(--card-border)] bg-[var(--bg-main)] px-3 py-2 text-left text-sm font-medium text-[var(--text-main)] transition hover:border-[#b2ddff] hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                                    className="rounded-full border border-[var(--card-border)] bg-[var(--bg-main)] px-3 py-2 text-left text-sm font-medium text-[var(--text-main)] transition hover:border-[var(--brand-outline)] hover:bg-[var(--bg-elevated)] disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                     {prompt}
                                 </button>

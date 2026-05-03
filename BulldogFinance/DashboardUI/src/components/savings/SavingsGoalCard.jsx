@@ -225,7 +225,7 @@ export default function SavingsGoalCard({
             <div className="grid gap-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(22rem,0.95fr)]">
                 <div className="relative flex min-h-[28rem] items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_30%_12%,rgba(255,255,255,0.95),rgba(239,244,255,0.62)_36%,rgba(209,250,223,0.42)_100%)] p-4 sm:p-6">
                     <div className="absolute inset-x-8 top-8 h-24 rounded-full bg-white/70 blur-3xl" />
-                    <div className="relative w-full">
+                    <div className="relative h-full min-h-[24rem] w-full">
                         <BulldogPiggyBank progressPercent={progressPercent} />
                     </div>
                 </div>
@@ -427,14 +427,14 @@ export default function SavingsGoalCard({
                             </Field>
 
                             <div>
-                                <p className="text-sm font-medium text-[var(--color-gray-700)]">
+                                <p className="text-sm font-medium text-[var(--text-muted)]">
                                     Included account types
                                 </p>
                                 <div className="mt-2 grid gap-2 sm:grid-cols-3">
                                     {ACCOUNT_TYPE_OPTIONS.map((type) => (
                                         <label
                                             key={type.value}
-                                            className="flex min-h-11 items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--card-border)] bg-white px-3 text-sm font-medium text-[var(--text-main)]"
+                                            className="flex min-h-11 items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--card-border)] bg-[var(--card-bg-strong)] px-3 text-sm font-medium text-[var(--text-main)]"
                                         >
                                             <Checkbox
                                                 checked={form.includedAccountTypes.includes(type.value)}
