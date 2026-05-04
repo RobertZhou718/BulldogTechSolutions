@@ -94,6 +94,23 @@ namespace BulldogFinance.Functions.Services.Plaid
             return result;
         }
 
+        public async Task<IReadOnlyList<PlaidItemEntity>> GetActiveItemsAsync(CancellationToken cancellationToken = default)
+        {
+            var result = new List<PlaidItemEntity>();
+            var activeStatus = "ACTIVE";
+            var filter = TableClient.CreateQueryFilter($"Status eq {activeStatus}");
+            var query = _itemsTable.QueryAsync<PlaidItemEntity>(
+                filter: filter,
+                cancellationToken: cancellationToken);
+
+            await foreach (var item in query)
+            {
+                result.Add(item);
+            }
+
+            return result;
+        }
+
         public async Task<PlaidItemEntity> UpsertItemAsync(PlaidItemEntity item, CancellationToken cancellationToken = default)
         {
             await _itemsTable.UpsertEntityAsync(item, TableUpdateMode.Replace, cancellationToken);
@@ -119,6 +136,23 @@ namespace BulldogFinance.Functions.Services.Plaid
             {
                 return null;
             }
+        }
+
+        public async Task<IReadOnlyList<PlaidAccountLinkEntity>> GetAccountLinksAsync(
+            string userId,
+            CancellationToken cancellationToken = default)
+        {
+            var result = new List<PlaidAccountLinkEntity>();
+            var query = _accountLinksTable.QueryAsync<PlaidAccountLinkEntity>(
+                ent => ent.PartitionKey == userId,
+                cancellationToken: cancellationToken);
+
+            await foreach (var item in query)
+            {
+                result.Add(item);
+            }
+
+            return result;
         }
 
         public async Task<IReadOnlyList<PlaidAccountLinkEntity>> GetAccountLinksByItemAsync(

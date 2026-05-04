@@ -65,6 +65,7 @@ Create `local.settings.json` in the Functions project directory (do not commit):
   "IsEncrypted": false,
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "QueueStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
     "APPLICATIONINSIGHTS_CONNECTION_STRING": "<optional>"
   },
@@ -107,6 +108,14 @@ Create `local.settings.json` in the Functions project directory (do not commit):
 ```
 
 Managed-identity variant (cloud): instead of `ConnectionString`, set `TableStorage:ServiceUri` / `BlobStorage:ServiceUri` and optionally `ManagedIdentity:ClientId`. The Functions host will fall back to `DefaultAzureCredential`.
+
+For the Plaid daily sync queue, set `QueueStorage` to the same storage account as `TableStorage` and `BlobStorage`. In connection-string mode, `QueueStorage` is the queue binding app setting that contains the storage account connection string. In managed-identity mode, use the queue binding prefix settings:
+
+```text
+QueueStorage__queueServiceUri=https://<storage-account>.queue.core.windows.net
+```
+
+If you use a user-assigned managed identity, also set the Functions queue binding identity settings for the same prefix, for example `QueueStorage__credential=managedidentity` and `QueueStorage__clientId=<managed-identity-client-id>`.
 
 ## 7. Authentication in local dev
 

@@ -20,6 +20,9 @@ namespace BulldogFinance.Functions.Models.Accounts
         public string? ExternalSource { get; set; }
         public string? InstitutionName { get; set; }
         public string? Mask { get; set; }
+        public DateTime? LastBalanceRefreshUtc { get; set; }
+        public DateTime? LastTransactionSyncUtc { get; set; }
+        public string? LastSyncStatus { get; set; }
     }
 
     public class CreateAccountResponse
