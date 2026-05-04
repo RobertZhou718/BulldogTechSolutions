@@ -9,7 +9,7 @@ import shakeIcon from "@/assets/ShakeIconButton.png";
 
 RectAreaLightUniformsLib.init();
 
-const MODEL_PATH = "/models/bulldog-piggy-bank.glb";
+const MODEL_PATH = "/models/tripo_retopo_subdiv2.glb";
 const MAX_COINS = 200;
 const COIN_SPAWN_INTERVAL_MS = 60;
 const COIN_SLOT_DROP_POSITION = [0.16, 0.62, 0.02];
