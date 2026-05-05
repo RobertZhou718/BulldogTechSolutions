@@ -1,5 +1,6 @@
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Accounts;
+using BulldogFinance.Functions.Models.Plaid;
 using BulldogFinance.Functions.Models.Transactions;
 using BulldogFinance.Functions.Services.Accounts;
 using BulldogFinance.Functions.Services.Plaid;
@@ -66,10 +67,22 @@ namespace BulldogFinance.Functions.Functions
             }
 
             var accounts = await _accountRepository.GetAccountsAsync(userId, includeArchived);
+            var plaidAccountLinks = await _plaidRepository.GetAccountLinksAsync(userId);
+            var plaidItems = await _plaidRepository.GetItemsAsync(userId);
+            var plaidAccountLinkByExternalAccountId = plaidAccountLinks
+                .GroupBy(link => link.RowKey)
+                .ToDictionary(group => group.Key, group => group.First());
+            var plaidItemByItemId = plaidItems
+                .GroupBy(item => item.RowKey)
+                .ToDictionary(group => group.Key, group => group.First());
+
             var dtoList = accounts
                 .OrderBy(a => a.SortOrder)
                 .ThenBy(a => a.Name)
-                .Select(ToDto)
+                .Select(account => ToDto(
+                    account,
+                    plaidAccountLinkByExternalAccountId,
+                    plaidItemByItemId))
                 .ToList();
 
             var response = req.CreateResponse(HttpStatusCode.OK);
@@ -226,7 +239,21 @@ namespace BulldogFinance.Functions.Functions
             return req.CreateResponse(HttpStatusCode.NoContent);
         }
 
-        private static AccountDto ToDto(AccountEntity account) => new AccountDto
+        private static AccountDto ToDto(
+            AccountEntity account,
+            IReadOnlyDictionary<string, PlaidAccountLinkEntity>? plaidAccountLinkByExternalAccountId = null,
+            IReadOnlyDictionary<string, PlaidItemEntity>? plaidItemByItemId = null)
+        {
+            PlaidItemEntity? plaidItem = null;
+            if (!string.IsNullOrWhiteSpace(account.ExternalAccountId) &&
+                plaidAccountLinkByExternalAccountId != null &&
+                plaidItemByItemId != null &&
+                plaidAccountLinkByExternalAccountId.TryGetValue(account.ExternalAccountId, out var plaidAccountLink))
+            {
+                plaidItemByItemId.TryGetValue(plaidAccountLink.ItemId, out plaidItem);
+            }
+
+            return new AccountDto
         {
             AccountId = account.RowKey,
             Name = account.Name,
@@ -237,7 +264,11 @@ namespace BulldogFinance.Functions.Functions
             IsArchived = account.IsArchived,
             ExternalSource = account.ExternalSource,
             InstitutionName = account.InstitutionName,
-            Mask = account.Mask
+            Mask = account.Mask,
+            LastBalanceRefreshUtc = account.LastBalanceRefreshUtc,
+            LastTransactionSyncUtc = plaidItem?.LastSyncAtUtc,
+            LastSyncStatus = plaidItem?.LastSyncStatus
         };
+        }
     }
 }

@@ -46,6 +46,7 @@ Bulldog Finance is a personal "wealth view" application that covers:
 
 - **Azure Table Storage**: `Users`, `Accounts`, `Transactions`, `Investments`, `Watchlist`, `PlaidItems`, `ChatConversations`
 - **Azure Blob Storage**: `reports` container (weekly/monthly latest markdown reports)
+- **Azure Queue Storage**: `plaid-daily-sync-items` queue for fan-out daily Plaid sync work
 - Credentials: connection string **or** `ServiceUri` + `DefaultAzureCredential` (managed identity friendly; `ManagedIdentity:ClientId` supported)
 
 ### Agent / tool layer

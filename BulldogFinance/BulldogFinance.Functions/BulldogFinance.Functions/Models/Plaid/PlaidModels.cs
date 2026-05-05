@@ -17,6 +17,11 @@ namespace BulldogFinance.Functions.Models.Plaid
         public string Status { get; set; } = "ACTIVE";
         public string? Cursor { get; set; }
         public DateTime? LastSyncAtUtc { get; set; }
+        public DateTime? LastSyncStartedAtUtc { get; set; }
+        public DateTime? LastSyncCompletedAtUtc { get; set; }
+        public string? LastSyncStatus { get; set; }
+        public string? LastSyncError { get; set; }
+        public DateTime? LastDailySyncQueuedAtUtc { get; set; }
         public DateTime? ConsentExpiresAtUtc { get; set; }
         public DateTime? CreatedAtUtc { get; set; }
         public DateTime? UpdatedAtUtc { get; set; }
@@ -115,5 +120,12 @@ namespace BulldogFinance.Functions.Models.Plaid
         public int Added { get; set; }
         public int Modified { get; set; }
         public int Removed { get; set; }
+    }
+
+    public class PlaidDailySyncQueueMessage
+    {
+        public string UserId { get; set; } = default!;
+        public string ItemId { get; set; } = default!;
+        public DateTime EnqueuedAtUtc { get; set; }
     }
 }

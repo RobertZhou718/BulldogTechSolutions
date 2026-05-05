@@ -10,11 +10,17 @@ namespace BulldogFinance.Functions.Services.Plaid
 
         Task<IReadOnlyList<PlaidItemEntity>> GetItemsAsync(string userId, CancellationToken cancellationToken = default);
 
+        Task<IReadOnlyList<PlaidItemEntity>> GetActiveItemsAsync(CancellationToken cancellationToken = default);
+
         Task<PlaidItemEntity> UpsertItemAsync(PlaidItemEntity item, CancellationToken cancellationToken = default);
 
         Task<PlaidAccountLinkEntity?> GetAccountLinkAsync(
             string userId,
             string plaidAccountId,
+            CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<PlaidAccountLinkEntity>> GetAccountLinksAsync(
+            string userId,
             CancellationToken cancellationToken = default);
 
         Task<IReadOnlyList<PlaidAccountLinkEntity>> GetAccountLinksByItemAsync(

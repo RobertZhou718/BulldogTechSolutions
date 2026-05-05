@@ -8,7 +8,7 @@ import MetricCard from "@/components/ui/MetricCard.jsx";
 import PageHeader from "@/components/ui/PageHeader.jsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { formatCurrencyBreakdown } from "@/lib/utils";
+import { formatCurrencyBreakdown, formatDateTime } from "@/lib/utils";
 import { useApiClient } from "@/services/apiClient";
 import { Field } from "@/components/ui/Field.jsx";
 import {
@@ -121,6 +121,35 @@ export default function TransactionsPage() {
         [accounts, formAccountId]
     );
     const currency = viewAccount?.currency || formAccount?.currency || "CAD";
+    const transactionSyncDescription = useMemo(() => {
+        const scopedAccounts = historyAccountId === "ALL"
+            ? accounts
+            : accounts.filter((account) => account.accountId === historyAccountId);
+        const plaidAccounts = scopedAccounts.filter((account) => account.externalSource === "Plaid");
+
+        if (plaidAccounts.length === 0) {
+            return "";
+        }
+
+        const timestamps = plaidAccounts
+            .map((account) => new Date(account.lastTransactionSyncUtc).getTime())
+            .filter((time) => Number.isFinite(time));
+
+        if (timestamps.length === 0) {
+            return "Plaid transaction sync pending.";
+        }
+
+        const oldestSync = new Date(Math.min(...timestamps)).toISOString();
+        const failedCount = plaidAccounts.filter((account) => account.lastSyncStatus === "FAILED").length;
+        const pendingCount = plaidAccounts.length - timestamps.length;
+        const statusText = failedCount > 0
+            ? ` ${failedCount} linked ${failedCount === 1 ? "account" : "accounts"} failed the latest daily sync.`
+            : pendingCount > 0
+              ? ` ${pendingCount} linked ${pendingCount === 1 ? "account is" : "accounts are"} pending first sync.`
+              : "";
+
+        return `Plaid transactions last synced ${formatDateTime(oldestSync)}.${statusText}`;
+    }, [accounts, historyAccountId]);
 
     const summary = useMemo(() => {
         const totalsByCurrency = new Map();
@@ -220,7 +249,7 @@ export default function TransactionsPage() {
             <PageHeader
                 eyebrow="Transactions"
                 title={historyAccountId === "ALL" ? "All accounts" : viewAccount?.name || "Selected account"}
-                description="Add transactions, filter by date or type, and review account activity in one place."
+                description={`Add transactions, filter by date or type, and review account activity in one place.${transactionSyncDescription ? ` ${transactionSyncDescription}` : ""}`}
                 actions={
                     <div className="min-w-[240px]">
                         <Field label="Viewing">

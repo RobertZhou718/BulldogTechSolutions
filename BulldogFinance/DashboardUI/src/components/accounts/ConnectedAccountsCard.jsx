@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Plus, Trash01 } from "@untitledui/icons";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency, formatDateTime } from "@/lib/utils";
 import ConnectBankButton from "@/components/plaid/ConnectBankButton.jsx";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,6 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { formatCurrency } from "@/lib/utils";
 
 const DEFAULT_VISIBLE_COUNT = 3;
 
@@ -50,6 +49,11 @@ function getTypeLabel(account) {
         .map((part) => part.replace(/_/g, " "))
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
         .join(" / ");
+}
+
+function getTimestampLabel(value, fallback = "Pending first sync") {
+    const formatted = formatDateTime(value);
+    return formatted || fallback;
 }
 
 export default function ConnectedAccountsCard({
@@ -281,6 +285,11 @@ export default function ConnectedAccountsCard({
                                 <span className="inline-flex rounded-full border border-[var(--card-border)] bg-[var(--card-bg-strong)] px-2.5 py-1 text-xs font-medium text-[var(--text-muted)]">
                                     {getSourceLabel(account)}
                                 </span>
+                                {account.externalSource === "Plaid" ? (
+                                    <p className="mt-2 text-xs text-[var(--text-soft)]">
+                                        Transactions: {getTimestampLabel(account.lastTransactionSyncUtc)}
+                                    </p>
+                                ) : null}
                             </div>
 
                             <div>
@@ -302,6 +311,11 @@ export default function ConnectedAccountsCard({
                                     {formatCurrency(account.currentBalance, account.currency, 2)}
                                 </p>
                                 <p className="mt-1 text-xs text-[var(--text-soft)]">{account.currency}</p>
+                                {account.externalSource === "Plaid" ? (
+                                    <p className="mt-1 text-xs text-[var(--text-soft)]">
+                                        Balance: {getTimestampLabel(account.lastBalanceRefreshUtc)}
+                                    </p>
+                                ) : null}
                             </div>
 
                             <div className="flex justify-start md:justify-end">
