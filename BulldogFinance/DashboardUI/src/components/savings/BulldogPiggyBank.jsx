@@ -11,9 +11,20 @@ RectAreaLightUniformsLib.init();
 
 const MODEL_PATH = "/models/tripo_retopo_subdiv2.glb";
 const MAX_COINS = 200;
-const COIN_SPAWN_INTERVAL_MS = 60;
-const COIN_SLOT_DROP_POSITION = [0.16, 0.62, 0.02];
-const COIN_SLOT_SPREAD = [0.045, 0.018, 0.018];
+
+// Coin spawn position above the slot: [x, y, z].
+// Keep this aligned with the red slot colliders in BASIN_COLLIDERS.
+const COIN_SLOT_DROP_POSITION = [0.16, 0.77, 0];
+const COIN_SLOT_SPREAD = [0.018, 0.012, 0.018];
+const COIN_INITIAL_LINEAR_VELOCITY = [0, -0.85, 0];
+const COIN_INITIAL_ANGULAR_VELOCITY = [0.12, 0.18, 0.06];
+const COIN_NEXT_DROP_Y = 0.42;
+const COIN_DROP_RETRY_MS = 1600;
+const COIN_QUEUE_PUMP_INTERVAL_MS = 80;
+const COIN_SHAKE_IMPULSE = 0.0045;
+const COIN_SHAKE_LIFT_IMPULSE = 0.0008;
+const COIN_SHAKE_TORQUE = 0.0025;
+const INITIAL_DROP_STORAGE_KEY = "bulldogPiggyBank.initialDropPlayed";
 const BANK_SHAKE_BUTTON_COOLDOWN_MS = 80;
 const BANK_SHAKE_DURATION_MS = 900;
 const BANK_SHAKE_AMPLITUDE = 0.032;
@@ -23,6 +34,7 @@ const BANK_SHAKE_BUTTON_INTENSITY = 1.35;
 const BANK_MODEL_SCALE = 1.12;
 const BANK_COMPACT_SCALE = 0.98;
 const GLASS_EDGE_SCALE = 1.012;
+const SHOW_BASIN_COLLIDER_DEBUG = false;
 
 const COIN_VARIANTS = [
     { radius: 0.075, height: 0.018, color: "#f5cf52", weight: 0.5 },
@@ -30,8 +42,62 @@ const COIN_VARIANTS = [
     { radius: 0.084, height: 0.020, color: "#b8862e", weight: 0.2 },
 ];
 
+// Container collider editor:
+// position: [x, y, z] is the center of the collider.
+// In the actual bulldog model, x = back/front. Positive x moves toward the front/head.
+// y = vertical. Negative is lower, positive is higher.
+// z = left/right when looking at the bulldog from the real front.
+// args: [halfWidthX, halfHeightY, halfDepthZ]. Double these values for the visible full size.
+// rotation tilts a collider in radians. Most position tuning should happen before changing rotation.
+const BASIN_COLLIDERS = [
+    { position: [-0.09, -0.505, 0], args: [0.34, 0.026, 0.24], color: "#38bdf8" },
+    { position: [-0.43, -0.21, 0], args: [0.026, 0.30, 0.24], color: "#38bdf8" },
+    { position: [0.25, -0.21, 0], args: [0.026, 0.30, 0.24], color: "#38bdf8" },
+    { position: [-0.09, -0.21, 0.24], args: [0.34, 0.30, 0.026], color: "#38bdf8" },
+    { position: [-0.09, -0.21, -0.24], args: [0.34, 0.30, 0.026], color: "#38bdf8" },
+    { position: [-0.245, 0.105, 0], args: [0.185, 0.018, 0.24], color: "#38bdf8" },
+    { position: [0.105, 0.105, 0.235], args: [0.165, 0.018, 0.015], color: "#38bdf8" },
+    { position: [0.105, 0.105, -0.235], args: [0.165, 0.018, 0.015], color: "#38bdf8" },
+    { position: [-0.02, 0.3, 0], args: [0.026, 0.17, 0.23], color: "#38bdf8" },
+    { position: [0.34, 0.3, 0], args: [0.026, 0.17, 0.23], color: "#38bdf8" },
+    { position: [0.16, 0.3, 0.23], args: [0.18, 0.17, 0.026], color: "#38bdf8" },
+    { position: [0.16, 0.3, -0.23], args: [0.18, 0.17, 0.026], color: "#38bdf8" },
+    { position: [-0.14, 0.16, 0.18], args: [0.16, 0.10, 0.022], rotation: [0.52, 0, 0], color: "#38bdf8" },
+    { position: [-0.14, 0.16, -0.18], args: [0.16, 0.10, 0.022], rotation: [-0.52, 0, 0], color: "#38bdf8" },
+    { position: [0.21, 0.16, 0.18], args: [0.13, 0.10, 0.022], rotation: [0.36, 0, 0], color: "#38bdf8" },
+    { position: [0.21, 0.16, -0.18], args: [0.13, 0.10, 0.022], rotation: [-0.36, 0, 0], color: "#38bdf8" },
+    { position: [0.015, 0.5, 0], args: [0.035, 0.022, 0.18], color: "#f97316" },
+    { position: [0.305, 0.5, 0], args: [0.035, 0.022, 0.18], color: "#f97316" },
+    { position: [0.16, 0.5, 0.15], args: [0.12, 0.022, 0.03], color: "#f97316" },
+    { position: [0.16, 0.5, -0.15], args: [0.12, 0.022, 0.03], color: "#f97316" },
+    { position: [0.052, 0.61, 0], args: [0.012, 0.10, 0.118], color: "#ef4444" },
+    { position: [0.268, 0.61, 0], args: [0.012, 0.10, 0.118], color: "#ef4444" },
+    { position: [0.16, 0.61, 0.118], args: [0.108, 0.10, 0.012], color: "#ef4444" },
+    { position: [0.16, 0.61, -0.118], args: [0.108, 0.10, 0.012], color: "#ef4444" },
+];
+
+const SLOT_ESCAPE_GATE_COLLIDERS = [
+    { position: [0.16, 0.735, 0], args: [0.135, 0.018, 0.135], color: "#a855f7" },
+];
+
 function clampProgress(progressPercent) {
     return Math.max(0, Math.min(100, Number(progressPercent) || 0));
+}
+
+function hasPlayedInitialDrop() {
+    try {
+        return window.sessionStorage.getItem(INITIAL_DROP_STORAGE_KEY) === "true";
+    } catch {
+        return false;
+    }
+}
+
+function markInitialDropPlayed() {
+    try {
+        window.sessionStorage.setItem(INITIAL_DROP_STORAGE_KEY, "true");
+    } catch {
+        // Storage can be unavailable in private contexts; falling back to replay is acceptable.
+    }
 }
 
 function pickVariant(seed) {
@@ -44,13 +110,51 @@ function pickVariant(seed) {
     return COIN_VARIANTS[0];
 }
 
+function seededUnit(seed, salt = 0) {
+    return ((seed * 9301 + salt * 49297 + 233_280) % 233_280) / 233_280;
+}
+
+function createSettledCoins(count) {
+    const xSlots = [-0.30, -0.17, -0.04, 0.09];
+    const zSlots = [-0.13, 0, 0.13];
+    const coinsPerLayer = xSlots.length * zSlots.length;
+    const baseY = -0.465;
+    const layerHeight = 0.024;
+
+    return Array.from({ length: count }, (_, id) => {
+        const layer = Math.floor(id / coinsPerLayer);
+        const slot = id % coinsPerLayer;
+        const variant = pickVariant(id);
+        const xIndex = slot % xSlots.length;
+        const zIndex = Math.floor(slot / xSlots.length);
+        const xJitter = (seededUnit(id, 1) - 0.5) * 0.018;
+        const zJitter = (seededUnit(id, 2) - 0.5) * 0.018;
+
+        return {
+            id,
+            variant,
+            spawnPos: [
+                xSlots[xIndex] + xJitter,
+                baseY + layer * layerHeight + seededUnit(id, 3) * 0.006,
+                zSlots[zIndex] + zJitter,
+            ],
+            spawnRot: [
+                (seededUnit(id, 4) - 0.5) * 0.04,
+                seededUnit(id, 5) * Math.PI,
+                (seededUnit(id, 6) - 0.5) * 0.04,
+            ],
+            initialLinearVelocity: [0, 0, 0],
+            initialAngularVelocity: [0, 0, 0],
+        };
+    });
+}
+
 function getBankShakeMotion(shakeState) {
     const startedAt = shakeState?.startedAt;
     if (startedAt === null || startedAt === undefined) return null;
 
     const elapsed = performance.now() - startedAt;
     if (elapsed >= BANK_SHAKE_DURATION_MS) {
-        shakeState.startedAt = null;
         return null;
     }
 
@@ -194,11 +298,29 @@ function BulldogModel({ compact, shakeStateRef }) {
     );
 }
 
-// Invisible closed volume inside the bulldog's belly. The segmented lid leaves
-// a narrow slot chute so new coins can enter while settled coins stay contained.
-function BellyBasin({ shakeStateRef }) {
+function DebugBasinCollider({ position, args, rotation, color }) {
+    if (!SHOW_BASIN_COLLIDER_DEBUG) return null;
+
+    return (
+        <mesh position={position} rotation={rotation} renderOrder={20}>
+            <boxGeometry args={[args[0] * 2, args[1] * 2, args[2] * 2]} />
+            <meshBasicMaterial
+                color={color}
+                wireframe
+                transparent
+                opacity={0.72}
+                depthTest={false}
+            />
+        </mesh>
+    );
+}
+
+// Invisible closed volume inside the bulldog's belly. The slot opens only while
+// a coin is actively dropping, then closes again to stop reverse escapes.
+function BellyBasin({ shakeStateRef, slotOpen }) {
     const bodyRef = useRef(null);
     const rotationRef = useRef(new THREE.Quaternion());
+    const colliders = slotOpen ? BASIN_COLLIDERS : [...BASIN_COLLIDERS, ...SLOT_ESCAPE_GATE_COLLIDERS];
 
     useFrame(() => {
         const body = bodyRef.current;
@@ -224,28 +346,36 @@ function BellyBasin({ shakeStateRef }) {
             friction={0.82}
             restitution={0.01}
         >
-            <CuboidCollider position={[-0.105, -0.5, 0]} args={[0.315, 0.02, 0.27]} />
-            <CuboidCollider position={[0.24, 0.0, 0]} args={[0.02, 0.5, 0.27]} />
-            <CuboidCollider position={[-0.430, 0.0, 0]} args={[0.02, 0.5, 0.27]} />
-            <CuboidCollider position={[-0.105, 0.0, 0.28]} args={[0.315, 0.5, 0.02]} />
-            <CuboidCollider position={[-0.105, 0.0, -0.28]} args={[0.315, 0.5, 0.02]} />
-
-            <CuboidCollider position={[-0.205, 0.52, 0]} args={[0.215, 0.02, 0.27]} />
-            <CuboidCollider position={[0.235, 0.52, 0]} args={[0.025, 0.02, 0.27]} />
-            <CuboidCollider position={[0.13, 0.52, 0.19]} args={[0.10, 0.02, 0.09]} />
-            <CuboidCollider position={[0.13, 0.52, -0.19]} args={[0.10, 0.02, 0.09]} />
-
-            <CuboidCollider position={[0.000, 0.62, 0]} args={[0.012, 0.10, 0.11]} />
-            <CuboidCollider position={[0.255, 0.62, 0]} args={[0.012, 0.10, 0.11]} />
-            <CuboidCollider position={[0.13, 0.62, 0.115]} args={[0.125, 0.10, 0.012]} />
-            <CuboidCollider position={[0.13, 0.62, -0.115]} args={[0.125, 0.10, 0.012]} />
+            {colliders.map((collider, index) => (
+                <React.Fragment key={index}>
+                    <CuboidCollider
+                        position={collider.position}
+                        rotation={collider.rotation}
+                        args={collider.args}
+                    />
+                    <DebugBasinCollider {...collider} />
+                </React.Fragment>
+            ))}
         </RigidBody>
     );
 }
 
-function PhysicsCoin({ variant, spawnPos, spawnRot }) {
+function PhysicsCoin({
+    id,
+    variant,
+    spawnPos,
+    spawnRot,
+    initialLinearVelocity = COIN_INITIAL_LINEAR_VELOCITY,
+    initialAngularVelocity = COIN_INITIAL_ANGULAR_VELOCITY,
+    registerBody,
+}) {
+    const bodyRef = useRef(null);
+
+    useEffect(() => registerBody(id, bodyRef), [id, registerBody]);
+
     return (
         <RigidBody
+            ref={bodyRef}
             colliders={false}
             position={spawnPos}
             rotation={spawnRot}
@@ -254,6 +384,8 @@ function PhysicsCoin({ variant, spawnPos, spawnRot }) {
             restitution={0.02}
             linearDamping={0.6}
             angularDamping={0.9}
+            linearVelocity={initialLinearVelocity}
+            angularVelocity={initialAngularVelocity}
             ccd
         >
             <CylinderCollider args={[variant.height / 2, variant.radius]} />
@@ -270,16 +402,150 @@ function PhysicsCoin({ variant, spawnPos, spawnRot }) {
     );
 }
 
-function CoinPile({ progressPercent, shakeStateRef }) {
+function CoinPile({ progressPercent, shakeStateRef, manualShakeSignal }) {
     const targetCount = Math.round((clampProgress(progressPercent) / 100) * MAX_COINS);
-    const [coins, setCoins] = useState([]);
+    const [initialSettleInstantly] = useState(() => hasPlayedInitialDrop());
+    const shouldSettleInstantlyRef = useRef(initialSettleInstantly);
+    const [coins, setCoins] = useState(() => (
+        initialSettleInstantly ? createSettledCoins(targetCount) : []
+    ));
     const queueRef = useRef(0);
-    const nextIdRef = useRef(0);
-    const coinCountRef = useRef(0);
+    const nextIdRef = useRef(coins.length);
+    const coinCountRef = useRef(coins.length);
     const targetCountRef = useRef(targetCount);
+    const activeDropIdRef = useRef(null);
+    const dropFallbackTimerRef = useRef(null);
+    const coinBodiesRef = useRef(new Map());
+    const [slotOpen, setSlotOpen] = useState(false);
+
+    const clearDropFallbackTimer = useCallback(() => {
+        if (dropFallbackTimerRef.current === null) return;
+        window.clearTimeout(dropFallbackTimerRef.current);
+        dropFallbackTimerRef.current = null;
+    }, []);
+
+    const setActiveDropId = useCallback((id) => {
+        activeDropIdRef.current = id;
+        setSlotOpen(id !== null);
+    }, []);
+
+    const spawnNextCoinRef = useRef(null);
+
+    const registerCoinBody = useCallback((id, bodyRef) => {
+        const coinBodies = coinBodiesRef.current;
+        coinBodies.set(id, bodyRef);
+        return () => coinBodies.delete(id);
+    }, []);
+
+    const scheduleDropFallback = useCallback((id) => {
+        clearDropFallbackTimer();
+        dropFallbackTimerRef.current = window.setTimeout(() => {
+            if (activeDropIdRef.current !== id) return;
+
+            dropFallbackTimerRef.current = null;
+            const body = coinBodiesRef.current.get(id)?.current;
+            if (body?.translation().y <= COIN_NEXT_DROP_Y) {
+                setActiveDropId(null);
+                spawnNextCoinRef.current?.();
+                return;
+            }
+
+            queueRef.current += 1;
+            coinCountRef.current = Math.max(0, coinCountRef.current - 1);
+            setActiveDropId(null);
+            setCoins((prev) => prev.filter((coin) => coin.id !== id));
+            spawnNextCoinRef.current?.();
+        }, COIN_DROP_RETRY_MS);
+    }, [clearDropFallbackTimer, setActiveDropId]);
+
+    const spawnNextCoin = useCallback(() => {
+        if (activeDropIdRef.current !== null || queueRef.current <= 0) return;
+
+        const currentTarget = targetCountRef.current;
+        if (coinCountRef.current >= currentTarget) {
+            queueRef.current = 0;
+            return;
+        }
+
+        queueRef.current -= 1;
+        const id = nextIdRef.current++;
+        const variant = pickVariant(id);
+        const spawnPos = [
+            COIN_SLOT_DROP_POSITION[0] + (Math.random() - 0.5) * COIN_SLOT_SPREAD[0],
+            COIN_SLOT_DROP_POSITION[1] + Math.random() * COIN_SLOT_SPREAD[1],
+            COIN_SLOT_DROP_POSITION[2] + (Math.random() - 0.5) * COIN_SLOT_SPREAD[2],
+        ];
+        const spawnRot = [
+            Math.PI / 2 + (Math.random() - 0.5) * 0.28,
+            Math.random() * Math.PI,
+            (Math.random() - 0.5) * 0.18,
+        ];
+
+        setActiveDropId(id);
+        scheduleDropFallback(id);
+        setCoins((prev) => {
+            const next = [...prev, { id, variant, spawnPos, spawnRot }];
+            coinCountRef.current = next.length;
+            return next;
+        });
+    }, [scheduleDropFallback, setActiveDropId]);
+
+    useEffect(() => {
+        spawnNextCoinRef.current = spawnNextCoin;
+    }, [spawnNextCoin]);
+
+    useEffect(() => {
+        if (!manualShakeSignal) return;
+
+        const direction = shakeStateRef.current?.direction || 1;
+        coinBodiesRef.current.forEach((bodyRef, id) => {
+            const body = bodyRef.current;
+            if (!body) return;
+
+            const sideJitter = seededUnit(id, manualShakeSignal) - 0.5;
+            const liftJitter = seededUnit(id, manualShakeSignal + 11);
+            const spinJitter = seededUnit(id, manualShakeSignal + 23) - 0.5;
+
+            body.wakeUp?.();
+            body.applyImpulse?.({
+                x: direction * COIN_SHAKE_IMPULSE * (0.55 + liftJitter),
+                y: COIN_SHAKE_LIFT_IMPULSE * liftJitter,
+                z: sideJitter * COIN_SHAKE_IMPULSE,
+            }, true);
+            body.applyTorqueImpulse?.({
+                x: spinJitter * COIN_SHAKE_TORQUE,
+                y: direction * COIN_SHAKE_TORQUE,
+                z: sideJitter * COIN_SHAKE_TORQUE,
+            }, true);
+        });
+    }, [manualShakeSignal, shakeStateRef]);
+
+    const handleDropComplete = useCallback((id) => {
+        if (activeDropIdRef.current !== id) return;
+
+        clearDropFallbackTimer();
+        setActiveDropId(null);
+        spawnNextCoin();
+    }, [clearDropFallbackTimer, setActiveDropId, spawnNextCoin]);
+
+    useFrame(() => {
+        const activeId = activeDropIdRef.current;
+        if (activeId === null) return;
+
+        const body = coinBodiesRef.current.get(activeId)?.current;
+        if (!body) return;
+
+        if (body.translation().y <= COIN_NEXT_DROP_Y) {
+            handleDropComplete(activeId);
+        }
+    });
 
     useEffect(() => {
         targetCountRef.current = targetCount;
+        if (!shouldSettleInstantlyRef.current && targetCount > 0) {
+            markInitialDropPlayed();
+        }
+
         const pending = queueRef.current;
         const total = coinCountRef.current + pending;
 
@@ -293,9 +559,24 @@ function CoinPile({ progressPercent, shakeStateRef }) {
     }, [targetCount]);
 
     useEffect(() => {
-        const interval = setInterval(() => {
+        const interval = window.setInterval(() => {
             const currentTarget = targetCountRef.current;
+            if (shouldSettleInstantlyRef.current) {
+                if (coinCountRef.current !== currentTarget || queueRef.current > 0 || activeDropIdRef.current !== null) {
+                    queueRef.current = 0;
+                    clearDropFallbackTimer();
+                    setActiveDropId(null);
+                    setCoins(createSettledCoins(currentTarget));
+                    coinCountRef.current = currentTarget;
+                    nextIdRef.current = currentTarget;
+                }
+                return;
+            }
+
             if (coinCountRef.current > currentTarget) {
+                queueRef.current = 0;
+                clearDropFallbackTimer();
+                setActiveDropId(null);
                 setCoins((prev) => {
                     const next = prev.slice(0, currentTarget);
                     coinCountRef.current = next.length;
@@ -304,39 +585,27 @@ function CoinPile({ progressPercent, shakeStateRef }) {
                 return;
             }
 
-            if (queueRef.current <= 0) return;
-            queueRef.current -= 1;
-            const id = nextIdRef.current++;
-            const variant = pickVariant(id);
-            const spawnPos = [
-                COIN_SLOT_DROP_POSITION[0] + (Math.random() - 0.5) * COIN_SLOT_SPREAD[0],
-                COIN_SLOT_DROP_POSITION[1] + Math.random() * COIN_SLOT_SPREAD[1],
-                COIN_SLOT_DROP_POSITION[2] + (Math.random() - 0.5) * COIN_SLOT_SPREAD[2],
-            ];
-            const spawnRot = [
-                Math.PI / 2 + (Math.random() - 0.5) * 0.28,
-                Math.random() * Math.PI,
-                (Math.random() - 0.5) * 0.18,
-            ];
-            setCoins((prev) => {
-                const next = [...prev, { id, variant, spawnPos, spawnRot }];
-                coinCountRef.current = next.length;
-                return next;
-            });
-        }, COIN_SPAWN_INTERVAL_MS);
+            spawnNextCoin();
+        }, COIN_QUEUE_PUMP_INTERVAL_MS);
 
-        return () => clearInterval(interval);
-    }, []);
+        return () => window.clearInterval(interval);
+    }, [targetCount, clearDropFallbackTimer, setActiveDropId, spawnNextCoin]);
+
+    useEffect(() => clearDropFallbackTimer, [clearDropFallbackTimer]);
 
     return (
         <>
-            <BellyBasin shakeStateRef={shakeStateRef} />
+            <BellyBasin shakeStateRef={shakeStateRef} slotOpen={slotOpen} />
             {coins.map((coin) => (
                 <PhysicsCoin
                     key={coin.id}
+                    id={coin.id}
                     variant={coin.variant}
                     spawnPos={coin.spawnPos}
                     spawnRot={coin.spawnRot}
+                    initialLinearVelocity={coin.initialLinearVelocity}
+                    initialAngularVelocity={coin.initialAngularVelocity}
+                    registerBody={registerCoinBody}
                 />
             ))}
         </>
@@ -376,15 +645,13 @@ function PiggyBankScene({ progressPercent, compact, reducedMotion, manualShakeSi
     const bankScale = compact ? BANK_COMPACT_SCALE : BANK_MODEL_SCALE;
 
     const triggerBankShake = useCallback((cooldownMs, intensity = 1) => {
-        if (reducedMotion) return;
-
         const now = performance.now();
         if (now - lastShakeAtRef.current < cooldownMs) return;
 
         lastShakeAtRef.current = now;
         shakeStateRef.current.startedAt = now;
         shakeStateRef.current.direction = Math.random() > 0.5 ? 1 : -1;
-        shakeStateRef.current.intensity = intensity;
+        shakeStateRef.current.intensity = reducedMotion ? Math.min(intensity, 0.75) : intensity;
     }, [reducedMotion]);
 
     useEffect(() => {
@@ -409,8 +676,12 @@ function PiggyBankScene({ progressPercent, compact, reducedMotion, manualShakeSi
             <rectAreaLight position={[0, 2.65, 0.2]} rotation={[-Math.PI / 2, 0, 0]} width={1.25} height={0.34} intensity={3.6} color="#ffffff" />
             <spotLight position={[0, 3.2, 1.35]} angle={0.5} penumbra={0.74} intensity={1.2} color="#ffffff" />
             <group scale={bankScale}>
-                <Physics gravity={[0, -3.2, 0]} timeStep={1 / 60} paused={reducedMotion}>
-                    <CoinPile progressPercent={normalized} shakeStateRef={shakeStateRef} />
+                <Physics gravity={[0, -3.2, 0]} timeStep={1 / 60}>
+                    <CoinPile
+                        progressPercent={normalized}
+                        shakeStateRef={shakeStateRef}
+                        manualShakeSignal={manualShakeSignal}
+                    />
                 </Physics>
                 <BulldogModel compact={compact} shakeStateRef={shakeStateRef} />
             </group>
@@ -489,7 +760,7 @@ export default function BulldogPiggyBank({ progressPercent = 0, compact = false 
     const [manualShakeSignal, setManualShakeSignal] = useState(0);
     const normalized = clampProgress(progressPercent);
     const reducedMotion = useReducedMotion();
-    const canShake = webGLReady && !reducedMotion;
+    const canShake = webGLReady;
 
     return (
         <div className={`${compact ? "mx-auto aspect-[1.4] max-w-[36rem]" : "h-full min-h-[24rem]"} relative isolate w-full overflow-visible`}>

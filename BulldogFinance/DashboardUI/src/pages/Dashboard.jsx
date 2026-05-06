@@ -8,7 +8,8 @@ import InvestmentsChart from "@/components/dashboard/InvestmentsChart.jsx";
 import SavingsGoalCard from "@/components/savings/SavingsGoalCard.jsx";
 import PageHeader from "@/components/ui/PageHeader.jsx";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrencyBreakdown } from "@/lib/utils";
+import { getAccountBalanceDisplay, summarizeAccountBalances } from "@/lib/accountBalances.js";
+import { formatCurrency } from "@/lib/utils";
 import { useApiClient } from "@/services/apiClient.js";
 import { toast } from "sonner";
 
@@ -18,6 +19,17 @@ const CASH_FLOW_PALETTE = [
     { income: "#7a5af8", expense: "#5925dc" },
     { income: "#36bffa", expense: "#026aa2" },
 ];
+const DASHBOARD_REQUEST_TIMEOUT_MS = 8000;
+
+function getSettledValue(result, fallback, label, issues) {
+    if (result.status === "fulfilled") {
+        return result.value ?? fallback;
+    }
+
+    console.warn(`Dashboard ${label} failed`, result.reason);
+    issues.push(label);
+    return fallback;
+}
 
 export default function DashboardPage() {
     const {
@@ -49,20 +61,34 @@ export default function DashboardPage() {
         start.setMonth(end.getMonth() - 5);
         start.setDate(1);
 
-        const [accountsData, transactionsData, overviewData, savingsGoalData] = await Promise.all([
-            getAccounts(),
-            getTransactions({
-                from: start.toISOString(),
-                to: end.toISOString(),
-            }),
-            getInvestmentOverview(),
-            getActiveSavingsGoal(),
+        const requestOptions = { timeoutMs: DASHBOARD_REQUEST_TIMEOUT_MS };
+        const [accountsResult, transactionsResult, overviewResult, savingsGoalResult] = await Promise.allSettled([
+            getAccounts(requestOptions),
+            getTransactions(
+                {
+                    from: start.toISOString(),
+                    to: end.toISOString(),
+                },
+                requestOptions
+            ),
+            getInvestmentOverview(requestOptions),
+            getActiveSavingsGoal(requestOptions),
         ]);
+        const issues = [];
+        const accountsData = getSettledValue(accountsResult, [], "accounts", issues);
+        const transactionsData = getSettledValue(transactionsResult, [], "transactions", issues);
+        const overviewData = getSettledValue(overviewResult, null, "investments", issues);
+        const savingsGoalData = getSettledValue(savingsGoalResult, null, "savings goal", issues);
 
         setAccounts(accountsData || []);
         setTransactions(transactionsData || []);
         setOverview(overviewData || null);
         setSavingsGoal(savingsGoalData || null);
+        setLoadError(
+            issues.length
+                ? `Some dashboard data could not be loaded: ${issues.join(", ")}.`
+                : null
+        );
     }, [getAccounts, getActiveSavingsGoal, getInvestmentOverview, getTransactions]);
 
     useEffect(() => {
@@ -224,17 +250,11 @@ export default function DashboardPage() {
         },
     ];
 
-    const accountCurrencyTotals = useMemo(() => {
-        const totals = new Map();
-
-        accounts.forEach((account) => {
-            const currency = account.currency || defaultCurrency;
-            totals.set(currency, (totals.get(currency) || 0) + (account.currentBalance ?? 0));
-        });
-
-        return Array.from(totals, ([currency, amount]) => ({ currency, amount }));
-    }, [accounts, defaultCurrency]);
-    const hasMixedAccountCurrencies = accountCurrencyTotals.length > 1;
+    const accountBalanceSummary = useMemo(
+        () => summarizeAccountBalances(accounts, defaultCurrency),
+        [accounts, defaultCurrency]
+    );
+    const hasMixedAccountCurrencies = accountBalanceSummary.hasMixedCurrencies;
     const hasMixedCashFlowCurrencies = cashFlowData.currencies.length > 1;
     const cashFlowChartSeries = useMemo(
         () =>
@@ -260,16 +280,21 @@ export default function DashboardPage() {
     const allocationItems = useMemo(
         () => (
             hasMixedAccountCurrencies
-                ? accountCurrencyTotals.map(({ currency, amount }) => ({
+                ? accountBalanceSummary.netWorthEntries.map(({ currency, amount }) => ({
                     label: currency,
-                    value: formatCurrencyBreakdown([{ currency, amount }], 0),
+                    value: formatCurrency(amount, currency, 0),
                 }))
-                : accounts.map((account) => ({
-                    label: account.name,
-                    value: account.currentBalance ?? 0,
-                }))
+                : accounts
+                    .map((account) => {
+                        const balance = getAccountBalanceDisplay(account);
+                        return {
+                            label: account.name,
+                            value: balance.assetBalance,
+                        };
+                    })
+                    .filter((item) => item.value > 0)
         ),
-        [accountCurrencyTotals, accounts, hasMixedAccountCurrencies]
+        [accountBalanceSummary.netWorthEntries, accounts, hasMixedAccountCurrencies]
     );
 
     if (loading) {
@@ -291,21 +316,18 @@ export default function DashboardPage() {
         );
     }
 
-    if (loadError) {
-        return (
-            <div className="mt-12 rounded-[var(--radius-xl)] border border-[var(--color-error-100)] bg-[var(--color-error-50)] p-4 text-sm font-medium text-[var(--color-error-700)]">
-                {loadError}
-            </div>
-        );
-    }
-
     return (
         <div className="space-y-8">
             <PageHeader
                 eyebrow="Overview"
                 title={`Welcome back, ${displayName}`}
-                description="Track balances, allocation, and short-term performance from one clean workspace."
+                description="Track savings goals, allocation, cash flow, and short-term performance from one clean workspace."
             />
+            {loadError ? (
+                <div className="rounded-[var(--radius-xl)] border border-[var(--color-warning-100)] bg-[var(--color-warning-50)] p-4 text-sm font-medium text-[var(--color-warning-700)]">
+                    {loadError}
+                </div>
+            ) : null}
 
             <div className="grid gap-6 xl:grid-cols-12">
                 <SavingsGoalCard
@@ -322,10 +344,10 @@ export default function DashboardPage() {
                 <div className="xl:col-span-8">
                     <AccountsPieChart
                         items={allocationItems}
-                        title={hasMixedAccountCurrencies ? "Balances by currency" : "Account composition"}
+                        title={hasMixedAccountCurrencies ? "Net position by currency" : "Cash and assets allocation"}
                         description={hasMixedAccountCurrencies
-                            ? "Balances are grouped by currency because no FX conversion is applied."
-                            : "Balance split across your connected accounts."}
+                            ? "No FX conversion is applied; credit card amounts owed are subtracted per currency."
+                            : "Positive cash, investment, and credit-balance assets. Credit card debt is excluded here."}
                         renderAsList={hasMixedAccountCurrencies}
                     />
                 </div>
