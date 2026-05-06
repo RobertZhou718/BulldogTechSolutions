@@ -36,7 +36,11 @@ const ACCOUNT_TYPE_OPTIONS = [
 ];
 
 function normalizeType(type) {
-    return String(type || "").trim().toLowerCase();
+    return String(type || "").trim().toLowerCase().replace(/_/g, " ");
+}
+
+function getPrimaryAccountType(type) {
+    return normalizeType(type).split(":")[0] || "";
 }
 
 function accountTypeMatches(accountType, includedTypes) {
@@ -45,12 +49,20 @@ function accountTypeMatches(accountType, includedTypes) {
 
     if (includedTypes.has(normalized)) return true;
 
-    const [primaryType] = normalized.split(":");
+    const primaryType = getPrimaryAccountType(normalized);
     return (
         includedTypes.has(primaryType) ||
         (includedTypes.has("bank") && primaryType === "depository") ||
         (includedTypes.has("investment") && primaryType === "investment")
     );
+}
+
+function getSavingsGoalEligibleBalance(account) {
+    const primaryType = getPrimaryAccountType(account?.type);
+    if (primaryType === "credit" || primaryType === "loan") return 0;
+
+    const currentBalance = Number(account?.currentBalance);
+    return Number.isFinite(currentBalance) ? currentBalance : 0;
 }
 
 function getInitialForm(goal, defaultCurrency) {
@@ -126,6 +138,17 @@ export default function SavingsGoalCard({
         ).length;
     }, [accounts, form.currency, form.includedAccountTypes]);
 
+    const selectedCurrentAmount = useMemo(() => {
+        const typeSet = new Set(form.includedAccountTypes.map(normalizeType));
+        return accounts
+            .filter(
+                (account) =>
+                    account.currency === form.currency &&
+                    accountTypeMatches(account.type, typeSet)
+            )
+            .reduce((total, account) => total + getSavingsGoalEligibleBalance(account), 0);
+    }, [accounts, form.currency, form.includedAccountTypes]);
+
     const openCreate = () => {
         setForm(getInitialForm(null, defaultCurrency));
         setFormError("");
@@ -181,6 +204,13 @@ export default function SavingsGoalCard({
 
         if (form.includedAccountTypes.length === 0) {
             setFormError("Choose at least one account type.");
+            return;
+        }
+
+        if (form.mode === "total_balance" && amount <= selectedCurrentAmount) {
+            setFormError(
+                `Total balance target must be greater than the current eligible balance of ${formatCurrency(selectedCurrentAmount, form.currency, 2)}.`
+            );
             return;
         }
 

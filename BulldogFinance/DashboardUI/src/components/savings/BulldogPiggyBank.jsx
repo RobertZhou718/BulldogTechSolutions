@@ -14,16 +14,16 @@ const MAX_COINS = 200;
 
 // Coin spawn position above the slot: [x, y, z].
 // Keep this aligned with the red slot colliders in BASIN_COLLIDERS.
-const COIN_SLOT_DROP_POSITION = [0.16, 0.77, 0];
+const COIN_SLOT_DROP_POSITION = [0.16, 0.67, 0];
 const COIN_SLOT_SPREAD = [0.018, 0.012, 0.018];
 const COIN_INITIAL_LINEAR_VELOCITY = [0, -0.85, 0];
 const COIN_INITIAL_ANGULAR_VELOCITY = [0.12, 0.18, 0.06];
 const COIN_NEXT_DROP_Y = 0.42;
 const COIN_DROP_RETRY_MS = 1600;
 const COIN_QUEUE_PUMP_INTERVAL_MS = 80;
-const COIN_SHAKE_IMPULSE = 0.0045;
-const COIN_SHAKE_LIFT_IMPULSE = 0.0008;
-const COIN_SHAKE_TORQUE = 0.0025;
+const COIN_SHAKE_IMPULSE = 0.00005;
+const COIN_SHAKE_LIFT_IMPULSE = 0.00005;
+const COIN_SHAKE_TORQUE = 0.00005;
 const INITIAL_DROP_STORAGE_KEY = "bulldogPiggyBank.initialDropPlayed";
 const BANK_SHAKE_BUTTON_COOLDOWN_MS = 80;
 const BANK_SHAKE_DURATION_MS = 900;
@@ -35,6 +35,7 @@ const BANK_MODEL_SCALE = 1.12;
 const BANK_COMPACT_SCALE = 0.98;
 const GLASS_EDGE_SCALE = 1.012;
 const SHOW_BASIN_COLLIDER_DEBUG = false;
+const DEBUG_PROGRESS_PERCENT_OVERRIDE = null; // Set to a number to ignore actual progress and show a specific state for debugging.
 
 const COIN_VARIANTS = [
     { radius: 0.075, height: 0.018, color: "#f5cf52", weight: 0.5 },
@@ -50,34 +51,34 @@ const COIN_VARIANTS = [
 // args: [halfWidthX, halfHeightY, halfDepthZ]. Double these values for the visible full size.
 // rotation tilts a collider in radians. Most position tuning should happen before changing rotation.
 const BASIN_COLLIDERS = [
-    { position: [-0.09, -0.505, 0], args: [0.34, 0.026, 0.24], color: "#38bdf8" },
-    { position: [-0.43, -0.21, 0], args: [0.026, 0.30, 0.24], color: "#38bdf8" },
+    { position: [-0.065, -0.505, 0], args: [0.315, 0.026, 0.24], color: "#38bdf8" },
+    { position: [-0.38, -0.21, 0], args: [0.026, 0.30, 0.24], color: "#38bdf8" },
     { position: [0.25, -0.21, 0], args: [0.026, 0.30, 0.24], color: "#38bdf8" },
-    { position: [-0.09, -0.21, 0.24], args: [0.34, 0.30, 0.026], color: "#38bdf8" },
-    { position: [-0.09, -0.21, -0.24], args: [0.34, 0.30, 0.026], color: "#38bdf8" },
-    { position: [-0.245, 0.105, 0], args: [0.185, 0.018, 0.24], color: "#38bdf8" },
+    { position: [-0.065, -0.21, 0.24], args: [0.315, 0.30, 0.026], color: "#38bdf8" },
+    { position: [-0.065, -0.21, -0.24], args: [0.315, 0.30, 0.026], color: "#38bdf8" },
+    { position: [-0.22, 0.105, 0], args: [0.16, 0.018, 0.24], color: "#38bdf8" },
     { position: [0.105, 0.105, 0.235], args: [0.165, 0.018, 0.015], color: "#38bdf8" },
     { position: [0.105, 0.105, -0.235], args: [0.165, 0.018, 0.015], color: "#38bdf8" },
-    { position: [-0.02, 0.3, 0], args: [0.026, 0.17, 0.23], color: "#38bdf8" },
-    { position: [0.34, 0.3, 0], args: [0.026, 0.17, 0.23], color: "#38bdf8" },
-    { position: [0.16, 0.3, 0.23], args: [0.18, 0.17, 0.026], color: "#38bdf8" },
-    { position: [0.16, 0.3, -0.23], args: [0.18, 0.17, 0.026], color: "#38bdf8" },
+    { position: [-0.02, 0.25, 0], args: [0.026, 0.12, 0.23], color: "#38bdf8" },
+    { position: [0.34, 0.25, 0], args: [0.026, 0.12, 0.23], color: "#38bdf8" },
+    { position: [0.16, 0.25, 0.23], args: [0.18, 0.12, 0.026], color: "#38bdf8" },
+    { position: [0.16, 0.25, -0.23], args: [0.18, 0.12, 0.026], color: "#38bdf8" },
     { position: [-0.14, 0.16, 0.18], args: [0.16, 0.10, 0.022], rotation: [0.52, 0, 0], color: "#38bdf8" },
     { position: [-0.14, 0.16, -0.18], args: [0.16, 0.10, 0.022], rotation: [-0.52, 0, 0], color: "#38bdf8" },
     { position: [0.21, 0.16, 0.18], args: [0.13, 0.10, 0.022], rotation: [0.36, 0, 0], color: "#38bdf8" },
     { position: [0.21, 0.16, -0.18], args: [0.13, 0.10, 0.022], rotation: [-0.36, 0, 0], color: "#38bdf8" },
-    { position: [0.015, 0.5, 0], args: [0.035, 0.022, 0.18], color: "#f97316" },
-    { position: [0.305, 0.5, 0], args: [0.035, 0.022, 0.18], color: "#f97316" },
-    { position: [0.16, 0.5, 0.15], args: [0.12, 0.022, 0.03], color: "#f97316" },
-    { position: [0.16, 0.5, -0.15], args: [0.12, 0.022, 0.03], color: "#f97316" },
-    { position: [0.052, 0.61, 0], args: [0.012, 0.10, 0.118], color: "#ef4444" },
-    { position: [0.268, 0.61, 0], args: [0.012, 0.10, 0.118], color: "#ef4444" },
-    { position: [0.16, 0.61, 0.118], args: [0.108, 0.10, 0.012], color: "#ef4444" },
-    { position: [0.16, 0.61, -0.118], args: [0.108, 0.10, 0.012], color: "#ef4444" },
+    { position: [0.015, 0.4, 0], args: [0.035, 0.022, 0.18], color: "#f97316" },
+    { position: [0.305, 0.4, 0], args: [0.035, 0.022, 0.18], color: "#f97316" },
+    { position: [0.16, 0.4, 0.15], args: [0.12, 0.022, 0.03], color: "#f97316" },
+    { position: [0.16, 0.4, -0.15], args: [0.12, 0.022, 0.03], color: "#f97316" },
+    { position: [0.052, 0.51, 0], args: [0.012, 0.10, 0.118], color: "#ef4444" },
+    { position: [0.268, 0.51, 0], args: [0.012, 0.10, 0.118], color: "#ef4444" },
+    { position: [0.16, 0.51, 0.118], args: [0.108, 0.10, 0.012], color: "#ef4444" },
+    { position: [0.16, 0.51, -0.118], args: [0.108, 0.10, 0.012], color: "#ef4444" },
 ];
 
 const SLOT_ESCAPE_GATE_COLLIDERS = [
-    { position: [0.16, 0.735, 0], args: [0.135, 0.018, 0.135], color: "#a855f7" },
+    { position: [0.16, 0.635, 0], args: [0.135, 0.018, 0.135], color: "#a855f7" },
 ];
 
 function clampProgress(progressPercent) {
@@ -612,32 +613,6 @@ function CoinPile({ progressPercent, shakeStateRef, manualShakeSignal }) {
     );
 }
 
-function Celebration({ active }) {
-    if (!active) return null;
-
-    return (
-        <group position={[0, 0.62, 0.04]}>
-            {[0, 1, 2, 3, 4].map((index) => (
-                <mesh
-                    key={index}
-                    position={[
-                        Math.cos(index * 1.25) * 0.18,
-                        Math.sin(index * 1.7) * 0.06,
-                        Math.sin(index) * 0.08,
-                    ]}
-                >
-                    <sphereGeometry args={[index === 0 ? 0.026 : 0.018, 16, 16]} />
-                    <meshStandardMaterial
-                        color={index % 2 === 0 ? "#facc15" : "#12b76a"}
-                        emissive={index % 2 === 0 ? "#f79009" : "#039855"}
-                        emissiveIntensity={0.55}
-                    />
-                </mesh>
-            ))}
-        </group>
-    );
-}
-
 function PiggyBankScene({ progressPercent, compact, reducedMotion, manualShakeSignal }) {
     const normalized = clampProgress(progressPercent);
     const shakeStateRef = useRef({ startedAt: null, direction: 1, intensity: 1 });
@@ -685,7 +660,6 @@ function PiggyBankScene({ progressPercent, compact, reducedMotion, manualShakeSi
                 </Physics>
                 <BulldogModel compact={compact} shakeStateRef={shakeStateRef} />
             </group>
-            <Celebration active={normalized >= 100} />
             <ContactShadows
                 position={[0, -0.56, 0]}
                 opacity={0.46}
@@ -758,7 +732,7 @@ function supportsWebGL() {
 export default function BulldogPiggyBank({ progressPercent = 0, compact = false }) {
     const [webGLReady, setWebGLReady] = useState(() => supportsWebGL());
     const [manualShakeSignal, setManualShakeSignal] = useState(0);
-    const normalized = clampProgress(progressPercent);
+    const normalized = clampProgress(DEBUG_PROGRESS_PERCENT_OVERRIDE ?? progressPercent);
     const reducedMotion = useReducedMotion();
     const canShake = webGLReady;
 

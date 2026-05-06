@@ -111,13 +111,21 @@ namespace BulldogFinance.Functions.Functions
                 currency,
                 includedAccountIds,
                 includedAccountTypes);
+            var targetAmountCents = ToCents(requestModel.TargetAmount);
+            validationError = ValidateTargetAmountAgainstCurrentBalance(
+                mode,
+                targetAmountCents,
+                baselineAmountCents,
+                currency);
+            if (validationError != null)
+                return await ApiResponse.BadRequestAsync(req, validationError);
 
             var goal = new SavingsGoalEntity
             {
                 PartitionKey = userId,
                 RowKey = Guid.NewGuid().ToString("N"),
                 Name = requestModel.Name.Trim(),
-                TargetAmountCents = ToCents(requestModel.TargetAmount),
+                TargetAmountCents = targetAmountCents,
                 Currency = currency,
                 Mode = mode,
                 BaselineAmountCents = baselineAmountCents,
@@ -251,11 +259,20 @@ namespace BulldogFinance.Functions.Functions
 
             if (configChanged)
             {
-                goal.BaselineAmountCents = CalculateCurrentAmountCents(
+                var currentAmountCents = CalculateCurrentAmountCents(
                     accounts,
                     goal.Currency,
                     includedAccountIds,
                     includedAccountTypes);
+                validationError = ValidateTargetAmountAgainstCurrentBalance(
+                    goal.Mode,
+                    goal.TargetAmountCents,
+                    currentAmountCents,
+                    goal.Currency);
+                if (validationError != null)
+                    return await ApiResponse.BadRequestAsync(req, validationError);
+
+                goal.BaselineAmountCents = currentAmountCents;
                 goal.LastConfigEditedAtUtc = now;
                 goal.ConfigEditCount += 1;
             }
@@ -304,6 +321,21 @@ namespace BulldogFinance.Functions.Functions
                 return "Mode must be total_balance or new_savings.";
 
             return null;
+        }
+
+        private static string? ValidateTargetAmountAgainstCurrentBalance(
+            string mode,
+            long targetAmountCents,
+            long currentAmountCents,
+            string currency)
+        {
+            if (!string.Equals(mode, SavingsGoalModes.TotalBalance, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            if (targetAmountCents > currentAmountCents)
+                return null;
+
+            return $"Total balance target must be greater than the current eligible balance ({FromCents(currentAmountCents):0.##} {currency}).";
         }
 
         private static string? ValidateIncludedAccounts(
