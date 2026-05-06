@@ -24,7 +24,7 @@ export default function TransactionsPage() {
 
     const [accounts, setAccounts] = useState([]);
     const [formAccountId, setFormAccountId] = useState("");
-    const [historyAccountId, setHistoryAccountId] = useState("");
+    const [historyAccountId, setHistoryAccountId] = useState("ALL");
     const [transactions, setTransactions] = useState([]);
     const [loadingAccounts, setLoadingAccounts] = useState(true);
     const [loadingTx, setLoadingTx] = useState(false);
@@ -73,7 +73,6 @@ export default function TransactionsPage() {
                 setAccounts(data || []);
                 if (data?.length) {
                     setFormAccountId(data[0].accountId);
-                    setHistoryAccountId(data[0].accountId);
                 }
             } catch (e) {
                 console.error(e);

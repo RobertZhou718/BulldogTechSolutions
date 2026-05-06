@@ -9,6 +9,7 @@ const OUTER_RADIUS = 108;
 const INNER_RADIUS = 74;
 const HOVER_PUSH = 6;
 const GAP_DEGREES = 1.4;
+const DEFAULT_VISIBLE_COUNT = 3;
 
 function toRadians(degrees) {
     return ((degrees - 90) * Math.PI) / 180;
@@ -45,6 +46,7 @@ function formatAmount(value) {
 
 export default function DonutBreakdownChart({ items }) {
     const [hoveredIndex, setHoveredIndex] = useState(null);
+    const [expanded, setExpanded] = useState(false);
 
     const { segments, total, positives } = useMemo(() => {
         const normalized = items.map((item, index) => {
@@ -100,6 +102,8 @@ export default function DonutBreakdownChart({ items }) {
 
     const active = hoveredIndex != null ? segments[hoveredIndex] : null;
     const hasAny = positives > 0;
+    const hiddenCount = Math.max(segments.length - DEFAULT_VISIBLE_COUNT, 0);
+    const visibleSegments = expanded ? segments : segments.slice(0, DEFAULT_VISIBLE_COUNT);
 
     const centerPrimary = active
         ? active.label
@@ -144,7 +148,7 @@ export default function DonutBreakdownChart({ items }) {
 
                         return (
                             <path
-                                key={seg.label}
+                                key={`${seg.label}-${seg.index}`}
                                 d={seg.path}
                                 fill={seg.color}
                                 opacity={dim ? 0.35 : 1}
@@ -175,53 +179,68 @@ export default function DonutBreakdownChart({ items }) {
                 </div>
             </div>
 
-            <ul className="space-y-2">
-                {segments.map((seg) => {
-                    const isHovered = hoveredIndex === seg.index;
-                    const dim = hoveredIndex != null && !isHovered;
+            <div>
+                <ul className="space-y-2">
+                    {visibleSegments.map((seg) => {
+                        const isHovered = hoveredIndex === seg.index;
+                        const dim = hoveredIndex != null && !isHovered;
 
-                    return (
-                        <li key={seg.label}>
-                            <button
-                                type="button"
-                                onMouseEnter={() => setHoveredIndex(seg.index)}
-                                onMouseLeave={() => setHoveredIndex(null)}
-                                onFocus={() => setHoveredIndex(seg.index)}
-                                onBlur={() => setHoveredIndex(null)}
-                                className={[
-                                    "flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition",
-                                    isHovered
-                                        ? "border-[var(--card-border-strong)] bg-[var(--bg-subtle)]"
-                                        : "border-transparent bg-transparent hover:bg-[var(--bg-subtle)]",
-                                    dim ? "opacity-60" : "opacity-100",
-                                ].join(" ")}
-                            >
-                                <span className="flex min-w-0 items-center gap-3">
-                                    <span
-                                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                                        style={{ backgroundColor: seg.color }}
-                                    />
-                                    <span className="min-w-0">
-                                        <span className="block truncate text-sm font-medium text-[var(--text-main)]">
-                                            {seg.label}
-                                        </span>
-                                        <span className="block text-xs text-[var(--text-soft)]">
-                                            {seg.isNegative
-                                                ? "Liability balance"
-                                                : total > 0
-                                                ? `${seg.percent.toFixed(1)}%`
-                                                : "—"}
+                        return (
+                            <li key={`${seg.label}-${seg.index}`}>
+                                <button
+                                    type="button"
+                                    onMouseEnter={() => setHoveredIndex(seg.index)}
+                                    onMouseLeave={() => setHoveredIndex(null)}
+                                    onFocus={() => setHoveredIndex(seg.index)}
+                                    onBlur={() => setHoveredIndex(null)}
+                                    className={[
+                                        "flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition",
+                                        isHovered
+                                            ? "border-[var(--card-border-strong)] bg-[var(--bg-subtle)]"
+                                            : "border-transparent bg-transparent hover:bg-[var(--bg-subtle)]",
+                                        dim ? "opacity-60" : "opacity-100",
+                                    ].join(" ")}
+                                >
+                                    <span className="flex min-w-0 items-center gap-3">
+                                        <span
+                                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                            style={{ backgroundColor: seg.color }}
+                                        />
+                                        <span className="min-w-0">
+                                            <span className="block truncate text-sm font-medium text-[var(--text-main)]">
+                                                {seg.label}
+                                            </span>
+                                            <span className="block text-xs text-[var(--text-soft)]">
+                                                {seg.isNegative
+                                                    ? "Liability balance"
+                                                    : total > 0
+                                                    ? `${seg.percent.toFixed(1)}%`
+                                                    : "—"}
+                                            </span>
                                         </span>
                                     </span>
-                                </span>
-                                <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--text-main)]">
-                                    {formatAmount(seg.rawValue)}
-                                </span>
-                            </button>
-                        </li>
-                    );
-                })}
-            </ul>
+                                    <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--text-main)]">
+                                        {formatAmount(seg.rawValue)}
+                                    </span>
+                                </button>
+                            </li>
+                        );
+                    })}
+                </ul>
+
+                {hiddenCount > 0 ? (
+                    <div className="mt-3 flex justify-end">
+                        <button
+                            type="button"
+                            aria-expanded={expanded}
+                            onClick={() => setExpanded((current) => !current)}
+                            className="min-h-9 rounded-full px-3 text-sm font-semibold text-[var(--brand)] transition hover:bg-[var(--brand-soft)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+                        >
+                            {expanded ? "Collapse" : `+${hiddenCount} more`}
+                        </button>
+                    </div>
+                ) : null}
+            </div>
         </div>
     );
 }

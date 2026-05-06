@@ -12,6 +12,9 @@ import {
 } from "@/auth/native/nativeClient.js";
 import { begin as beginRequest, end as endRequest } from "@/services/progressBus.js";
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
+const REQUEST_TIMEOUT_MESSAGE = "Request timed out. Please try again.";
+
 function isJwtExpiringSoon(token, skewMs = 0) {
     try {
         const base64Url = token.split(".")[1];
@@ -68,10 +71,25 @@ export function useApiClient() {
 
     // Centralized request helper that attaches the access token and normalizes API errors.
     const request = useCallback(async (path, options = {}) => {
-        const { responseType = "json", allowNotFound = false, ...fetchOptions } = options;
+        const {
+            responseType = "json",
+            allowNotFound = false,
+            timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+            ...fetchOptions
+        } = options;
 
-        beginRequest();
-        try {
+        const controller = new AbortController();
+        let didTimeout = false;
+        let timeoutId = null;
+        const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = window.setTimeout(() => {
+                didTimeout = true;
+                controller.abort();
+                reject(new Error(REQUEST_TIMEOUT_MESSAGE));
+            }, timeoutMs);
+        });
+
+        const runRequest = async () => {
             const token = await getAccessToken();
 
             const headers = {
@@ -83,6 +101,7 @@ export function useApiClient() {
             const response = await fetch(`${apiConfig.baseUrl}${path}`, {
                 ...fetchOptions,
                 headers,
+                signal: fetchOptions.signal || controller.signal,
             });
 
             if (allowNotFound && response.status === 404) {
@@ -126,7 +145,21 @@ export function useApiClient() {
             }
 
             return response.json();
+        };
+
+        beginRequest();
+        try {
+            return await Promise.race([runRequest(), timeoutPromise]);
+        } catch (error) {
+            if (didTimeout || error?.name === "AbortError") {
+                throw new Error(REQUEST_TIMEOUT_MESSAGE);
+            }
+
+            throw error;
         } finally {
+            if (timeoutId !== null) {
+                window.clearTimeout(timeoutId);
+            }
             endRequest();
         }
     }, [getAccessToken, signOut]);
@@ -143,8 +176,8 @@ export function useApiClient() {
         });
     }, [request]);
 
-    const getAccounts = useCallback(() => {
-        return request("/accounts", { method: "GET" });
+    const getAccounts = useCallback((options = {}) => {
+        return request("/accounts", { method: "GET", ...options });
     }, [request]);
 
     const createAccount = useCallback((payload) => {
@@ -161,10 +194,11 @@ export function useApiClient() {
     }, [request]);
 
     // Savings goal APIs.
-    const getActiveSavingsGoal = useCallback(() => {
+    const getActiveSavingsGoal = useCallback((options = {}) => {
         return request("/savings-goals/active", {
             method: "GET",
             allowNotFound: true,
+            ...options,
         });
     }, [request]);
 
@@ -189,7 +223,7 @@ export function useApiClient() {
     }, [request]);
 
     // Transaction APIs.
-    const getTransactions = useCallback((params = {}) => {
+    const getTransactions = useCallback((params = {}, options = {}) => {
         const search = new URLSearchParams();
         if (params.accountId) search.set("accountId", params.accountId);
         if (params.from) search.set("from", params.from);
@@ -198,7 +232,7 @@ export function useApiClient() {
         const qs = search.toString();
         const path = qs ? `/transactions?${qs}` : "/transactions";
 
-        return request(path, { method: "GET" });
+        return request(path, { method: "GET", ...options });
     }, [request]);
 
     const createTransaction = useCallback((tx) => {
@@ -274,8 +308,8 @@ export function useApiClient() {
     }, [request]);
 
     // Investment overview APIs.
-    const getInvestmentOverview = useCallback(() => {
-        return request("/investments/overview", { method: "GET" });
+    const getInvestmentOverview = useCallback((options = {}) => {
+        return request("/investments/overview", { method: "GET", ...options });
     }, [request]);
 
     const sendChatMessage = useCallback((payload) => {

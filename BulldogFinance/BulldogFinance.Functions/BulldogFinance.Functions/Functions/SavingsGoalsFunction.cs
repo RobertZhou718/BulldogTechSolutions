@@ -394,7 +394,16 @@ namespace BulldogFinance.Functions.Functions
                 .Where(a => idSet != null
                     ? idSet.Contains(a.RowKey)
                     : typeSet == null || MatchesIncludedAccountType(a.Type, typeSet))
-                .Sum(a => a.CurrentBalanceCents);
+                .Sum(GetSavingsGoalEligibleBalanceCents);
+        }
+
+        private static long GetSavingsGoalEligibleBalanceCents(AccountEntity account)
+        {
+            var primaryType = GetPrimaryAccountType(account.Type);
+
+            return primaryType is "credit" or "loan"
+                ? 0
+                : account.CurrentBalanceCents;
         }
 
         private static bool MatchesIncludedAccountType(string? accountType, HashSet<string> includedTypes)
@@ -410,10 +419,19 @@ namespace BulldogFinance.Functions.Functions
                 return true;
             }
 
-            var primaryType = normalized.Split(':', 2)[0];
+            var primaryType = GetPrimaryAccountType(normalized);
             return includedTypes.Contains(primaryType)
                 || (includedTypes.Contains("bank") && primaryType == "depository")
                 || (includedTypes.Contains("investment") && primaryType == "investment");
+        }
+
+        private static string GetPrimaryAccountType(string? accountType)
+        {
+            return (accountType ?? string.Empty)
+                .Trim()
+                .ToLowerInvariant()
+                .Replace('_', ' ')
+                .Split(':', 2)[0];
         }
 
         private static bool CanEditConfig(SavingsGoalEntity goal, DateTime now)

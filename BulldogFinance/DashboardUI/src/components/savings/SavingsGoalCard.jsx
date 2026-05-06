@@ -243,8 +243,8 @@ export default function SavingsGoalCard({
                                 </h2>
                                 <p className="mt-2 max-w-xl text-sm text-[var(--text-muted)]">
                                     {hasGoal
-                                        ? "Your connected balances fill the glass bank with Bulldog coins as you move toward the target."
-                                        : "Create a target and your Bulldog coin stack will grow as eligible account balances increase."}
+                                        ? "Eligible cash and asset balances fill the glass bank with Bulldog coins as you move toward the target."
+                                        : "Create a target and your Bulldog coin stack will grow as eligible savings balances increase."}
                                 </p>
                             </div>
                             {hasGoal ? (

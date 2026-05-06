@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Plus, Trash01 } from "@untitledui/icons";
+import { getAccountBalanceDisplay } from "@/lib/accountBalances.js";
 import { cn, formatCurrency, formatDateTime } from "@/lib/utils";
 import ConnectBankButton from "@/components/plaid/ConnectBankButton.jsx";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -156,7 +157,7 @@ export default function ConnectedAccountsCard({
                         Connected and manual accounts
                     </h2>
                     <p className="mt-2 text-sm text-[var(--text-muted)]">
-                        Review each account source, institution, and current balance.
+                        Review each account source, institution, and balance position.
                         Connect another bank or add a manual account at any time.
                         Current total: {accounts.length} {accounts.length === 1 ? "account" : "accounts"}.
                     </p>
@@ -233,7 +234,7 @@ export default function ConnectedAccountsCard({
                             </Select>
                         </Field>
 
-                        <Field label="Initial balance">
+                        <Field label={form.type === "credit" ? "Initial amount owed" : "Initial balance"}>
                             <Input
                                 type="number"
                                 value={form.initialBalance}
@@ -263,79 +264,104 @@ export default function ConnectedAccountsCard({
                     <span>Source</span>
                     <span>Institution</span>
                     <span>Available</span>
-                    <span className="text-right">Current</span>
+                    <span className="text-right">Balance</span>
                     <span className="text-right">Delete</span>
                 </div>
 
                 <div className="divide-y divide-[var(--card-border)]">
-                    {visibleAccounts.map((account) => (
-                        <div
-                            key={account.accountId}
-                            className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,2.2fr)_1fr_1fr_1.2fr_1.1fr_auto] md:items-center md:gap-4"
-                        >
-                            <div>
-                                <p className="font-semibold text-[var(--text-main)]">{account.name}</p>
-                                <p className="mt-1 text-sm text-[var(--text-muted)]">
-                                    {getTypeLabel(account)}
-                                    {account.mask ? ` •••• ${account.mask}` : ""}
-                                </p>
-                            </div>
+                    {visibleAccounts.map((account) => {
+                        const balance = getAccountBalanceDisplay(account);
 
-                            <div>
-                                <span className="inline-flex rounded-full border border-[var(--card-border)] bg-[var(--card-bg-strong)] px-2.5 py-1 text-xs font-medium text-[var(--text-muted)]">
-                                    {getSourceLabel(account)}
-                                </span>
-                                {account.externalSource === "Plaid" ? (
-                                    <p className="mt-2 text-xs text-[var(--text-soft)]">
-                                        Transactions: {getTimestampLabel(account.lastTransactionSyncUtc)}
+                        return (
+                            <div
+                                key={account.accountId}
+                                className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,2.2fr)_1fr_1fr_1.2fr_1.1fr_auto] md:items-center md:gap-4"
+                            >
+                                <div>
+                                    <p className="font-semibold text-[var(--text-main)]">{account.name}</p>
+                                    <p className="mt-1 text-sm text-[var(--text-muted)]">
+                                        {getTypeLabel(account)}
+                                        {account.mask ? ` •••• ${account.mask}` : ""}
                                     </p>
-                                ) : null}
-                            </div>
+                                </div>
 
-                            <div>
-                                <p className="text-sm text-[var(--text-main)]">
-                                    {account.institutionName || "Added manually"}
-                                </p>
-                            </div>
+                                <div>
+                                    <span className="inline-flex rounded-full border border-[var(--card-border)] bg-[var(--card-bg-strong)] px-2.5 py-1 text-xs font-medium text-[var(--text-muted)]">
+                                        {getSourceLabel(account)}
+                                    </span>
+                                    {account.externalSource === "Plaid" ? (
+                                        <p className="mt-2 text-xs text-[var(--text-soft)]">
+                                            Transactions: {getTimestampLabel(account.lastTransactionSyncUtc)}
+                                        </p>
+                                    ) : null}
+                                </div>
 
-                            <div>
-                                <p className="text-sm text-[var(--text-main)]">
-                                    {account.availableBalance != null
-                                        ? formatCurrency(account.availableBalance, account.currency, 2)
-                                        : "N/A"}
-                                </p>
-                            </div>
+                                <div>
+                                    <p className="text-sm text-[var(--text-main)]">
+                                        {account.institutionName || "Added manually"}
+                                    </p>
+                                </div>
 
-                            <div className="text-left md:text-right">
-                                <p className="font-semibold text-[var(--text-main)]">
-                                    {formatCurrency(account.currentBalance, account.currency, 2)}
-                                </p>
-                                <p className="mt-1 text-xs text-[var(--text-soft)]">{account.currency}</p>
-                                {account.externalSource === "Plaid" ? (
+                                <div>
+                                    <p
+                                        className={cn(
+                                            "text-sm",
+                                            balance.availableTone === "negative"
+                                                ? "text-[var(--color-error-700)]"
+                                                : "text-[var(--text-main)]"
+                                        )}
+                                    >
+                                        {balance.hasAvailableValue
+                                            ? formatCurrency(balance.availableValue, account.currency, 2)
+                                            : "N/A"}
+                                    </p>
                                     <p className="mt-1 text-xs text-[var(--text-soft)]">
-                                        Balance: {getTimestampLabel(account.lastBalanceRefreshUtc)}
+                                        {balance.availableLabel}
                                     </p>
-                                ) : null}
-                            </div>
+                                </div>
 
-                            <div className="flex justify-start md:justify-end">
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="rounded-full"
-                                            onClick={() => setPendingAccount(account)}
-                                            aria-label={`Delete ${account.name}`}
-                                        >
-                                            <Trash01 className="h-5 w-5" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Delete {account.name}</TooltipContent>
-                                </Tooltip>
+                                <div className="text-left md:text-right">
+                                    <p
+                                        className={cn(
+                                            "font-semibold",
+                                            balance.balanceTone === "negative"
+                                                ? "text-[var(--color-error-700)]"
+                                                : balance.balanceTone === "positive"
+                                                  ? "text-[var(--color-success-700)]"
+                                                  : "text-[var(--text-main)]"
+                                        )}
+                                    >
+                                        {formatCurrency(balance.balanceValue, account.currency, 2)}
+                                    </p>
+                                    <p className="mt-1 text-xs text-[var(--text-soft)]">
+                                        {balance.balanceLabel} • {account.currency}
+                                    </p>
+                                    {account.externalSource === "Plaid" ? (
+                                        <p className="mt-1 text-xs text-[var(--text-soft)]">
+                                            Balance: {getTimestampLabel(account.lastBalanceRefreshUtc)}
+                                        </p>
+                                    ) : null}
+                                </div>
+
+                                <div className="flex justify-start md:justify-end">
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="rounded-full"
+                                                onClick={() => setPendingAccount(account)}
+                                                aria-label={`Delete ${account.name}`}
+                                            >
+                                                <Trash01 className="h-5 w-5" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Delete {account.name}</TooltipContent>
+                                    </Tooltip>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
 
