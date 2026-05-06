@@ -9,6 +9,48 @@ function formatPeriodLabel(period) {
     return period.charAt(0).toUpperCase() + period.slice(1);
 }
 
+function getReportField(report, camelName, pascalName) {
+    return report?.[camelName] ?? report?.[pascalName] ?? "";
+}
+
+function normalizeReport(report) {
+    if (!report) {
+        return null;
+    }
+
+    return {
+        ...report,
+        startUtc: getReportField(report, "startUtc", "StartUtc"),
+        endUtc: getReportField(report, "endUtc", "EndUtc"),
+        createdAtUtc: getReportField(report, "createdAtUtc", "CreatedAtUtc"),
+        markdown: getReportField(report, "markdown", "Markdown"),
+    };
+}
+
+function formatReportDateRange(startUtc, endUtc) {
+    const startLabel = formatTransactionDate(startUtc);
+    const endLabel = formatTransactionDate(endUtc);
+
+    if (startLabel && endLabel) {
+        return `${startLabel} to ${endLabel}`;
+    }
+
+    return startLabel || endLabel || "";
+}
+
+function formatCreatedDate(value) {
+    if (!value) {
+        return "";
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+
+    return date.toLocaleDateString();
+}
+
 export default function LatestReportCard() {
     const { getLatestReport } = useApiClient();
     const [reports, setReports] = useState({
@@ -49,8 +91,12 @@ export default function LatestReportCard() {
     }, [getLatestReport]);
 
     const activeReportState = reports[activePeriod];
-    const report = activeReportState?.report;
+    const report = normalizeReport(activeReportState?.report);
     const emptyMessage = activeReportState?.message || `No ${activePeriod} report is available yet.`;
+    const dateRangeLabel = formatReportDateRange(report?.startUtc, report?.endUtc);
+    const createdDateLabel = formatCreatedDate(report?.createdAtUtc);
+    const reportMarkdown = report?.markdown?.trim() || "";
+    const hasMetadata = dateRangeLabel || createdDateLabel;
 
     return (
         <Card>
@@ -91,18 +137,23 @@ export default function LatestReportCard() {
                 </p>
             ) : (
                 <div className="mt-6 space-y-4">
-                    <div className="flex flex-wrap gap-3 text-sm text-[var(--text-soft)]">
-                        <span>
-                            {formatTransactionDate(report.startUtc)} to{" "}
-                            {formatTransactionDate(report.endUtc)}
-                        </span>
-                        <span>Created {new Date(report.createdAtUtc).toLocaleDateString()}</span>
-                    </div>
-                    <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-4">
-                        <pre className="overflow-x-auto whitespace-pre-wrap font-[inherit] text-sm leading-7 text-[var(--text-main)]">
-                            {report.markdown}
-                        </pre>
-                    </div>
+                    {hasMetadata ? (
+                        <div className="flex flex-wrap gap-3 text-sm text-[var(--text-soft)]">
+                            {dateRangeLabel ? <span>{dateRangeLabel}</span> : null}
+                            {createdDateLabel ? <span>Created {createdDateLabel}</span> : null}
+                        </div>
+                    ) : null}
+                    {reportMarkdown ? (
+                        <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-4">
+                            <pre className="overflow-x-auto whitespace-pre-wrap font-[inherit] text-sm leading-7 text-[var(--text-main)]">
+                                {reportMarkdown}
+                            </pre>
+                        </div>
+                    ) : (
+                        <p className="rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-4 text-sm text-[var(--text-muted)]">
+                            This report is missing its generated content. Please regenerate it.
+                        </p>
+                    )}
                 </div>
             )}
         </Card>

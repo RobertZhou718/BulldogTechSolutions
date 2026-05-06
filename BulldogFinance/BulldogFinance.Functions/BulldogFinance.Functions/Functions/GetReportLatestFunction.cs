@@ -16,6 +16,7 @@ public class GetReportLatestFunction
 {
     private readonly BlobContainerClient _container;
     private readonly ILogger<GetReportLatestFunction> _logger;
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public GetReportLatestFunction(
         BlobServiceClient blobServiceClient,
@@ -62,7 +63,7 @@ public class GetReportLatestFunction
             }
 
             var resp = req.CreateResponse(HttpStatusCode.OK);
-            await resp.WriteAsJsonAsync(new
+            await WriteJsonAsync(resp, new
             {
                 hasReport = true,
                 report,
@@ -79,7 +80,7 @@ public class GetReportLatestFunction
                 blobName);
 
             var ok = req.CreateResponse(HttpStatusCode.OK);
-            await ok.WriteAsJsonAsync(new
+            await WriteJsonAsync(ok, new
             {
                 hasReport = false,
                 report = (GeneratedReport?)null,
@@ -92,7 +93,7 @@ public class GetReportLatestFunction
             _logger.LogError(ex, "Failed to load latest {Period} report for user {UserId}.", period, userId);
 
             var error = req.CreateResponse(HttpStatusCode.InternalServerError);
-            await error.WriteAsJsonAsync(new
+            await WriteJsonAsync(error, new
             {
                 hasReport = false,
                 report = (GeneratedReport?)null,
@@ -100,5 +101,14 @@ public class GetReportLatestFunction
             }, cancellationToken);
             return error;
         }
+    }
+
+    private static async Task WriteJsonAsync(
+        HttpResponseData response,
+        object payload,
+        CancellationToken cancellationToken)
+    {
+        response.Headers.Add("Content-Type", "application/json; charset=utf-8");
+        await response.WriteStringAsync(JsonSerializer.Serialize(payload, JsonOptions), cancellationToken);
     }
 }
