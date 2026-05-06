@@ -6,7 +6,6 @@ import { useChatbot } from "./chatbotContext.js";
 import chatbotAvatar from "@/assets/BulldogFinance.png";
 
 export default function ChatbotPanel({
-    embedded = false,
     className = "",
     title = "Bulldog Finance chat",
     description = "Ask questions about your portfolio, transactions, or the latest report.",
