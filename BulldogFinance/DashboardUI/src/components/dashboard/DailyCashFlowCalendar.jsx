@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import Card from "@/components/ui/Card.jsx";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import { getTransactionDateKey } from "@/lib/transactionDates.js";
 
 function formatDateKey(date) {
     const year = date.getFullYear();
@@ -53,10 +54,9 @@ export default function DailyCashFlowCalendar({ transactions = [] }) {
             const occurredAt = tx.occurredAtUtc || tx.occurredAt || tx.createdAtUtc;
             if (!occurredAt) return;
 
-            const date = new Date(occurredAt);
-            if (Number.isNaN(date.getTime())) return;
+            const key = getTransactionDateKey(occurredAt);
+            if (!key) return;
 
-            const key = formatDateKey(date);
             const amount = Number(tx.amount) || 0;
             const signed =
                 tx.type === "INCOME" ? amount : tx.type === "EXPENSE" ? -amount : 0;

@@ -10,6 +10,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { getLocalDateInputValue, transactionDateToUtcIso } from "@/lib/transactionDates.js";
 
 const TYPE_OPTIONS = [
     { value: "EXPENSE", label: "Expense" },
@@ -36,7 +37,7 @@ export default function TransactionForm({
     const [amount, setAmount] = useState("");
     const [category, setCategory] = useState("General");
     const [note, setNote] = useState("");
-    const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [date, setDate] = useState(() => getLocalDateInputValue());
     const accountId = selectedAccountId || accounts[0]?.accountId || "";
 
     const currentAccount = accounts.find((a) => a.accountId === accountId);
@@ -55,7 +56,7 @@ export default function TransactionForm({
             amount: numericAmount,
             category,
             note: note.trim(),
-            occurredAtUtc: new Date(`${date}T00:00:00Z`).toISOString(),
+            occurredAtUtc: transactionDateToUtcIso(date),
             currency,
         });
 
