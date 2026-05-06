@@ -3,6 +3,7 @@ import Card from "@/components/ui/Card.jsx";
 import { Button } from "@/components/ui/button";
 import Spinner from "@/components/ui/Spinner.jsx";
 import { useApiClient } from "@/services/apiClient";
+import { formatTransactionDate } from "@/lib/transactionDates.js";
 
 function formatPeriodLabel(period) {
     return period.charAt(0).toUpperCase() + period.slice(1);
@@ -92,8 +93,8 @@ export default function LatestReportCard() {
                 <div className="mt-6 space-y-4">
                     <div className="flex flex-wrap gap-3 text-sm text-[var(--text-soft)]">
                         <span>
-                            {new Date(report.startUtc).toLocaleDateString()} to{" "}
-                            {new Date(report.endUtc).toLocaleDateString()}
+                            {formatTransactionDate(report.startUtc)} to{" "}
+                            {formatTransactionDate(report.endUtc)}
                         </span>
                         <span>Created {new Date(report.createdAtUtc).toLocaleDateString()}</span>
                     </div>

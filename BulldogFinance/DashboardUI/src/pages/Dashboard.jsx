@@ -10,6 +10,7 @@ import PageHeader from "@/components/ui/PageHeader.jsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getAccountBalanceDisplay, summarizeAccountBalances } from "@/lib/accountBalances.js";
 import { formatCurrency } from "@/lib/utils";
+import { getTransactionMonthKey } from "@/lib/transactionDates.js";
 import { useApiClient } from "@/services/apiClient.js";
 import { toast } from "sonner";
 
@@ -175,7 +176,7 @@ export default function DashboardPage() {
             date.setMonth(date.getMonth() - (5 - index));
             date.setDate(1);
             return {
-                key: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`,
+                key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
                 label: date.toLocaleString("en-US", { month: "short" }),
                 income: 0,
                 expense: 0,
@@ -188,8 +189,7 @@ export default function DashboardPage() {
             const occurredAt = tx.occurredAtUtc || tx.occurredAt || tx.createdAtUtc;
             if (!occurredAt) return;
 
-            const date = new Date(occurredAt);
-            const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+            const key = getTransactionMonthKey(occurredAt);
             const currency = tx.currency || defaultCurrency;
 
             if (!monthMapsByCurrency.has(currency)) {

@@ -4,11 +4,11 @@ import TransactionForm from "@/components/transactions/TransactionForm.jsx";
 import TransactionTable from "@/components/transactions/TransactionTable.jsx";
 import LatestReportCard from "@/components/reports/LatestReportCard.jsx";
 import EmptyState from "@/components/ui/EmptyState.jsx";
-import MetricCard from "@/components/ui/MetricCard.jsx";
 import PageHeader from "@/components/ui/PageHeader.jsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { formatCurrencyBreakdown, formatDateTime } from "@/lib/utils";
+import { formatDateTime } from "@/lib/utils";
+import { getTransactionTimestamp, transactionDateToUtcIso } from "@/lib/transactionDates.js";
 import { useApiClient } from "@/services/apiClient";
 import { Field } from "@/components/ui/Field.jsx";
 import {
@@ -39,11 +39,11 @@ export default function TransactionsPage() {
         }
 
         if (filters.from) {
-            params.from = new Date(`${filters.from}T00:00:00Z`).toISOString();
+            params.from = transactionDateToUtcIso(filters.from);
         }
 
         if (filters.to) {
-            params.to = new Date(`${filters.to}T23:59:59Z`).toISOString();
+            params.to = transactionDateToUtcIso(filters.to, true);
         }
 
         return params;
@@ -103,8 +103,8 @@ export default function TransactionsPage() {
                 return sortDirection === "asc" ? av - bv : bv - av;
             }
 
-            const ad = new Date(a.occurredAtUtc || a.occurredAt || a.createdAtUtc || 0).getTime();
-            const bd = new Date(b.occurredAtUtc || b.occurredAt || b.createdAtUtc || 0).getTime();
+            const ad = getTransactionTimestamp(a.occurredAtUtc || a.occurredAt || a.createdAtUtc);
+            const bd = getTransactionTimestamp(b.occurredAtUtc || b.occurredAt || b.createdAtUtc);
             return sortDirection === "asc" ? ad - bd : bd - ad;
         });
 
@@ -115,11 +115,6 @@ export default function TransactionsPage() {
         () => accounts.find((a) => a.accountId === historyAccountId),
         [accounts, historyAccountId]
     );
-    const formAccount = useMemo(
-        () => accounts.find((a) => a.accountId === formAccountId),
-        [accounts, formAccountId]
-    );
-    const currency = viewAccount?.currency || formAccount?.currency || "CAD";
     const transactionSyncDescription = useMemo(() => {
         const scopedAccounts = historyAccountId === "ALL"
             ? accounts
@@ -150,47 +145,6 @@ export default function TransactionsPage() {
         return `Plaid transactions last synced ${formatDateTime(oldestSync)}.${statusText}`;
     }, [accounts, historyAccountId]);
 
-    const summary = useMemo(() => {
-        const totalsByCurrency = new Map();
-
-        visibleTransactions.forEach((tx) => {
-            const transactionCurrency = tx.currency || currency || "CAD";
-            const existing = totalsByCurrency.get(transactionCurrency) || { income: 0, expense: 0 };
-            const amount = Number(tx.amount) || 0;
-
-            if (tx.type === "EXPENSE") {
-                existing.expense += amount;
-            } else {
-                existing.income += amount;
-            }
-
-            totalsByCurrency.set(transactionCurrency, existing);
-        });
-
-        const totals = Array.from(totalsByCurrency, ([entryCurrency, values]) => ({
-            currency: entryCurrency,
-            income: values.income,
-            expense: values.expense,
-            net: values.income - values.expense,
-        }));
-
-        return { totals, count: visibleTransactions.length };
-    }, [currency, visibleTransactions]);
-    const hasMixedSummaryCurrencies = summary.totals.length > 1;
-    const netFlowLabel = useMemo(
-        () => formatCurrencyBreakdown(summary.totals.map(({ currency: entryCurrency, net }) => ({ currency: entryCurrency, amount: net })), 0),
-        [summary.totals]
-    );
-    const incomeLabel = useMemo(
-        () => formatCurrencyBreakdown(summary.totals.map(({ currency: entryCurrency, income }) => ({ currency: entryCurrency, amount: income })), 0),
-        [summary.totals]
-    );
-    const expenseLabel = useMemo(
-        () => formatCurrencyBreakdown(summary.totals.map(({ currency: entryCurrency, expense }) => ({ currency: entryCurrency, amount: expense })), 0),
-        [summary.totals]
-    );
-    const primaryNetTotal = summary.totals[0]?.net ?? 0;
-
     const accountNameMap = useMemo(
         () =>
             accounts.reduce((map, acc) => {
@@ -218,14 +172,8 @@ export default function TransactionsPage() {
                     <Skeleton className="h-4 w-24" />
                     <Skeleton className="h-9 w-72" />
                     <Skeleton className="h-4 w-[28rem] max-w-full" />
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
-                        <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
-                        <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
-                        <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
-                    </div>
                 </div>
-                <div className="grid gap-6">
+                <div className="grid grid-cols-1 gap-6">
                     <Skeleton className="h-40 rounded-[var(--radius-2xl)]" />
                     <Skeleton className="h-16 rounded-[var(--radius-2xl)]" />
                     <Skeleton className="h-80 rounded-[var(--radius-2xl)]" />
@@ -271,21 +219,9 @@ export default function TransactionsPage() {
                         </Field>
                     </div>
                 }
-            >
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    <MetricCard
-                        label="Net flow"
-                        value={netFlowLabel}
-                        tone={hasMixedSummaryCurrencies ? "default" : (primaryNetTotal >= 0 ? "positive" : "negative")}
-                        hint={hasMixedSummaryCurrencies ? "Grouped by currency; no FX conversion applied" : undefined}
-                    />
-                    <MetricCard label="Inflows" value={incomeLabel} />
-                    <MetricCard label="Outflows" value={expenseLabel} />
-                    <MetricCard label="Items shown" value={summary.count} />
-                </div>
-            </PageHeader>
+            />
 
-            <div className="grid gap-6">
+            <div className="grid grid-cols-1 gap-6">
                 <LatestReportCard />
 
                 <TransactionForm

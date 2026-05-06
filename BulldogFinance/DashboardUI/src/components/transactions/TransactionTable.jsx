@@ -1,12 +1,6 @@
 import React from "react";
 import Card from "@/components/ui/Card.jsx";
-
-function formatDate(dateStr) {
-    if (!dateStr) return "";
-    const d = new Date(dateStr);
-    if (Number.isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString();
-}
+import { formatTransactionDate } from "@/lib/transactionDates.js";
 
 export default function TransactionTable({
     transactions,
@@ -73,7 +67,7 @@ export default function TransactionTable({
                             {transactions.map((tx) => (
                                 <tr key={tx.transactionId || tx.rowKey || tx.id} className="text-sm">
                                     <td className="px-4 py-4 text-[var(--text-muted)]">
-                                        {formatDate(tx.occurredAtUtc || tx.occurredAt || tx.createdAtUtc)}
+                                        {formatTransactionDate(tx.occurredAtUtc || tx.occurredAt || tx.createdAtUtc)}
                                     </td>
                                     <td className="px-4 py-4 text-[var(--text-main)]">
                                         {accountNames?.[tx.accountId] || tx.accountName || tx.accountId}
