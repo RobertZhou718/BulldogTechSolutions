@@ -314,9 +314,8 @@ namespace BulldogFinance.Functions.Services.Transactions
                 filterParts.Add(TableClient.CreateQueryFilter($"RowKey gt {cursor}"));
             }
 
-            var items = new List<TransactionEntity>(limit);
-            var hasMore = false;
-            string? nextCursor = null;
+            var bufferCap = Math.Max(limit * 2, limit + 50);
+            var indexes = new List<TransactionTimelineIndexEntity>(bufferCap);
             var query = table.QueryAsync<TransactionTimelineIndexEntity>(
                 filter: string.Join(" and ", filterParts),
                 maxPerPage: Math.Max(limit * 2, 20),
@@ -324,11 +323,35 @@ namespace BulldogFinance.Functions.Services.Transactions
 
             await foreach (var index in query)
             {
-                var transaction = await GetTransactionAsync(userId, index.TransactionId, cancellationToken);
-                if (transaction == null ||
-                    transaction.IsDeleted ||
-                    TimelineRowKey(transaction) != index.RowKey ||
-                    !IsVisibleTransaction(transaction, accountId, fromUtc, toUtc, type, category))
+                indexes.Add(index);
+                if (indexes.Count >= bufferCap)
+                {
+                    break;
+                }
+            }
+
+            var staleMap = await HydrateStaleIndexesAsync(userId, indexes, cancellationToken);
+
+            var items = new List<TransactionEntity>(limit);
+            var hasMore = false;
+            string? nextCursor = null;
+
+            foreach (var index in indexes)
+            {
+                TransactionEntity? transaction;
+                if (string.IsNullOrEmpty(index.Type))
+                {
+                    if (!staleMap.TryGetValue(index.RowKey, out transaction))
+                    {
+                        continue;
+                    }
+                }
+                else
+                {
+                    transaction = HydrateFromIndex(userId, index);
+                }
+
+                if (!IsVisibleTransaction(transaction, accountId, fromUtc, toUtc, type, category))
                 {
                     continue;
                 }
@@ -349,6 +372,66 @@ namespace BulldogFinance.Functions.Services.Transactions
                 NextCursor = nextCursor,
                 HasMore = hasMore
             };
+        }
+
+        private static TransactionEntity HydrateFromIndex(string userId, TransactionTimelineIndexEntity index) => new()
+        {
+            PartitionKey = userId,
+            RowKey = index.TransactionId,
+            AccountId = index.AccountId,
+            Type = index.Type ?? string.Empty,
+            AmountCents = index.AmountCents,
+            Currency = string.IsNullOrEmpty(index.Currency) ? "CAD" : index.Currency!,
+            Category = index.Category,
+            Note = index.Note,
+            MerchantName = index.MerchantName,
+            Source = index.Source,
+            ExternalTransactionId = index.ExternalTransactionId,
+            ExternalAccountId = index.ExternalAccountId,
+            Pending = index.Pending,
+            AuthorizedAtUtc = index.AuthorizedAtUtc,
+            PostedAtUtc = index.PostedAtUtc,
+            OccurredAtUtc = index.OccurredAtUtc,
+            CreatedAtUtc = index.CreatedAtUtc,
+            UpdatedAtUtc = index.UpdatedAtUtc,
+            IsDeleted = false,
+            IsSystemGenerated = index.IsSystemGenerated
+        };
+
+        private async Task<Dictionary<string, TransactionEntity>> HydrateStaleIndexesAsync(
+            string userId,
+            IReadOnlyList<TransactionTimelineIndexEntity> indexes,
+            CancellationToken cancellationToken)
+        {
+            var staleIndexes = indexes.Where(index => string.IsNullOrEmpty(index.Type)).ToList();
+            if (staleIndexes.Count == 0)
+            {
+                return new Dictionary<string, TransactionEntity>(0);
+            }
+
+            var fetched = await Task.WhenAll(staleIndexes.Select(index =>
+                GetTransactionAsync(userId, index.TransactionId, cancellationToken)));
+
+            var result = new Dictionary<string, TransactionEntity>(fetched.Length);
+            for (var i = 0; i < fetched.Length; i++)
+            {
+                var transaction = fetched[i];
+                var index = staleIndexes[i];
+
+                if (transaction == null ||
+                    transaction.IsDeleted ||
+                    TimelineRowKey(transaction) != index.RowKey)
+                {
+                    continue;
+                }
+
+                result[index.RowKey] = transaction;
+            }
+
+            await Task.WhenAll(result.Values.Select(transaction =>
+                UpsertTimelineIndexesAsync(transaction, cancellationToken)));
+
+            return result;
         }
 
         private async Task<PagedResult<TransactionEntity>> GetFallbackTransactionsPageAsync(
@@ -379,10 +462,7 @@ namespace BulldogFinance.Functions.Services.Transactions
 
             var page = filtered.Take(limit + 1).ToList();
             var items = page.Take(limit).ToList();
-            foreach (var item in items)
-            {
-                await UpsertTimelineIndexesAsync(item, cancellationToken);
-            }
+            await Task.WhenAll(items.Select(item => UpsertTimelineIndexesAsync(item, cancellationToken)));
 
             return new PagedResult<TransactionEntity>
             {
@@ -420,32 +500,42 @@ namespace BulldogFinance.Functions.Services.Transactions
                 return;
             }
 
-            var now = DateTime.UtcNow;
             var rowKey = TimelineRowKey(transaction);
             var occurredAtUtc = GetTimelineDateUtc(transaction);
-            var index = new TransactionTimelineIndexEntity
+
+            TransactionTimelineIndexEntity BuildIndex(string partitionKey) => new()
             {
-                PartitionKey = transaction.PartitionKey,
+                PartitionKey = partitionKey,
                 RowKey = rowKey,
                 TransactionId = transaction.RowKey,
                 AccountId = transaction.AccountId,
                 OccurredAtUtc = occurredAtUtc,
-                UpdatedAtUtc = now
+                Type = transaction.Type,
+                AmountCents = transaction.AmountCents,
+                Currency = transaction.Currency,
+                Category = transaction.Category,
+                Note = transaction.Note,
+                MerchantName = transaction.MerchantName,
+                Source = transaction.Source,
+                ExternalTransactionId = transaction.ExternalTransactionId,
+                ExternalAccountId = transaction.ExternalAccountId,
+                Pending = transaction.Pending,
+                AuthorizedAtUtc = transaction.AuthorizedAtUtc,
+                PostedAtUtc = transaction.PostedAtUtc,
+                CreatedAtUtc = transaction.CreatedAtUtc,
+                UpdatedAtUtc = transaction.UpdatedAtUtc,
+                IsSystemGenerated = transaction.IsSystemGenerated
             };
 
-            await _transactionTimelineTable.UpsertEntityAsync(index, TableUpdateMode.Replace, cancellationToken);
-            await _transactionAccountTimelineTable.UpsertEntityAsync(
-                new TransactionTimelineIndexEntity
-                {
-                    PartitionKey = AccountTimelinePartitionKey(transaction.PartitionKey, transaction.AccountId),
-                    RowKey = rowKey,
-                    TransactionId = transaction.RowKey,
-                    AccountId = transaction.AccountId,
-                    OccurredAtUtc = occurredAtUtc,
-                    UpdatedAtUtc = now
-                },
-                TableUpdateMode.Replace,
-                cancellationToken);
+            await Task.WhenAll(
+                _transactionTimelineTable.UpsertEntityAsync(
+                    BuildIndex(transaction.PartitionKey),
+                    TableUpdateMode.Replace,
+                    cancellationToken),
+                _transactionAccountTimelineTable.UpsertEntityAsync(
+                    BuildIndex(AccountTimelinePartitionKey(transaction.PartitionKey, transaction.AccountId)),
+                    TableUpdateMode.Replace,
+                    cancellationToken));
         }
 
         private async Task DeleteStaleTimelineIndexesAsync(
