@@ -1,9 +1,7 @@
-﻿using BulldogFinance.Functions.Helper;
+using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Services.Users;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
-using System.Net;
-using System.Text.Json;
 
 namespace BulldogFinance.Functions.Functions
 {
@@ -19,8 +17,7 @@ namespace BulldogFinance.Functions.Functions
         [Function("GetMe")]
         public async Task<HttpResponseData> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "me")]
-            HttpRequestData req,
-            FunctionContext context)
+            HttpRequestData req)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
@@ -28,20 +25,14 @@ namespace BulldogFinance.Functions.Functions
 
             var userEntity = await _userRepository.GetUserAsync(userId);
 
-            var response = req.CreateResponse(HttpStatusCode.OK);
-            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-
-            var result = new
+            return await ApiResponse.OkAsync(req, new
             {
                 userId,
                 displayName = userEntity?.DisplayName,
                 email = userEntity?.Email,
                 defaultCurrency = userEntity?.DefaultCurrency ?? "CAD",
                 onboardingDone = userEntity?.OnboardingDone ?? false
-            };
-
-            await response.WriteStringAsync(JsonSerializer.Serialize(result));
-            return response;
+            });
         }
     }
 }

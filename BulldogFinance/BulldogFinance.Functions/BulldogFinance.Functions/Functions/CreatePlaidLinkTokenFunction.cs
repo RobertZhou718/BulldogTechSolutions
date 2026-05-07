@@ -1,5 +1,3 @@
-using System.Net;
-using System.Text.Json;
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Plaid;
 using BulldogFinance.Functions.Services.Plaid;
@@ -7,54 +5,37 @@ using Going.Plaid.Entity;
 using Going.Plaid.Link;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
-using Microsoft.Extensions.Configuration;
 
 namespace BulldogFinance.Functions.Functions
 {
     public class CreatePlaidLinkTokenFunction
     {
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            PropertyNameCaseInsensitive = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
-
         private readonly IPlaidClientFactory _plaidClientFactory;
         private readonly IPlaidRepository _plaidRepository;
         private readonly IPlaidTokenProtector _tokenProtector;
-        private readonly string? _webhookUrl;
 
         public CreatePlaidLinkTokenFunction(
             IPlaidClientFactory plaidClientFactory,
             IPlaidRepository plaidRepository,
-            IPlaidTokenProtector tokenProtector,
-            IConfiguration configuration)
+            IPlaidTokenProtector tokenProtector)
         {
             _plaidClientFactory = plaidClientFactory;
             _plaidRepository = plaidRepository;
             _tokenProtector = tokenProtector;
-            _webhookUrl = configuration["Plaid:WebhookUrl"];
         }
 
         [Function("CreatePlaidLinkToken")]
         public async Task<HttpResponseData> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "plaid/link-token")]
-            HttpRequestData req,
-            FunctionContext context)
+            HttpRequestData req)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
                 return await ApiResponse.UnauthorizedAsync(req);
 
-            CreatePlaidLinkTokenRequest? requestModel = null;
-            using (var reader = new StreamReader(req.Body))
-            {
-                var body = await reader.ReadToEndAsync();
-                if (!string.IsNullOrWhiteSpace(body))
-                {
-                    requestModel = JsonSerializer.Deserialize<CreatePlaidLinkTokenRequest>(body, JsonOptions);
-                }
-            }
+            // Body is optional — defaults apply when absent.
+            var body = await req.ReadJsonBodyAsync<CreatePlaidLinkTokenRequest>();
+            var requestModel = body.Value;
 
             var countryCodes = (requestModel?.CountryCodes?.Length > 0 ? requestModel.CountryCodes : new[] { "CA", "US" })
                 .Select(ParseCountryCode).ToArray();
@@ -102,11 +83,6 @@ namespace BulldogFinance.Functions.Functions
                     AdditionalConsentedProducts = additionalConsentedProducts,
                     User = user
                 };
-
-                if (!string.IsNullOrWhiteSpace(_webhookUrl))
-                {
-                    plaidRequest.Webhook = _webhookUrl;
-                }
             }
 
             var plaidClient = _plaidClientFactory.Create();
@@ -117,15 +93,11 @@ namespace BulldogFinance.Functions.Functions
                 throw new PlaidApiException("/link/token/create", result.StatusCode, result.Error, result.RawJson);
             }
 
-            var response = req.CreateResponse(HttpStatusCode.OK);
-            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-            await response.WriteStringAsync(JsonSerializer.Serialize(new CreatePlaidLinkTokenResponse
+            return await ApiResponse.OkAsync(req, new CreatePlaidLinkTokenResponse
             {
                 LinkToken = result.LinkToken,
                 Expiration = result.Expiration.UtcDateTime
-            }, JsonOptions));
-
-            return response;
+            });
         }
 
         private static CountryCode ParseCountryCode(string value) =>

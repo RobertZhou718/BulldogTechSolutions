@@ -1,4 +1,3 @@
-﻿using System.Net;
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Services.Investments;
 using Microsoft.Azure.Functions.Worker;
@@ -23,8 +22,7 @@ namespace BulldogFinance.Functions.Functions
         [Function("GetWatchlist")]
         public async Task<HttpResponseData> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "investments/watchlist")]
-            HttpRequestData req,
-            FunctionContext context)
+            HttpRequestData req)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
@@ -33,10 +31,7 @@ namespace BulldogFinance.Functions.Functions
             _logger.LogInformation("GetWatchlist for user {UserId}", userId);
 
             var items = await _overviewService.GetWatchlistOverviewAsync(userId);
-
-            var resp = req.CreateResponse(HttpStatusCode.OK);
-            await resp.WriteAsJsonAsync(items);
-            return resp;
+            return await ApiResponse.OkAsync(req, items);
         }
     }
 }

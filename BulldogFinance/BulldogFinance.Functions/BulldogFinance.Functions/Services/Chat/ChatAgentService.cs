@@ -94,35 +94,18 @@ namespace BulldogFinance.Functions.Services.Chat
                     var assistantMessage = new AssistantChatMessage(completion);
                     messages.Add(assistantMessage);
 
-                    var step = new ChatAgentStepDto
-                    {
-                        StepNumber = round,
-                        Thought = "Model requested tool execution."
-                    };
+                    var step = new ChatAgentStepDto();
 
                     foreach (var toolCall in completion.ToolCalls)
                     {
                         var requestDto = CreateToolExecutionRequest(toolCall);
-
-                        step.ToolCalls.Add(new ChatToolCallDto
-                        {
-                            ToolName = requestDto.ToolName,
-                            Arguments = requestDto.Arguments
-                        });
-
                         var result = await _toolExecutor.ExecuteAsync(userId, requestDto, ct);
 
-                        var resultDto = new ChatToolResultDto
+                        step.ToolResults.Add(new ChatToolResultDto
                         {
                             ToolName = result.ToolName,
-                            IsSuccess = result.IsSuccess,
-                            Summary = result.Summary,
-                            Data = result.Data,
-                            ErrorCode = result.ErrorCode,
-                            ErrorMessage = result.ErrorMessage
-                        };
-
-                        step.ToolResults.Add(resultDto);
+                            Summary = result.Summary
+                        });
 
                         messages.Add(new ToolChatMessage(
                             toolCall.Id,

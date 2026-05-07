@@ -13,10 +13,28 @@ namespace BulldogFinance.Functions.Helper
     /// </remarks>
     public static class ApiResponse
     {
-        private static readonly JsonSerializerOptions JsonOptions = new()
+        private static readonly JsonSerializerOptions JsonOptions = JsonDefaults.Api;
+
+        public static Task<HttpResponseData> OkAsync(
+            HttpRequestData req,
+            object payload,
+            CancellationToken ct = default)
+            => JsonAsync(req, HttpStatusCode.OK, payload, ct);
+
+        public static async Task<HttpResponseData> JsonAsync(
+            HttpRequestData req,
+            HttpStatusCode statusCode,
+            object payload,
+            CancellationToken ct = default)
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
+            var response = req.CreateResponse(statusCode);
+            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
+            await response.WriteStringAsync(JsonSerializer.Serialize(payload, JsonOptions), ct);
+            return response;
+        }
+
+        public static HttpResponseData NoContent(HttpRequestData req)
+            => req.CreateResponse(HttpStatusCode.NoContent);
 
         public static Task<HttpResponseData> UnauthorizedAsync(
             HttpRequestData req,

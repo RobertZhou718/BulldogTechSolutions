@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using Azure;
 using Azure.Data.Tables;
 
@@ -23,7 +22,6 @@ namespace BulldogFinance.Functions.Models.Plaid
         public string? LastSyncErrorCode { get; set; }
         public string? LastSyncError { get; set; }
         public DateTime? LastDailySyncQueuedAtUtc { get; set; }
-        public DateTime? ConsentExpiresAtUtc { get; set; }
         public DateTime? CreatedAtUtc { get; set; }
         public DateTime? UpdatedAtUtc { get; set; }
     }
@@ -86,40 +84,7 @@ namespace BulldogFinance.Functions.Models.Plaid
     {
         public string ItemId { get; set; } = default!;
         public int AccountsConnected { get; set; }
-        public int TransactionsAdded { get; set; }
-        public int TransactionsModified { get; set; }
-        public int TransactionsRemoved { get; set; }
-        public int InvestmentHoldingsSynced { get; set; }
-        public int InvestmentSecuritiesSynced { get; set; }
-        public int InvestmentTransactionsSynced { get; set; }
         public bool BackgroundSyncQueued { get; set; }
-    }
-
-    public class PlaidWebhookRequest
-    {
-        [JsonPropertyName("webhook_type")]
-        public string? WebhookType { get; set; }
-
-        [JsonPropertyName("webhook_code")]
-        public string? WebhookCode { get; set; }
-
-        [JsonPropertyName("item_id")]
-        public string? ItemId { get; set; }
-
-        [JsonPropertyName("error")]
-        public PlaidWebhookError? Error { get; set; }
-    }
-
-    public class PlaidWebhookError
-    {
-        [JsonPropertyName("error_type")]
-        public string? ErrorType { get; set; }
-
-        [JsonPropertyName("error_code")]
-        public string? ErrorCode { get; set; }
-
-        [JsonPropertyName("error_message")]
-        public string? ErrorMessage { get; set; }
     }
 
     public class PlaidSyncSummary

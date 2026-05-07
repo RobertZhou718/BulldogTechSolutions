@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text.Json;
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Accounts;
@@ -19,11 +18,7 @@ namespace BulldogFinance.Functions.Functions
         private readonly ISavingsGoalRepository _savingsGoalRepository;
         private readonly IAccountRepository _accountRepository;
 
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            PropertyNameCaseInsensitive = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
+        private static readonly JsonSerializerOptions JsonOptions = JsonDefaults.Api;
 
         public SavingsGoalsFunction(
             ISavingsGoalRepository savingsGoalRepository,
@@ -49,7 +44,7 @@ namespace BulldogFinance.Functions.Functions
                 .Select(g => ToDto(g, accounts))
                 .ToList();
 
-            return await JsonAsync(req, HttpStatusCode.OK, dtoList);
+            return await ApiResponse.OkAsync(req, dtoList);
         }
 
         [Function("GetActiveSavingsGoal")]
@@ -66,7 +61,7 @@ namespace BulldogFinance.Functions.Functions
                 return await ApiResponse.NotFoundAsync(req, "No active savings goal found.");
 
             var accounts = await _accountRepository.GetAccountsAsync(userId, includeArchived: false);
-            return await JsonAsync(req, HttpStatusCode.OK, ToDto(goal, accounts));
+            return await ApiResponse.OkAsync(req, ToDto(goal, accounts));
         }
 
         [Function("CreateSavingsGoal")]
@@ -78,10 +73,11 @@ namespace BulldogFinance.Functions.Functions
             if (string.IsNullOrWhiteSpace(userId))
                 return await ApiResponse.UnauthorizedAsync(req);
 
-            var requestModel = await ReadJsonAsync<SavingsGoalCreateRequest>(req);
-            if (requestModel == null)
+            var body = await req.ReadJsonBodyAsync<SavingsGoalCreateRequest>();
+            if (body.IsMissingOrInvalid || body.Value is null)
                 return await ApiResponse.BadRequestAsync(req, "Invalid or empty request body.");
 
+            var requestModel = body.Value;
             var validationError = ValidateCreateRequest(requestModel);
             if (validationError != null)
                 return await ApiResponse.BadRequestAsync(req, validationError);
@@ -139,7 +135,7 @@ namespace BulldogFinance.Functions.Functions
 
             await _savingsGoalRepository.CreateSavingsGoalAsync(goal);
 
-            return await JsonAsync(req, HttpStatusCode.OK, new CreateSavingsGoalResponse
+            return await ApiResponse.OkAsync(req, new CreateSavingsGoalResponse
             {
                 Goal = ToDto(goal, accounts)
             });
@@ -155,10 +151,11 @@ namespace BulldogFinance.Functions.Functions
             if (string.IsNullOrWhiteSpace(userId))
                 return await ApiResponse.UnauthorizedAsync(req);
 
-            var requestModel = await ReadJsonAsync<SavingsGoalUpdateRequest>(req);
-            if (requestModel == null)
+            var body = await req.ReadJsonBodyAsync<SavingsGoalUpdateRequest>();
+            if (body.IsMissingOrInvalid || body.Value is null)
                 return await ApiResponse.BadRequestAsync(req, "Invalid or empty request body.");
 
+            var requestModel = body.Value;
             var goal = await _savingsGoalRepository.GetSavingsGoalAsync(userId, goalId);
             if (goal == null)
                 return await ApiResponse.NotFoundAsync(req, "Savings goal not found.");
@@ -280,7 +277,7 @@ namespace BulldogFinance.Functions.Functions
             goal.UpdatedAtUtc = now;
             await _savingsGoalRepository.UpdateSavingsGoalAsync(goal);
 
-            return await JsonAsync(req, HttpStatusCode.OK, ToDto(goal, accounts));
+            return await ApiResponse.OkAsync(req, ToDto(goal, accounts));
         }
 
         [Function("ArchiveSavingsGoal")]
@@ -306,7 +303,7 @@ namespace BulldogFinance.Functions.Functions
             goal.UpdatedAtUtc = now;
 
             await _savingsGoalRepository.UpdateSavingsGoalAsync(goal);
-            return req.CreateResponse(HttpStatusCode.NoContent);
+            return ApiResponse.NoContent(req);
         }
 
         private static string? ValidateCreateRequest(SavingsGoalCreateRequest request)
@@ -564,36 +561,5 @@ namespace BulldogFinance.Functions.Functions
             return cents / 100m;
         }
 
-        private static async Task<T?> ReadJsonAsync<T>(HttpRequestData req)
-        {
-            string body;
-            using (var reader = new StreamReader(req.Body))
-            {
-                body = await reader.ReadToEndAsync();
-            }
-
-            if (string.IsNullOrWhiteSpace(body))
-                return default;
-
-            try
-            {
-                return JsonSerializer.Deserialize<T>(body, JsonOptions);
-            }
-            catch (JsonException)
-            {
-                return default;
-            }
-        }
-
-        private static async Task<HttpResponseData> JsonAsync(
-            HttpRequestData req,
-            HttpStatusCode statusCode,
-            object payload)
-        {
-            var response = req.CreateResponse(statusCode);
-            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-            await response.WriteStringAsync(JsonSerializer.Serialize(payload, JsonOptions));
-            return response;
-        }
     }
 }

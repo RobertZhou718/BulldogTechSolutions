@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text.Json;
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Plaid;
@@ -14,11 +13,6 @@ namespace BulldogFinance.Functions.Functions
         private const string QueueName = "plaid-daily-sync-items";
         private const string QueueConnectionName = "QueueStorage";
 
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
-
         private readonly IPlaidRepository _plaidRepository;
 
         public CompletePlaidItemUpdateFunction(IPlaidRepository plaidRepository)
@@ -30,8 +24,7 @@ namespace BulldogFinance.Functions.Functions
         public async Task<CompletePlaidItemUpdateOutput> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "plaid/items/{itemId}/update-complete")]
             HttpRequestData req,
-            string itemId,
-            FunctionContext context)
+            string itemId)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
@@ -53,16 +46,14 @@ namespace BulldogFinance.Functions.Functions
                 UserId = userId,
                 ItemId = itemId,
                 EnqueuedAtUtc = queuedAt
-            }, JsonOptions);
+            }, JsonDefaults.Api);
 
-            var response = req.CreateResponse(HttpStatusCode.OK);
-            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-            await response.WriteStringAsync(JsonSerializer.Serialize(new
+            var response = await ApiResponse.OkAsync(req, new
             {
-                Success = true,
-                ItemId = itemId,
-                BackgroundSyncQueued = true
-            }, JsonOptions));
+                success = true,
+                itemId,
+                backgroundSyncQueued = true
+            });
 
             return Output(response, queueMessage);
         }

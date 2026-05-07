@@ -26,7 +26,6 @@ namespace BulldogFinance.Functions.Services.Chat
 
             sb.AppendLine($"Current user id: {context.UserId}");
             sb.AppendLine($"Conversation id: {context.ConversationId}");
-            sb.AppendLine($"Detected intent: {context.Intent}");
             sb.AppendLine();
 
             sb.AppendLine("Available tools:");

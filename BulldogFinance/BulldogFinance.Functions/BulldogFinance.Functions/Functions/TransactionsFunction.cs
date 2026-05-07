@@ -1,4 +1,4 @@
-﻿using BulldogFinance.Functions.Helper;
+using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Accounts;
 using BulldogFinance.Functions.Models.Transactions;
 using BulldogFinance.Functions.Services.Accounts;
@@ -15,12 +15,6 @@ namespace BulldogFinance.Functions.Functions
     {
         private readonly IAccountRepository _accountRepository;
         private readonly ITransactionRepository _transactionRepository;
-
-        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
 
         private static readonly string[] BankManagedUpdateFields =
         [
@@ -54,28 +48,14 @@ namespace BulldogFinance.Functions.Functions
             if (string.IsNullOrWhiteSpace(userId))
                 return await ApiResponse.UnauthorizedAsync(req);
 
-            string body;
-            using (var reader = new StreamReader(req.Body))
-            {
-                body = await reader.ReadToEndAsync();
-            }
-
-            if (string.IsNullOrWhiteSpace(body))
+            var body = await req.ReadJsonBodyAsync<TransactionCreateRequest>();
+            if (body.IsEmpty)
                 return await ApiResponse.BadRequestAsync(req, "Request body is empty.");
-
-            TransactionCreateRequest? requestModel;
-            try
-            {
-                requestModel = JsonSerializer.Deserialize<TransactionCreateRequest>(body, JsonOptions);
-            }
-            catch (JsonException)
-            {
+            if (body.IsInvalid)
                 return await ApiResponse.BadRequestAsync(req, "Invalid JSON.");
-            }
 
-            if (requestModel == null ||
-                string.IsNullOrWhiteSpace(requestModel.AccountId) ||
-                requestModel.Amount <= 0)
+            var requestModel = body.Value!;
+            if (string.IsNullOrWhiteSpace(requestModel.AccountId) || requestModel.Amount <= 0)
                 return await ApiResponse.BadRequestAsync(req, "AccountId and positive Amount are required.");
 
             var typeUpper = (requestModel.Type ?? string.Empty).Trim().ToUpperInvariant();
@@ -126,20 +106,14 @@ namespace BulldogFinance.Functions.Functions
             var balanceDelta = typeUpper == "INCOME" ? amountCents : -amountCents;
             account = await ApplyBalanceDeltaWithRetryAsync(userId, account.RowKey, balanceDelta, now);
 
-            var result = new CreateTransactionResponse
+            return await ApiResponse.OkAsync(req, new CreateTransactionResponse
             {
                 Transaction = ToDto(transactionEntity),
                 AccountBalanceAfter = account.CurrentBalanceCents / 100m
-            };
-
-            var response = req.CreateResponse(HttpStatusCode.OK);
-            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-            await response.WriteStringAsync(JsonSerializer.Serialize(result, JsonOptions));
-
-            return response;
+            });
         }
 
-        private async Task<BulldogFinance.Functions.Models.Accounts.AccountEntity> ApplyBalanceDeltaWithRetryAsync(
+        private async Task<AccountEntity> ApplyBalanceDeltaWithRetryAsync(
             string userId,
             string accountId,
             long balanceDeltaCents,
@@ -188,29 +162,25 @@ namespace BulldogFinance.Functions.Functions
             if (account == null || account.IsArchived)
                 return await ApiResponse.NotFoundAsync(req, "Account not found or archived.");
 
-            string body;
-            using (var reader = new StreamReader(req.Body))
-            {
-                body = await reader.ReadToEndAsync();
-            }
-
-            if (string.IsNullOrWhiteSpace(body))
+            var (document, _, error) = await req.ReadJsonDocumentAsync();
+            if (error == JsonBodyError.Empty)
                 return await ApiResponse.BadRequestAsync(req, "Request body is empty.");
+            if (error == JsonBodyError.Invalid)
+                return await ApiResponse.BadRequestAsync(req, "Invalid JSON.");
 
-            JsonDocument document;
+            using var doc = document;
+            if (doc!.RootElement.ValueKind != JsonValueKind.Object)
+                return await ApiResponse.BadRequestAsync(req, "Request body must be a JSON object.");
+
             TransactionUpdateRequest? requestModel;
             try
             {
-                document = JsonDocument.Parse(body);
-                requestModel = JsonSerializer.Deserialize<TransactionUpdateRequest>(body, JsonOptions);
+                requestModel = doc.RootElement.Deserialize<TransactionUpdateRequest>(JsonDefaults.Api);
             }
             catch (JsonException)
             {
                 return await ApiResponse.BadRequestAsync(req, "Invalid JSON.");
             }
-
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
-                return await ApiResponse.BadRequestAsync(req, "Request body must be a JSON object.");
 
             if (requestModel == null)
                 return await ApiResponse.BadRequestAsync(req, "Invalid request body.");
@@ -220,17 +190,17 @@ namespace BulldogFinance.Functions.Functions
 
             if (isConnectedTransaction)
             {
-                if (ContainsAnyProperty(document.RootElement, BankManagedUpdateFields))
+                if (ContainsAnyProperty(doc.RootElement, BankManagedUpdateFields))
                 {
                     return await ApiResponse.BadRequestAsync(
                         req,
                         "Connected account transactions are managed by bank sync. Only category, note, and merchant name can be edited.");
                 }
 
-                ApplyMetadataUpdates(document.RootElement, transaction);
+                ApplyMetadataUpdates(doc.RootElement, transaction);
                 transaction.UpdatedAtUtc = now;
                 await _transactionRepository.UpdateTransactionAsync(transaction);
-                return await WriteJsonAsync(req, new { transaction = ToDto(transaction) });
+                return await ApiResponse.OkAsync(req, new { transaction = ToDto(transaction) });
             }
 
             if (transaction.IsSystemGenerated)
@@ -238,7 +208,7 @@ namespace BulldogFinance.Functions.Functions
 
             var oldSignedAmountCents = GetSignedAmountCents(transaction);
 
-            if (TryGetPropertyIgnoreCase(document.RootElement, "type", out _))
+            if (TryGetPropertyIgnoreCase(doc.RootElement, "type", out _))
             {
                 var typeUpper = (requestModel.Type ?? string.Empty).Trim().ToUpperInvariant();
                 if (typeUpper != "INCOME" && typeUpper != "EXPENSE")
@@ -247,7 +217,7 @@ namespace BulldogFinance.Functions.Functions
                 transaction.Type = typeUpper;
             }
 
-            if (TryGetPropertyIgnoreCase(document.RootElement, "amount", out _))
+            if (TryGetPropertyIgnoreCase(doc.RootElement, "amount", out _))
             {
                 if (!requestModel.Amount.HasValue || requestModel.Amount.Value <= 0)
                     return await ApiResponse.BadRequestAsync(req, "Amount must be positive.");
@@ -258,12 +228,12 @@ namespace BulldogFinance.Functions.Functions
                     MidpointRounding.AwayFromZero);
             }
 
-            if (TryGetPropertyIgnoreCase(document.RootElement, "occurredAtUtc", out _))
+            if (TryGetPropertyIgnoreCase(doc.RootElement, "occurredAtUtc", out _))
             {
                 transaction.OccurredAtUtc = requestModel.OccurredAtUtc;
             }
 
-            ApplyMetadataUpdates(document.RootElement, transaction);
+            ApplyMetadataUpdates(doc.RootElement, transaction);
             transaction.UpdatedAtUtc = now;
             await _transactionRepository.UpdateTransactionAsync(transaction);
 
@@ -273,7 +243,7 @@ namespace BulldogFinance.Functions.Functions
                 account = await ApplyBalanceDeltaWithRetryAsync(userId, account.RowKey, balanceDeltaCents, now);
             }
 
-            return await WriteJsonAsync(req, new
+            return await ApiResponse.OkAsync(req, new
             {
                 transaction = ToDto(transaction),
                 accountBalanceAfter = account.CurrentBalanceCents / 100m
@@ -310,7 +280,7 @@ namespace BulldogFinance.Functions.Functions
             await _transactionRepository.UpdateTransactionAsync(transaction);
             await ApplyBalanceDeltaWithRetryAsync(userId, account.RowKey, -GetSignedAmountCents(transaction), now);
 
-            return req.CreateResponse(HttpStatusCode.NoContent);
+            return ApiResponse.NoContent(req);
         }
 
         [Function("GetTransactions")]
@@ -322,79 +292,18 @@ namespace BulldogFinance.Functions.Functions
             if (string.IsNullOrWhiteSpace(userId))
                 return await ApiResponse.UnauthorizedAsync(req);
 
-            string? accountId = null;
-            DateTime? fromUtc = null;
-            DateTime? toUtc = null;
-            string? type = null;
-            string? category = null;
-            string? cursor = null;
-            var limit = 50;
-
-            var query = req.Url.Query;
-            if (!string.IsNullOrWhiteSpace(query))
-            {
-                var trimmed = query.TrimStart('?');
-                var pairs = trimmed.Split('&', StringSplitOptions.RemoveEmptyEntries);
-
-                foreach (var pair in pairs)
-                {
-                    var kv = pair.Split('=', 2, StringSplitOptions.RemoveEmptyEntries);
-                    if (kv.Length != 2) continue;
-
-                    var key = kv[0];
-                    var value = Uri.UnescapeDataString(kv[1]);
-
-                    if (key.Equals("accountId", StringComparison.OrdinalIgnoreCase))
-                    {
-                        accountId = value;
-                    }
-                    else if (key.Equals("type", StringComparison.OrdinalIgnoreCase))
-                    {
-                        type = value;
-                    }
-                    else if (key.Equals("category", StringComparison.OrdinalIgnoreCase))
-                    {
-                        category = value;
-                    }
-                    else if (key.Equals("cursor", StringComparison.OrdinalIgnoreCase))
-                    {
-                        cursor = value;
-                    }
-                    else if (key.Equals("limit", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (int.TryParse(value, out var parsedLimit))
-                        {
-                            limit = Math.Clamp(parsedLimit, 1, 200);
-                        }
-                    }
-                    else if (key.Equals("from", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (DateTime.TryParse(value, out var parsed))
-                        {
-                            fromUtc = DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
-                        }
-                    }
-                    else if (key.Equals("to", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (DateTime.TryParse(value, out var parsed))
-                        {
-                            toUtc = DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
-                        }
-                    }
-                }
-            }
-
+            var query = QueryHelper.Parse(req);
             var page = await _transactionRepository.GetTransactionsPageAsync(
                 userId,
-                accountId,
-                fromUtc,
-                toUtc,
-                type,
-                category,
-                limit,
-                cursor);
+                query.GetString("accountId"),
+                query.GetUtcDateTime("from"),
+                query.GetUtcDateTime("to"),
+                query.GetString("type"),
+                query.GetString("category"),
+                query.GetInt("limit", 50, 1, 200),
+                query.GetString("cursor"));
 
-            return await WriteJsonAsync(req, new
+            return await ApiResponse.OkAsync(req, new
             {
                 items = page.Items.Select(ToDto).ToList(),
                 nextCursor = page.NextCursor,
@@ -496,17 +405,5 @@ namespace BulldogFinance.Functions.Functions
 
             return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
         }
-
-        private static async Task<HttpResponseData> WriteJsonAsync(
-            HttpRequestData req,
-            object payload,
-            HttpStatusCode statusCode = HttpStatusCode.OK)
-        {
-            var response = req.CreateResponse(statusCode);
-            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-            await response.WriteStringAsync(JsonSerializer.Serialize(payload, JsonOptions));
-            return response;
-        }
-
     }
 }

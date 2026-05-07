@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Plaid;
 using BulldogFinance.Functions.Services.Plaid;
 using Microsoft.Azure.Functions.Worker;
@@ -11,11 +12,7 @@ namespace BulldogFinance.Functions.Functions
         private const string QueueName = "plaid-daily-sync-items";
         private const string QueueConnectionName = "QueueStorage";
 
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            PropertyNameCaseInsensitive = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
+        private static readonly JsonSerializerOptions JsonOptions = JsonDefaults.Api;
 
         private readonly IPlaidRepository _plaidRepository;
         private readonly IPlaidSyncService _plaidSyncService;

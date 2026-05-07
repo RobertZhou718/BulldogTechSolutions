@@ -2,7 +2,6 @@ using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Services.Chat;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
-using System.Net;
 
 namespace BulldogFinance.Functions.Functions
 {
@@ -24,12 +23,8 @@ namespace BulldogFinance.Functions.Functions
             if (string.IsNullOrWhiteSpace(userId))
                 return await ApiResponse.UnauthorizedAsync(req, cancellationToken);
 
-            var response = req.CreateResponse(HttpStatusCode.OK);
-            await response.WriteAsJsonAsync(
-                await _conversationService.ListConversationsAsync(userId, cancellationToken),
-                cancellationToken);
-
-            return response;
+            var conversations = await _conversationService.ListConversationsAsync(userId, cancellationToken);
+            return await ApiResponse.OkAsync(req, conversations, cancellationToken);
         }
     }
 }
