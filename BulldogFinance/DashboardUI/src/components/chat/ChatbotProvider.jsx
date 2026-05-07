@@ -11,7 +11,12 @@ const starterMessages = [
 ];
 
 export function ChatbotProvider({ children }) {
-    const { sendChatMessage, getChatConversations, getChatConversation } = useApiClient();
+    const {
+        sendChatMessage,
+        getChatConversations,
+        getChatConversation,
+        deleteChatConversation,
+    } = useApiClient();
     const [messages, setMessages] = useState(starterMessages);
     const [conversationId, setConversationId] = useState("");
     const [conversations, setConversations] = useState([]);
@@ -21,6 +26,7 @@ export function ChatbotProvider({ children }) {
     const [isSending, setIsSending] = useState(false);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [isLoadingConversations, setIsLoadingConversations] = useState(true);
+    const [deletingConversationId, setDeletingConversationId] = useState("");
     const [error, setError] = useState("");
 
     useEffect(() => {
@@ -46,8 +52,8 @@ export function ChatbotProvider({ children }) {
         };
     }, [getChatConversations]);
 
-    const refreshConversations = useCallback(async (preferredConversationId = "") => {
-        const items = await getChatConversations();
+    const refreshConversations = useCallback(async (preferredConversationId = "", options = {}) => {
+        const items = await getChatConversations(options);
         const nextItems = Array.isArray(items) ? items : [];
         setConversations(nextItems);
 
@@ -79,7 +85,7 @@ export function ChatbotProvider({ children }) {
         setIsOpen(true);
 
         try {
-            const response = await getChatConversation(nextConversationId);
+            const response = await getChatConversation(nextConversationId, { showProgress: false });
             const responseConversationId = response?.conversationId ?? response?.ConversationId ?? nextConversationId;
             const responseTitle = response?.title ?? response?.Title ?? "";
             const responseMessages = Array.isArray(response?.messages ?? response?.Messages)
@@ -102,6 +108,39 @@ export function ChatbotProvider({ children }) {
             setIsLoadingHistory(false);
         }
     }, [getChatConversation, startNewConversation]);
+
+    const deleteConversation = useCallback(async (targetConversationId) => {
+        if (!targetConversationId || deletingConversationId) {
+            return;
+        }
+
+        setDeletingConversationId(targetConversationId);
+        setError("");
+
+        try {
+            await deleteChatConversation(targetConversationId);
+
+            setConversations((current) =>
+                current.filter((item) =>
+                    (item?.conversationId ?? item?.ConversationId ?? "") !== targetConversationId
+                )
+            );
+
+            if (targetConversationId === conversationId) {
+                startNewConversation();
+            }
+        } catch (err) {
+            console.error("Failed to delete conversation", err);
+            setError(err.message || "Failed to delete chat history.");
+        } finally {
+            setDeletingConversationId("");
+        }
+    }, [
+        conversationId,
+        deleteChatConversation,
+        deletingConversationId,
+        startNewConversation,
+    ]);
 
     const submitMessage = useCallback(async (customMessage) => {
         const message = String(customMessage ?? draft).trim();
@@ -139,7 +178,7 @@ export function ChatbotProvider({ children }) {
                     text: reply || "No reply received.",
                 },
             ]);
-            await refreshConversations(nextConversationId);
+            await refreshConversations(nextConversationId, { showProgress: false });
         } catch (err) {
             console.error("Failed to send chat message", err);
             setError(err.message || "Failed to contact the finance assistant.");
@@ -160,11 +199,13 @@ export function ChatbotProvider({ children }) {
         isSending,
         isLoadingHistory,
         isLoadingConversations,
+        deletingConversationId,
         setDraft,
         setIsOpen,
         openChat: () => setIsOpen(true),
         closeChat: () => setIsOpen(false),
         openConversation,
+        deleteConversation,
         startNewConversation,
         refreshConversations,
         submitMessage,
@@ -174,12 +215,14 @@ export function ChatbotProvider({ children }) {
         conversations,
         draft,
         error,
+        deletingConversationId,
         isLoadingHistory,
         isLoadingConversations,
         isOpen,
         isSending,
         messages,
         openConversation,
+        deleteConversation,
         refreshConversations,
         startNewConversation,
         submitMessage,

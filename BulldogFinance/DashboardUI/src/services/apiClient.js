@@ -75,6 +75,7 @@ export function useApiClient() {
             responseType = "json",
             allowNotFound = false,
             timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+            showProgress = true,
             ...fetchOptions
         } = options;
 
@@ -147,7 +148,9 @@ export function useApiClient() {
             return response.json();
         };
 
-        beginRequest();
+        if (showProgress) {
+            beginRequest();
+        }
         try {
             return await Promise.race([runRequest(), timeoutPromise]);
         } catch (error) {
@@ -160,7 +163,9 @@ export function useApiClient() {
             if (timeoutId !== null) {
                 window.clearTimeout(timeoutId);
             }
-            endRequest();
+            if (showProgress) {
+                endRequest();
+            }
         }
     }, [getAccessToken, signOut]);
 
@@ -339,16 +344,25 @@ export function useApiClient() {
         return request("/chat", {
             method: "POST",
             body: JSON.stringify(payload),
+            showProgress: false,
         });
     }, [request]);
 
-    const getChatConversations = useCallback(() => {
-        return request("/chat/conversations", { method: "GET" });
+    const getChatConversations = useCallback((options = {}) => {
+        return request("/chat/conversations", { method: "GET", ...options });
     }, [request]);
 
-    const getChatConversation = useCallback((conversationId) => {
+    const getChatConversation = useCallback((conversationId, options = {}) => {
         return request(`/chat/conversations/${encodeURIComponent(conversationId)}`, {
             method: "GET",
+            ...options,
+        });
+    }, [request]);
+
+    const deleteChatConversation = useCallback((conversationId) => {
+        return request(`/chat/conversations/${encodeURIComponent(conversationId)}`, {
+            method: "DELETE",
+            showProgress: false,
         });
     }, [request]);
 
@@ -387,6 +401,7 @@ export function useApiClient() {
         sendChatMessage,
         getChatConversations,
         getChatConversation,
+        deleteChatConversation,
         getLatestReport,
     }), [
         addToWatchlist,
@@ -396,6 +411,7 @@ export function useApiClient() {
         createSavingsGoal,
         createTransaction,
         deleteAccount,
+        deleteChatConversation,
         deleteInvestment,
         exchangePlaidPublicToken,
         getAccounts,
