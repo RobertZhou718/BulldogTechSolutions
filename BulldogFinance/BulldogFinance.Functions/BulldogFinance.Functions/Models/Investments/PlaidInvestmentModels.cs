@@ -95,6 +95,22 @@ namespace BulldogFinance.Functions.Models.Investments
         public DateTime UpdatedAtUtc { get; set; }
     }
 
+    public class PlaidInvestmentTransactionTimelineIndexEntity : ITableEntity
+    {
+        public string PartitionKey { get; set; } = default!;
+        public string RowKey { get; set; } = default!;
+        public DateTimeOffset? Timestamp { get; set; }
+        public ETag ETag { get; set; }
+
+        public string TransactionId { get; set; } = default!;
+        public string ItemId { get; set; } = default!;
+        public string PlaidAccountId { get; set; } = default!;
+        public string? LocalAccountId { get; set; }
+        public string? SecurityId { get; set; }
+        public DateTime DateUtc { get; set; }
+        public DateTime UpdatedAtUtc { get; set; }
+    }
+
     public class InvestmentPortfolioSnapshotEntity : ITableEntity
     {
         public string PartitionKey { get; set; } = default!;

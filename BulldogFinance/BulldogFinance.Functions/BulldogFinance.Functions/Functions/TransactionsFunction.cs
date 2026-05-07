@@ -325,6 +325,10 @@ namespace BulldogFinance.Functions.Functions
             string? accountId = null;
             DateTime? fromUtc = null;
             DateTime? toUtc = null;
+            string? type = null;
+            string? category = null;
+            string? cursor = null;
+            var limit = 50;
 
             var query = req.Url.Query;
             if (!string.IsNullOrWhiteSpace(query))
@@ -344,6 +348,25 @@ namespace BulldogFinance.Functions.Functions
                     {
                         accountId = value;
                     }
+                    else if (key.Equals("type", StringComparison.OrdinalIgnoreCase))
+                    {
+                        type = value;
+                    }
+                    else if (key.Equals("category", StringComparison.OrdinalIgnoreCase))
+                    {
+                        category = value;
+                    }
+                    else if (key.Equals("cursor", StringComparison.OrdinalIgnoreCase))
+                    {
+                        cursor = value;
+                    }
+                    else if (key.Equals("limit", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (int.TryParse(value, out var parsedLimit))
+                        {
+                            limit = Math.Clamp(parsedLimit, 1, 200);
+                        }
+                    }
                     else if (key.Equals("from", StringComparison.OrdinalIgnoreCase))
                     {
                         if (DateTime.TryParse(value, out var parsed))
@@ -361,19 +384,22 @@ namespace BulldogFinance.Functions.Functions
                 }
             }
 
-            var entities = await _transactionRepository.GetTransactionsAsync(
+            var page = await _transactionRepository.GetTransactionsPageAsync(
                 userId,
                 accountId,
                 fromUtc,
-                toUtc);
+                toUtc,
+                type,
+                category,
+                limit,
+                cursor);
 
-            var list = entities.Select(ToDto).ToList();
-
-            var response = req.CreateResponse(HttpStatusCode.OK);
-            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-            await response.WriteStringAsync(JsonSerializer.Serialize(list, JsonOptions));
-
-            return response;
+            return await WriteJsonAsync(req, new
+            {
+                items = page.Items.Select(ToDto).ToList(),
+                nextCursor = page.NextCursor,
+                hasMore = page.HasMore
+            });
         }
 
         private static TransactionDto ToDto(TransactionEntity transaction)

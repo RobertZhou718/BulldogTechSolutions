@@ -1,4 +1,5 @@
-﻿using BulldogFinance.Functions.Models.Transactions;
+using BulldogFinance.Functions.Models.Paging;
+using BulldogFinance.Functions.Models.Transactions;
 
 namespace BulldogFinance.Functions.Services.Transactions
 {
@@ -13,6 +14,17 @@ namespace BulldogFinance.Functions.Services.Transactions
             string? accountId = null,
             DateTime? fromUtc = null,
             DateTime? toUtc = null,
+            CancellationToken cancellationToken = default);
+
+        Task<PagedResult<TransactionEntity>> GetTransactionsPageAsync(
+            string userId,
+            string? accountId = null,
+            DateTime? fromUtc = null,
+            DateTime? toUtc = null,
+            string? type = null,
+            string? category = null,
+            int limit = 50,
+            string? cursor = null,
             CancellationToken cancellationToken = default);
 
         Task<TransactionEntity?> GetTransactionAsync(

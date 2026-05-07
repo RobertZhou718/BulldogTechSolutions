@@ -9,6 +9,8 @@ import { formatCurrency, formatCurrencyBreakdown } from "@/lib/utils";
 import { useApiClient } from "@/services/apiClient";
 import { toast } from "sonner";
 
+const INVESTMENT_ACTIVITY_PAGE_SIZE = 50;
+
 export default function InvestmentsPage() {
     const {
         getInvestmentOverview,
@@ -25,17 +27,25 @@ export default function InvestmentsPage() {
     const [watchlist, setWatchlist] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [activityNextCursor, setActivityNextCursor] = useState(null);
+    const [hasMoreActivity, setHasMoreActivity] = useState(false);
+    const [loadingMoreActivity, setLoadingMoreActivity] = useState(false);
 
     const loadAll = useCallback(async () => {
         setLoading(true);
         try {
             const [o, a, w] = await Promise.all([
                 getInvestmentOverview(),
-                getInvestmentActivity({ days: 90, limit: 50 }),
+                getInvestmentActivity({
+                    days: 90,
+                    limit: INVESTMENT_ACTIVITY_PAGE_SIZE,
+                }),
                 getWatchlist(),
             ]);
             setOverview(o || {});
-            setActivity(Array.isArray(a) ? a : []);
+            setActivity(a?.items || []);
+            setActivityNextCursor(a?.nextCursor || null);
+            setHasMoreActivity(Boolean(a?.hasMore));
             setWatchlist(Array.isArray(w) ? w : []);
         } catch (err) {
             console.error("Failed to load investments data", err);
@@ -107,6 +117,30 @@ export default function InvestmentsPage() {
         }
     };
 
+    const loadMoreActivity = useCallback(async () => {
+        if (!hasMoreActivity || !activityNextCursor || loadingMoreActivity) {
+            return;
+        }
+
+        setLoadingMoreActivity(true);
+        try {
+            const page = await getInvestmentActivity({
+                days: 90,
+                limit: INVESTMENT_ACTIVITY_PAGE_SIZE,
+                cursor: activityNextCursor,
+            });
+            const items = page?.items || [];
+            setActivity((current) => [...current, ...items]);
+            setActivityNextCursor(page?.nextCursor || null);
+            setHasMoreActivity(Boolean(page?.hasMore));
+        } catch (err) {
+            console.error("Failed to load more investment activity", err);
+            toast.error(err.message || "Failed to load more investment activity.");
+        } finally {
+            setLoadingMoreActivity(false);
+        }
+    }, [activityNextCursor, getInvestmentActivity, hasMoreActivity, loadingMoreActivity]);
+
     if (loading && !overview) {
         return (
             <div className="space-y-8">
@@ -167,7 +201,13 @@ export default function InvestmentsPage() {
                     </div>
                 </div>
 
-                <InvestmentActivityCard items={activity} loading={loading} />
+                <InvestmentActivityCard
+                    items={activity}
+                    loading={loading}
+                    hasMore={hasMoreActivity}
+                    loadingMore={loadingMoreActivity}
+                    onLoadMore={loadMoreActivity}
+                />
             </div>
         </div>
     );

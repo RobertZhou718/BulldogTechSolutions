@@ -1,6 +1,7 @@
 using Azure;
 using Azure.Data.Tables;
 using BulldogFinance.Functions.Models.Investments;
+using BulldogFinance.Functions.Models.Paging;
 
 namespace BulldogFinance.Functions.Services.Investments
 {
@@ -9,11 +10,13 @@ namespace BulldogFinance.Functions.Services.Investments
         private const string SecuritiesTableName = "PlaidInvestmentSecurities";
         private const string HoldingsTableName = "PlaidInvestmentHoldings";
         private const string TransactionsTableName = "PlaidInvestmentTransactions";
+        private const string TransactionTimelineTableName = "PlaidInvestmentTransactionTimeline";
         private const string SnapshotsTableName = "InvestmentPortfolioSnapshots";
 
         private readonly TableClient _securitiesTable;
         private readonly TableClient _holdingsTable;
         private readonly TableClient _transactionsTable;
+        private readonly TableClient _transactionTimelineTable;
         private readonly TableClient _snapshotsTable;
 
         public PlaidInvestmentRepository(TableServiceClient tableServiceClient)
@@ -21,11 +24,13 @@ namespace BulldogFinance.Functions.Services.Investments
             _securitiesTable = tableServiceClient.GetTableClient(SecuritiesTableName);
             _holdingsTable = tableServiceClient.GetTableClient(HoldingsTableName);
             _transactionsTable = tableServiceClient.GetTableClient(TransactionsTableName);
+            _transactionTimelineTable = tableServiceClient.GetTableClient(TransactionTimelineTableName);
             _snapshotsTable = tableServiceClient.GetTableClient(SnapshotsTableName);
 
             _securitiesTable.CreateIfNotExists();
             _holdingsTable.CreateIfNotExists();
             _transactionsTable.CreateIfNotExists();
+            _transactionTimelineTable.CreateIfNotExists();
             _snapshotsTable.CreateIfNotExists();
         }
 
@@ -118,12 +123,12 @@ namespace BulldogFinance.Functions.Services.Investments
 
             if (fromUtc.HasValue)
             {
-                filterParts.Add(TableClient.CreateQueryFilter($"DateUtc ge {fromUtc.Value}"));
+                filterParts.Add(TableClient.CreateQueryFilter($"DateUtc ge {NormalizeUtc(fromUtc.Value)}"));
             }
 
             if (toUtc.HasValue)
             {
-                filterParts.Add(TableClient.CreateQueryFilter($"DateUtc le {toUtc.Value}"));
+                filterParts.Add(TableClient.CreateQueryFilter($"DateUtc le {NormalizeUtc(toUtc.Value)}"));
             }
 
             var query = _transactionsTable.QueryAsync<PlaidInvestmentTransactionEntity>(
@@ -136,9 +141,75 @@ namespace BulldogFinance.Functions.Services.Investments
             }
 
             return result
-                .OrderByDescending(x => x.DateUtc)
-                .ThenByDescending(x => x.TransactionDatetimeUtc)
+                .OrderByDescending(GetTimelineDateUtc)
+                .ThenByDescending(x => x.RowKey, StringComparer.Ordinal)
                 .ToList();
+        }
+
+        public async Task<PagedResult<PlaidInvestmentTransactionEntity>> GetTransactionsPageAsync(
+            string userId,
+            DateTime? fromUtc = null,
+            DateTime? toUtc = null,
+            int limit = 50,
+            string? cursor = null,
+            CancellationToken cancellationToken = default)
+        {
+            limit = Math.Clamp(limit, 1, 200);
+
+            var indexed = await GetIndexedTransactionsPageAsync(
+                userId,
+                fromUtc,
+                toUtc,
+                limit,
+                cursor,
+                cancellationToken);
+
+            if (indexed.HasMore)
+            {
+                return indexed;
+            }
+
+            if (indexed.Items.Count > 0)
+            {
+                var remaining = limit - indexed.Items.Count;
+                var fallback = await GetFallbackTransactionsPageAsync(
+                    userId,
+                    fromUtc,
+                    toUtc,
+                    remaining > 0 ? remaining : 1,
+                    indexed.NextCursor,
+                    cancellationToken);
+
+                if (remaining <= 0)
+                {
+                    return new PagedResult<PlaidInvestmentTransactionEntity>
+                    {
+                        Items = indexed.Items,
+                        NextCursor = indexed.NextCursor,
+                        HasMore = fallback.Items.Count > 0
+                    };
+                }
+
+                if (fallback.Items.Count == 0)
+                {
+                    return indexed;
+                }
+
+                return new PagedResult<PlaidInvestmentTransactionEntity>
+                {
+                    Items = indexed.Items.Concat(fallback.Items).ToList(),
+                    NextCursor = fallback.NextCursor,
+                    HasMore = fallback.HasMore
+                };
+            }
+
+            return await GetFallbackTransactionsPageAsync(
+                userId,
+                fromUtc,
+                toUtc,
+                limit,
+                cursor,
+                cancellationToken);
         }
 
         public async Task<IReadOnlyList<InvestmentPortfolioSnapshotEntity>> GetPortfolioSnapshotsAsync(
@@ -194,10 +265,18 @@ namespace BulldogFinance.Functions.Services.Investments
             PlaidInvestmentTransactionEntity transaction,
             CancellationToken cancellationToken = default)
         {
+            var previous = await GetTransactionAsync(
+                transaction.PartitionKey,
+                transaction.RowKey,
+                cancellationToken);
+
             await _transactionsTable.UpsertEntityAsync(
                 transaction,
                 TableUpdateMode.Replace,
                 cancellationToken);
+
+            await DeleteStaleTimelineIndexAsync(previous, transaction, cancellationToken);
+            await UpsertTimelineIndexAsync(transaction, cancellationToken);
         }
 
         public async Task UpsertPortfolioSnapshotAsync(
@@ -251,8 +330,181 @@ namespace BulldogFinance.Functions.Services.Investments
                 cancellationToken);
             foreach (var transaction in transactions)
             {
+                await DeleteTimelineIndexAsync(transaction, cancellationToken);
                 await DeleteIfExistsAsync(_transactionsTable, transaction, cancellationToken);
             }
+        }
+
+        private async Task<PagedResult<PlaidInvestmentTransactionEntity>> GetIndexedTransactionsPageAsync(
+            string userId,
+            DateTime? fromUtc,
+            DateTime? toUtc,
+            int limit,
+            string? cursor,
+            CancellationToken cancellationToken)
+        {
+            var filterParts = new List<string>
+            {
+                TableClient.CreateQueryFilter($"PartitionKey eq {userId}"),
+                TableClient.CreateQueryFilter($"RowKey ge {TimelineLowerBound(toUtc)}"),
+                TableClient.CreateQueryFilter($"RowKey le {TimelineUpperBound(fromUtc)}")
+            };
+
+            if (!string.IsNullOrWhiteSpace(cursor))
+            {
+                filterParts.Add(TableClient.CreateQueryFilter($"RowKey gt {cursor}"));
+            }
+
+            var items = new List<PlaidInvestmentTransactionEntity>(limit);
+            var hasMore = false;
+            string? nextCursor = null;
+            var query = _transactionTimelineTable.QueryAsync<PlaidInvestmentTransactionTimelineIndexEntity>(
+                filter: string.Join(" and ", filterParts),
+                maxPerPage: Math.Max(limit * 2, 20),
+                cancellationToken: cancellationToken);
+
+            await foreach (var index in query)
+            {
+                var transaction = await GetTransactionAsync(userId, index.TransactionId, cancellationToken);
+                if (transaction == null ||
+                    TimelineRowKey(transaction) != index.RowKey ||
+                    !IsVisibleTransaction(transaction, fromUtc, toUtc))
+                {
+                    continue;
+                }
+
+                if (items.Count >= limit)
+                {
+                    hasMore = true;
+                    break;
+                }
+
+                items.Add(transaction);
+                nextCursor = index.RowKey;
+            }
+
+            return new PagedResult<PlaidInvestmentTransactionEntity>
+            {
+                Items = items,
+                NextCursor = nextCursor,
+                HasMore = hasMore
+            };
+        }
+
+        private async Task<PagedResult<PlaidInvestmentTransactionEntity>> GetFallbackTransactionsPageAsync(
+            string userId,
+            DateTime? fromUtc,
+            DateTime? toUtc,
+            int limit,
+            string? cursor,
+            CancellationToken cancellationToken)
+        {
+            var transactions = await GetTransactionsAsync(userId, fromUtc, toUtc, cancellationToken);
+            var filtered = transactions.Where(x => IsVisibleTransaction(x, fromUtc, toUtc));
+
+            if (!string.IsNullOrWhiteSpace(cursor))
+            {
+                filtered = filtered.Where(x => string.CompareOrdinal(TimelineRowKey(x), cursor) > 0);
+            }
+
+            var page = filtered.Take(limit + 1).ToList();
+            var items = page.Take(limit).ToList();
+            foreach (var item in items)
+            {
+                await UpsertTimelineIndexAsync(item, cancellationToken);
+            }
+
+            return new PagedResult<PlaidInvestmentTransactionEntity>
+            {
+                Items = items,
+                NextCursor = items.Count > 0 ? TimelineRowKey(items[^1]) : null,
+                HasMore = page.Count > limit
+            };
+        }
+
+        private async Task<PlaidInvestmentTransactionEntity?> GetTransactionAsync(
+            string userId,
+            string transactionId,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                var response = await _transactionsTable.GetEntityAsync<PlaidInvestmentTransactionEntity>(
+                    userId,
+                    transactionId,
+                    cancellationToken: cancellationToken);
+
+                return response.Value;
+            }
+            catch (RequestFailedException ex) when (ex.Status == 404)
+            {
+                return null;
+            }
+        }
+
+        private async Task UpsertTimelineIndexAsync(
+            PlaidInvestmentTransactionEntity transaction,
+            CancellationToken cancellationToken)
+        {
+            await _transactionTimelineTable.UpsertEntityAsync(
+                new PlaidInvestmentTransactionTimelineIndexEntity
+                {
+                    PartitionKey = transaction.PartitionKey,
+                    RowKey = TimelineRowKey(transaction),
+                    TransactionId = transaction.RowKey,
+                    ItemId = transaction.ItemId,
+                    PlaidAccountId = transaction.PlaidAccountId,
+                    LocalAccountId = transaction.LocalAccountId,
+                    SecurityId = transaction.SecurityId,
+                    DateUtc = GetTimelineDateUtc(transaction),
+                    UpdatedAtUtc = DateTime.UtcNow
+                },
+                TableUpdateMode.Replace,
+                cancellationToken);
+        }
+
+        private async Task DeleteStaleTimelineIndexAsync(
+            PlaidInvestmentTransactionEntity? previous,
+            PlaidInvestmentTransactionEntity current,
+            CancellationToken cancellationToken)
+        {
+            if (previous == null)
+            {
+                return;
+            }
+
+            if (!string.Equals(TimelineRowKey(previous), TimelineRowKey(current), StringComparison.Ordinal))
+            {
+                await DeleteTimelineIndexAsync(previous, cancellationToken);
+            }
+        }
+
+        private Task DeleteTimelineIndexAsync(
+            PlaidInvestmentTransactionEntity transaction,
+            CancellationToken cancellationToken) =>
+            DeleteIfExistsAsync(
+                _transactionTimelineTable,
+                transaction.PartitionKey,
+                TimelineRowKey(transaction),
+                cancellationToken);
+
+        private static bool IsVisibleTransaction(
+            PlaidInvestmentTransactionEntity transaction,
+            DateTime? fromUtc,
+            DateTime? toUtc)
+        {
+            var occurred = GetTimelineDateUtc(transaction);
+            if (fromUtc.HasValue && occurred < NormalizeUtc(fromUtc.Value))
+            {
+                return false;
+            }
+
+            if (toUtc.HasValue && occurred > NormalizeUtc(toUtc.Value))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         private static async Task<IReadOnlyList<T>> QueryByItemAsync<T>(
@@ -287,16 +539,52 @@ namespace BulldogFinance.Functions.Services.Investments
             CancellationToken cancellationToken)
             where T : class, ITableEntity
         {
+            await DeleteIfExistsAsync(table, entity.PartitionKey, entity.RowKey, cancellationToken);
+        }
+
+        private static async Task DeleteIfExistsAsync(
+            TableClient table,
+            string partitionKey,
+            string rowKey,
+            CancellationToken cancellationToken)
+        {
             try
             {
                 await table.DeleteEntityAsync(
-                    entity.PartitionKey,
-                    entity.RowKey,
+                    partitionKey,
+                    rowKey,
                     cancellationToken: cancellationToken);
             }
             catch (RequestFailedException ex) when (ex.Status == 404)
             {
             }
         }
+
+        private static string TimelineLowerBound(DateTime? toUtc) =>
+            toUtc.HasValue
+                ? $"{InvertedTicks(NormalizeUtc(toUtc.Value)):D19}|"
+                : "0000000000000000000|";
+
+        private static string TimelineUpperBound(DateTime? fromUtc) =>
+            fromUtc.HasValue
+                ? $"{InvertedTicks(NormalizeUtc(fromUtc.Value)):D19}|~"
+                : "9999999999999999999|~";
+
+        private static string TimelineRowKey(PlaidInvestmentTransactionEntity transaction) =>
+            $"{InvertedTicks(GetTimelineDateUtc(transaction)):D19}|{transaction.RowKey}";
+
+        private static long InvertedTicks(DateTime value) =>
+            DateTime.MaxValue.Ticks - NormalizeUtc(value).Ticks;
+
+        private static DateTime GetTimelineDateUtc(PlaidInvestmentTransactionEntity transaction) =>
+            NormalizeUtc(transaction.TransactionDatetimeUtc ?? transaction.DateUtc);
+
+        private static DateTime NormalizeUtc(DateTime value) =>
+            value.Kind switch
+            {
+                DateTimeKind.Utc => value,
+                DateTimeKind.Local => value.ToUniversalTime(),
+                _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+            };
     }
 }

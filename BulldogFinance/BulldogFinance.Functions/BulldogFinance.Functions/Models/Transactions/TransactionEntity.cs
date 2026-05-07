@@ -34,4 +34,17 @@ namespace BulldogFinance.Functions.Models.Transactions
         public bool IsDeleted { get; set; }
         public bool IsSystemGenerated { get; set; }
     }
+
+    public class TransactionTimelineIndexEntity : ITableEntity
+    {
+        public string PartitionKey { get; set; } = default!;
+        public string RowKey { get; set; } = default!;
+        public DateTimeOffset? Timestamp { get; set; }
+        public ETag ETag { get; set; }
+
+        public string TransactionId { get; set; } = default!;
+        public string AccountId { get; set; } = default!;
+        public DateTime OccurredAtUtc { get; set; }
+        public DateTime UpdatedAtUtc { get; set; }
+    }
 }
