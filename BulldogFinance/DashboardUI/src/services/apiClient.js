@@ -349,12 +349,17 @@ export function useApiClient() {
     }, [request]);
 
     const getChatConversations = useCallback((options = {}) => {
-        return request("/chat/conversations", { method: "GET", ...options });
+        return request("/chat/conversations", {
+            method: "GET",
+            showProgress: false,
+            ...options,
+        });
     }, [request]);
 
     const getChatConversation = useCallback((conversationId, options = {}) => {
         return request(`/chat/conversations/${encodeURIComponent(conversationId)}`, {
             method: "GET",
+            showProgress: false,
             ...options,
         });
     }, [request]);
