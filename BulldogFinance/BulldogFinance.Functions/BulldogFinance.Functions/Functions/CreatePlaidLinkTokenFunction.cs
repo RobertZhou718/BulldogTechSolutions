@@ -20,13 +20,19 @@ namespace BulldogFinance.Functions.Functions
         };
 
         private readonly IPlaidClientFactory _plaidClientFactory;
+        private readonly IPlaidRepository _plaidRepository;
+        private readonly IPlaidTokenProtector _tokenProtector;
         private readonly string? _webhookUrl;
 
         public CreatePlaidLinkTokenFunction(
             IPlaidClientFactory plaidClientFactory,
+            IPlaidRepository plaidRepository,
+            IPlaidTokenProtector tokenProtector,
             IConfiguration configuration)
         {
             _plaidClientFactory = plaidClientFactory;
+            _plaidRepository = plaidRepository;
+            _tokenProtector = tokenProtector;
             _webhookUrl = configuration["Plaid:WebhookUrl"];
         }
 
@@ -52,31 +58,55 @@ namespace BulldogFinance.Functions.Functions
 
             var countryCodes = (requestModel?.CountryCodes?.Length > 0 ? requestModel.CountryCodes : new[] { "CA", "US" })
                 .Select(ParseCountryCode).ToArray();
-            var products = (requestModel?.Products?.Length > 0 ? requestModel.Products : new[] { "transactions" })
-                .Select(ParseProduct).ToArray();
-            var additionalConsentedProducts = (requestModel?.AdditionalConsentedProducts?.Length > 0
-                    ? requestModel.AdditionalConsentedProducts
-                    : new[] { "investments" })
-                .Select(ParseProduct)
-                .Where(product => !products.Contains(product))
-                .ToArray();
-
-            var plaidRequest = new LinkTokenCreateRequest
+            var user = new LinkTokenCreateRequestUser
             {
-                ClientName = "Bulldog Finance",
-                Language = Language.English,
-                CountryCodes = countryCodes,
-                Products = products,
-                AdditionalConsentedProducts = additionalConsentedProducts,
-                User = new LinkTokenCreateRequestUser
-                {
-                    ClientUserId = userId
-                }
+                ClientUserId = userId
             };
 
-            if (!string.IsNullOrWhiteSpace(_webhookUrl))
+            LinkTokenCreateRequest plaidRequest;
+            var updateItemId = requestModel?.ItemId?.Trim();
+            if (!string.IsNullOrWhiteSpace(updateItemId))
             {
-                plaidRequest.Webhook = _webhookUrl;
+                var item = await _plaidRepository.GetItemAsync(userId, updateItemId);
+                if (item == null)
+                {
+                    return await ApiResponse.NotFoundAsync(req, "Plaid item not found.");
+                }
+
+                plaidRequest = new LinkTokenCreateRequest
+                {
+                    ClientName = "Bulldog Finance",
+                    Language = Language.English,
+                    CountryCodes = countryCodes,
+                    User = user,
+                    AccessToken = _tokenProtector.Unprotect(item.AccessTokenEncrypted)
+                };
+            }
+            else
+            {
+                var products = (requestModel?.Products?.Length > 0 ? requestModel.Products : new[] { "transactions" })
+                    .Select(ParseProduct).ToArray();
+                var additionalConsentedProducts = (requestModel?.AdditionalConsentedProducts?.Length > 0
+                        ? requestModel.AdditionalConsentedProducts
+                        : new[] { "investments" })
+                    .Select(ParseProduct)
+                    .Where(product => !products.Contains(product))
+                    .ToArray();
+
+                plaidRequest = new LinkTokenCreateRequest
+                {
+                    ClientName = "Bulldog Finance",
+                    Language = Language.English,
+                    CountryCodes = countryCodes,
+                    Products = products,
+                    AdditionalConsentedProducts = additionalConsentedProducts,
+                    User = user
+                };
+
+                if (!string.IsNullOrWhiteSpace(_webhookUrl))
+                {
+                    plaidRequest.Webhook = _webhookUrl;
+                }
             }
 
             var plaidClient = _plaidClientFactory.Create();
@@ -84,11 +114,7 @@ namespace BulldogFinance.Functions.Functions
 
             if (!result.IsSuccessStatusCode)
             {
-                var detail = result.Error != null
-                    ? $"{result.Error.ErrorType}/{result.Error.ErrorCode}: {result.Error.ErrorMessage}"
-                    : result.RawJson ?? "Unknown error";
-                throw new InvalidOperationException(
-                    $"Plaid API /link/token/create failed: {(int)result.StatusCode} {detail}");
+                throw new PlaidApiException("/link/token/create", result.StatusCode, result.Error, result.RawJson);
             }
 
             var response = req.CreateResponse(HttpStatusCode.OK);

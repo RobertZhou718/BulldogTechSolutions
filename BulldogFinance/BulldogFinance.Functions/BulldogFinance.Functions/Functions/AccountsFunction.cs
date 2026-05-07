@@ -244,11 +244,12 @@ namespace BulldogFinance.Functions.Functions
             IReadOnlyDictionary<string, PlaidAccountLinkEntity>? plaidAccountLinkByExternalAccountId = null,
             IReadOnlyDictionary<string, PlaidItemEntity>? plaidItemByItemId = null)
         {
+            PlaidAccountLinkEntity? plaidAccountLink = null;
             PlaidItemEntity? plaidItem = null;
             if (!string.IsNullOrWhiteSpace(account.ExternalAccountId) &&
                 plaidAccountLinkByExternalAccountId != null &&
                 plaidItemByItemId != null &&
-                plaidAccountLinkByExternalAccountId.TryGetValue(account.ExternalAccountId, out var plaidAccountLink))
+                plaidAccountLinkByExternalAccountId.TryGetValue(account.ExternalAccountId, out plaidAccountLink))
             {
                 plaidItemByItemId.TryGetValue(plaidAccountLink.ItemId, out plaidItem);
             }
@@ -265,9 +266,13 @@ namespace BulldogFinance.Functions.Functions
             ExternalSource = account.ExternalSource,
             InstitutionName = account.InstitutionName,
             Mask = account.Mask,
+            PlaidItemId = plaidAccountLink?.ItemId,
+            PlaidItemStatus = plaidItem?.Status,
             LastBalanceRefreshUtc = account.LastBalanceRefreshUtc,
             LastTransactionSyncUtc = plaidItem?.LastSyncAtUtc,
-            LastSyncStatus = plaidItem?.LastSyncStatus
+            LastSyncStatus = plaidItem?.LastSyncStatus,
+            LastSyncErrorCode = plaidItem?.LastSyncErrorCode,
+            LastSyncError = plaidItem?.LastSyncError
         };
         }
     }

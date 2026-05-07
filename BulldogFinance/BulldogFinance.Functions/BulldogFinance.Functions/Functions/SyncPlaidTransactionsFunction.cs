@@ -47,19 +47,30 @@ namespace BulldogFinance.Functions.Functions
             }
 
             PlaidSyncSummary summary;
-            if (string.IsNullOrWhiteSpace(itemId))
+            try
             {
-                summary = await _plaidSyncService.SyncTransactionsForAllItemsAsync(userId);
-                var items = await _plaidSyncService.GetActiveItemsAsync(userId);
-                foreach (var item in items)
+                if (string.IsNullOrWhiteSpace(itemId))
                 {
-                    await _plaidSyncService.RefreshBalancesAsync(userId, item.RowKey);
+                    summary = await _plaidSyncService.SyncTransactionsForAllItemsAsync(userId);
+                    var items = await _plaidSyncService.GetActiveItemsAsync(userId);
+                    foreach (var item in items)
+                    {
+                        await _plaidSyncService.RefreshBalancesAsync(userId, item.RowKey);
+                    }
+                }
+                else
+                {
+                    summary = await _plaidSyncService.SyncTransactionsAsync(userId, itemId);
+                    await _plaidSyncService.RefreshBalancesAsync(userId, itemId);
                 }
             }
-            else
+            catch (PlaidApiException ex) when (ex.RequiresLinkUpdate)
             {
-                summary = await _plaidSyncService.SyncTransactionsAsync(userId, itemId);
-                await _plaidSyncService.RefreshBalancesAsync(userId, itemId);
+                return await ApiResponse.ConflictAsync(req, "This bank connection needs to be reconnected.");
+            }
+            catch (PlaidApiException ex)
+            {
+                return await ApiResponse.BadGatewayAsync(req, ex.Message);
             }
 
             var response = req.CreateResponse(HttpStatusCode.OK);

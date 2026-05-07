@@ -143,8 +143,17 @@ namespace BulldogFinance.Functions.Services.Plaid
             var item = await GetActiveItemAsync(userId, itemId, cancellationToken);
             var accessToken = _tokenProtector.Unprotect(item.AccessTokenEncrypted);
             var plaidClient = _plaidClientFactory.Create(accessToken);
-            var balances = await plaidClient.AccountsBalanceGetAsync(new AccountsBalanceGetRequest());
-            EnsureSuccess(balances, "/accounts/balance/get");
+            AccountsGetResponse balances;
+            try
+            {
+                balances = await plaidClient.AccountsBalanceGetAsync(new AccountsBalanceGetRequest());
+                EnsureSuccess(balances, "/accounts/balance/get");
+            }
+            catch (PlaidApiException ex)
+            {
+                await MarkPlaidItemErrorAsync(item, ex, cancellationToken);
+                throw;
+            }
 
             var now = DateTime.UtcNow;
 
@@ -184,65 +193,76 @@ namespace BulldogFinance.Functions.Services.Plaid
             var summary = new PlaidSyncSummary();
             var cursor = item.Cursor;
 
-            while (true)
+            try
             {
-                var request = new TransactionsSyncRequest();
-                if (!string.IsNullOrWhiteSpace(cursor))
+                while (true)
                 {
-                    request.Cursor = cursor;
-                }
-
-                var syncResult = await plaidClient.TransactionsSyncAsync(request);
-                EnsureSuccess(syncResult, "/transactions/sync");
-
-                foreach (var transaction in syncResult.Added)
-                {
-                    var created = await UpsertPlaidTransactionAsync(userId, transaction, true, cancellationToken);
-                    if (created)
+                    var request = new TransactionsSyncRequest();
+                    if (!string.IsNullOrWhiteSpace(cursor))
                     {
-                        summary.Added++;
-                    }
-                }
-
-                foreach (var transaction in syncResult.Modified)
-                {
-                    await UpsertPlaidTransactionAsync(userId, transaction, false, cancellationToken);
-                    summary.Modified++;
-                }
-
-                foreach (var removed in syncResult.Removed)
-                {
-                    if (string.IsNullOrWhiteSpace(removed.TransactionId))
-                    {
-                        continue;
+                        request.Cursor = cursor;
                     }
 
-                    var existing = await _transactionRepository.GetByExternalTransactionIdAsync(
-                        userId,
-                        removed.TransactionId,
-                        cancellationToken);
+                    var syncResult = await plaidClient.TransactionsSyncAsync(request);
+                    EnsureSuccess(syncResult, "/transactions/sync");
 
-                    if (existing == null || existing.IsDeleted)
+                    foreach (var transaction in syncResult.Added)
                     {
-                        continue;
+                        var created = await UpsertPlaidTransactionAsync(userId, transaction, true, cancellationToken);
+                        if (created)
+                        {
+                            summary.Added++;
+                        }
                     }
 
-                    existing.IsDeleted = true;
-                    existing.UpdatedAtUtc = DateTime.UtcNow;
-                    await _transactionRepository.UpdateTransactionAsync(existing, cancellationToken);
-                    summary.Removed++;
-                }
+                    foreach (var transaction in syncResult.Modified)
+                    {
+                        await UpsertPlaidTransactionAsync(userId, transaction, false, cancellationToken);
+                        summary.Modified++;
+                    }
 
-                cursor = syncResult.NextCursor;
-                if (!syncResult.HasMore)
-                {
-                    break;
+                    foreach (var removed in syncResult.Removed)
+                    {
+                        if (string.IsNullOrWhiteSpace(removed.TransactionId))
+                        {
+                            continue;
+                        }
+
+                        var existing = await _transactionRepository.GetByExternalTransactionIdAsync(
+                            userId,
+                            removed.TransactionId,
+                            cancellationToken);
+
+                        if (existing == null || existing.IsDeleted)
+                        {
+                            continue;
+                        }
+
+                        existing.IsDeleted = true;
+                        existing.UpdatedAtUtc = DateTime.UtcNow;
+                        await _transactionRepository.UpdateTransactionAsync(existing, cancellationToken);
+                        summary.Removed++;
+                    }
+
+                    cursor = syncResult.NextCursor;
+                    if (!syncResult.HasMore)
+                    {
+                        break;
+                    }
                 }
+            }
+            catch (PlaidApiException ex)
+            {
+                await MarkPlaidItemErrorAsync(item, ex, cancellationToken);
+                throw;
             }
 
             item.Cursor = cursor;
             item.LastSyncAtUtc = DateTime.UtcNow;
             item.UpdatedAtUtc = DateTime.UtcNow;
+            item.Status = PlaidItemSyncState.Active;
+            item.LastSyncErrorCode = null;
+            item.LastSyncError = null;
             await _plaidRepository.UpsertItemAsync(item, cancellationToken);
 
             return summary;
@@ -266,7 +286,12 @@ namespace BulldogFinance.Functions.Services.Plaid
 
         public async Task RemoveItemAsync(string userId, string itemId, CancellationToken cancellationToken = default)
         {
-            var item = await GetActiveItemAsync(userId, itemId, cancellationToken);
+            var item = await _plaidRepository.GetItemAsync(userId, itemId, cancellationToken);
+            if (item == null)
+            {
+                throw new InvalidOperationException("Plaid item not found.");
+            }
+
             var accessToken = _tokenProtector.Unprotect(item.AccessTokenEncrypted);
             var plaidClient = _plaidClientFactory.Create(accessToken);
             var removeResult = await plaidClient.ItemRemoveAsync(new ItemRemoveRequest());
@@ -410,12 +435,16 @@ namespace BulldogFinance.Functions.Services.Plaid
                 return;
             }
 
-            var error = response.Error;
-            var detail = error != null
-                ? $"{error.ErrorType}/{error.ErrorCode}: {error.ErrorMessage}"
-                : response.RawJson ?? "Unknown error";
-            throw new InvalidOperationException(
-                $"Plaid API {path} failed: {(int)response.StatusCode} {detail}");
+            throw new PlaidApiException(path, response.StatusCode, response.Error, response.RawJson);
+        }
+
+        private Task MarkPlaidItemErrorAsync(
+            PlaidItemEntity item,
+            PlaidApiException exception,
+            CancellationToken cancellationToken)
+        {
+            PlaidItemSyncState.ApplyApiError(item, exception, DateTime.UtcNow);
+            return _plaidRepository.UpsertItemAsync(item, cancellationToken);
         }
 
         private static string ResolveCurrency(AccountBalance? balance) =>

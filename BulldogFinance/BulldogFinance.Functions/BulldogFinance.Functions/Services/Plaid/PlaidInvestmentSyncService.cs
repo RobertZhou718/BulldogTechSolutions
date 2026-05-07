@@ -54,14 +54,23 @@ namespace BulldogFinance.Functions.Services.Plaid
 
             var accessToken = _tokenProtector.Unprotect(item.AccessTokenEncrypted);
             var plaidClient = _plaidClientFactory.Create(accessToken);
-            var response = await plaidClient.InvestmentsHoldingsGetAsync(new InvestmentsHoldingsGetRequest
+            InvestmentsHoldingsGetResponse response;
+            try
             {
-                Options = new InvestmentHoldingsGetRequestOptions
+                response = await plaidClient.InvestmentsHoldingsGetAsync(new InvestmentsHoldingsGetRequest
                 {
-                    AccountIds = accountContexts.Keys.ToArray()
-                }
-            });
-            EnsureSuccess(response, "/investments/holdings/get");
+                    Options = new InvestmentHoldingsGetRequestOptions
+                    {
+                        AccountIds = accountContexts.Keys.ToArray()
+                    }
+                });
+                EnsureSuccess(response, "/investments/holdings/get");
+            }
+            catch (PlaidApiException ex)
+            {
+                await MarkPlaidItemErrorAsync(item, ex, cancellationToken);
+                throw;
+            }
 
             var now = DateTime.UtcNow;
             var summary = new PlaidInvestmentSyncSummary();
@@ -161,21 +170,30 @@ namespace BulldogFinance.Functions.Services.Plaid
 
             while (true)
             {
-                var response = await plaidClient.InvestmentsTransactionsGetAsync(
-                    new InvestmentsTransactionsGetRequest
-                    {
-                        StartDate = startDate,
-                        EndDate = endDate,
-                        Options = new InvestmentsTransactionsGetRequestOptions
+                InvestmentsTransactionsGetResponse response;
+                try
+                {
+                    response = await plaidClient.InvestmentsTransactionsGetAsync(
+                        new InvestmentsTransactionsGetRequest
                         {
-                            AccountIds = accountContexts.Keys.ToArray(),
-                            Count = InvestmentTransactionPageSize,
-                            Offset = offset,
-                            AsyncUpdate = asyncUpdate
-                        }
-                    });
+                            StartDate = startDate,
+                            EndDate = endDate,
+                            Options = new InvestmentsTransactionsGetRequestOptions
+                            {
+                                AccountIds = accountContexts.Keys.ToArray(),
+                                Count = InvestmentTransactionPageSize,
+                                Offset = offset,
+                                AsyncUpdate = asyncUpdate
+                            }
+                        });
 
-                EnsureSuccess(response, "/investments/transactions/get");
+                    EnsureSuccess(response, "/investments/transactions/get");
+                }
+                catch (PlaidApiException ex)
+                {
+                    await MarkPlaidItemErrorAsync(item, ex, cancellationToken);
+                    throw;
+                }
 
                 var now = DateTime.UtcNow;
                 foreach (var security in response.Securities.Where(x => !string.IsNullOrWhiteSpace(x.SecurityId)))
@@ -487,12 +505,16 @@ namespace BulldogFinance.Functions.Services.Plaid
                 return;
             }
 
-            var error = response.Error;
-            var detail = error != null
-                ? $"{error.ErrorType}/{error.ErrorCode}: {error.ErrorMessage}"
-                : response.RawJson ?? "Unknown error";
-            throw new InvalidOperationException(
-                $"Plaid API {path} failed: {(int)response.StatusCode} {detail}");
+            throw new PlaidApiException(path, response.StatusCode, response.Error, response.RawJson);
+        }
+
+        private Task MarkPlaidItemErrorAsync(
+            PlaidItemEntity item,
+            PlaidApiException exception,
+            CancellationToken cancellationToken)
+        {
+            PlaidItemSyncState.ApplyApiError(item, exception, DateTime.UtcNow);
+            return _plaidRepository.UpsertItemAsync(item, cancellationToken);
         }
 
         private static bool IsInvestmentAccount(string? accountType)

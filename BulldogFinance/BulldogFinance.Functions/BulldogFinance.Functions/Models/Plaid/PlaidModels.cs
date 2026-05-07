@@ -20,6 +20,7 @@ namespace BulldogFinance.Functions.Models.Plaid
         public DateTime? LastSyncStartedAtUtc { get; set; }
         public DateTime? LastSyncCompletedAtUtc { get; set; }
         public string? LastSyncStatus { get; set; }
+        public string? LastSyncErrorCode { get; set; }
         public string? LastSyncError { get; set; }
         public DateTime? LastDailySyncQueuedAtUtc { get; set; }
         public DateTime? ConsentExpiresAtUtc { get; set; }
@@ -62,6 +63,7 @@ namespace BulldogFinance.Functions.Models.Plaid
 
     public class CreatePlaidLinkTokenRequest
     {
+        public string? ItemId { get; set; }
         public string[]? CountryCodes { get; set; }
         public string[]? Products { get; set; }
         public string[]? AdditionalConsentedProducts { get; set; }

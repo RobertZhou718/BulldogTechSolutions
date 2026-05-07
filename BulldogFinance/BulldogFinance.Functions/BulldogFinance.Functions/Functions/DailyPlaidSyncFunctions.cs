@@ -163,6 +163,7 @@ namespace BulldogFinance.Functions.Functions
             var now = DateTime.UtcNow;
             item.LastSyncStartedAtUtc = now;
             item.LastSyncStatus = "RUNNING";
+            item.LastSyncErrorCode = null;
             item.LastSyncError = null;
             item.UpdatedAtUtc = now;
             await _plaidRepository.UpsertItemAsync(item, cancellationToken);
@@ -180,10 +181,7 @@ namespace BulldogFinance.Functions.Functions
             }
 
             var now = DateTime.UtcNow;
-            item.LastSyncCompletedAtUtc = now;
-            item.LastSyncStatus = "SUCCESS";
-            item.LastSyncError = null;
-            item.UpdatedAtUtc = now;
+            PlaidItemSyncState.MarkSuccess(item, now);
             await _plaidRepository.UpsertItemAsync(item, cancellationToken);
         }
 
@@ -200,12 +198,21 @@ namespace BulldogFinance.Functions.Functions
             }
 
             var now = DateTime.UtcNow;
-            item.LastSyncCompletedAtUtc = now;
-            item.LastSyncStatus = "FAILED";
-            item.LastSyncError = exception.Message.Length > 512
-                ? exception.Message[..512]
-                : exception.Message;
-            item.UpdatedAtUtc = now;
+            if (exception is PlaidApiException plaidApiException)
+            {
+                PlaidItemSyncState.ApplyApiError(item, plaidApiException, now);
+            }
+            else
+            {
+                item.LastSyncCompletedAtUtc = now;
+                item.LastSyncStatus = PlaidItemSyncState.Failed;
+                item.LastSyncErrorCode = null;
+                item.LastSyncError = exception.Message.Length > 512
+                    ? exception.Message[..512]
+                    : exception.Message;
+                item.UpdatedAtUtc = now;
+            }
+
             await _plaidRepository.UpsertItemAsync(item, cancellationToken);
         }
     }

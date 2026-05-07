@@ -257,6 +257,12 @@ export function useApiClient() {
         });
     }, [request]);
 
+    const completePlaidItemUpdate = useCallback((itemId) => {
+        return request(`/plaid/items/${encodeURIComponent(itemId)}/update-complete`, {
+            method: "POST",
+        });
+    }, [request]);
+
     const syncPlaidTransactions = useCallback((payload = {}) => {
         return request("/plaid/sync-transactions", {
             method: "POST",
@@ -365,6 +371,7 @@ export function useApiClient() {
         getTransactions,
         createTransaction,
         createPlaidLinkToken,
+        completePlaidItemUpdate,
         exchangePlaidPublicToken,
         syncPlaidTransactions,
         refreshPlaidBalances,
@@ -384,6 +391,7 @@ export function useApiClient() {
     }), [
         addToWatchlist,
         createPlaidLinkToken,
+        completePlaidItemUpdate,
         createAccount,
         createSavingsGoal,
         createTransaction,

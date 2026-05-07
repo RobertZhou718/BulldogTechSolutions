@@ -20,9 +20,13 @@ namespace BulldogFinance.Functions.Models.Accounts
         public string? ExternalSource { get; set; }
         public string? InstitutionName { get; set; }
         public string? Mask { get; set; }
+        public string? PlaidItemId { get; set; }
+        public string? PlaidItemStatus { get; set; }
         public DateTime? LastBalanceRefreshUtc { get; set; }
         public DateTime? LastTransactionSyncUtc { get; set; }
         public string? LastSyncStatus { get; set; }
+        public string? LastSyncErrorCode { get; set; }
+        public string? LastSyncError { get; set; }
     }
 
     public class CreateAccountResponse
