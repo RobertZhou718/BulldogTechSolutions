@@ -1,5 +1,6 @@
 import React from "react";
 import Card from "@/components/ui/Card.jsx";
+import { Button } from "@/components/ui/button";
 import Spinner from "@/components/ui/Spinner.jsx";
 import { formatCurrency } from "@/lib/utils";
 
@@ -13,7 +14,13 @@ function getActivityLabel(item) {
     return subtype && subtype !== "Undefined" ? subtype : type || "Activity";
 }
 
-export default function InvestmentActivityCard({ items, loading }) {
+export default function InvestmentActivityCard({
+    items,
+    loading,
+    hasMore = false,
+    loadingMore = false,
+    onLoadMore,
+}) {
     const list = Array.isArray(items) ? items : [];
 
     return (
@@ -37,8 +44,9 @@ export default function InvestmentActivityCard({ items, loading }) {
                     No Plaid investment activity has been synced yet.
                 </p>
             ) : (
-                <div className="mt-6 overflow-x-auto">
-                    <table className="min-w-full divide-y divide-[var(--card-border)]">
+                <>
+                    <div className="mt-6 overflow-x-auto">
+                        <table className="min-w-full divide-y divide-[var(--card-border)]">
                         <thead>
                             <tr className="bg-[var(--bg-main)] text-left text-xs font-semibold uppercase tracking-[0.06em] text-[var(--text-soft)]">
                                 <th className="px-4 py-3">Date</th>
@@ -95,8 +103,22 @@ export default function InvestmentActivityCard({ items, loading }) {
                                 );
                             })}
                         </tbody>
-                    </table>
-                </div>
+                        </table>
+                    </div>
+                    {hasMore && onLoadMore ? (
+                        <div className="mt-5 flex justify-center">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={onLoadMore}
+                                loading={loadingMore}
+                                loadingText="Loading..."
+                            >
+                                Load more
+                            </Button>
+                        </div>
+                    ) : null}
+                </>
             )}
         </Card>
     );

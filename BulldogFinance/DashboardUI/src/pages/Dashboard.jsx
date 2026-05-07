@@ -21,6 +21,7 @@ const CASH_FLOW_PALETTE = [
     { income: "#36bffa", expense: "#026aa2" },
 ];
 const DASHBOARD_REQUEST_TIMEOUT_MS = 8000;
+const DASHBOARD_TRANSACTION_PAGE_SIZE = 200;
 
 function getSettledValue(result, fallback, label, issues) {
     if (result.status === "fulfilled") {
@@ -56,6 +57,27 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(null);
 
+    const getTransactionRange = useCallback(async (params, requestOptions) => {
+        const items = [];
+        let cursor = null;
+
+        do {
+            const page = await getTransactions(
+                {
+                    ...params,
+                    limit: DASHBOARD_TRANSACTION_PAGE_SIZE,
+                    cursor,
+                },
+                requestOptions
+            );
+
+            items.push(...(page?.items || []));
+            cursor = page?.hasMore ? page?.nextCursor || null : null;
+        } while (cursor);
+
+        return items;
+    }, [getTransactions]);
+
     const loadDashboard = useCallback(async () => {
         const end = new Date();
         const start = new Date(end);
@@ -65,7 +87,7 @@ export default function DashboardPage() {
         const requestOptions = { timeoutMs: DASHBOARD_REQUEST_TIMEOUT_MS };
         const [accountsResult, transactionsResult, overviewResult, savingsGoalResult] = await Promise.allSettled([
             getAccounts(requestOptions),
-            getTransactions(
+            getTransactionRange(
                 {
                     from: start.toISOString(),
                     to: end.toISOString(),
@@ -90,7 +112,7 @@ export default function DashboardPage() {
                 ? `Some dashboard data could not be loaded: ${issues.join(", ")}.`
                 : null
         );
-    }, [getAccounts, getActiveSavingsGoal, getInvestmentOverview, getTransactions]);
+    }, [getAccounts, getActiveSavingsGoal, getInvestmentOverview, getTransactionRange]);
 
     useEffect(() => {
         (async () => {

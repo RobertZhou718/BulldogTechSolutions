@@ -1,4 +1,5 @@
 using BulldogFinance.Functions.Models.Investments;
+using BulldogFinance.Functions.Models.Paging;
 
 namespace BulldogFinance.Functions.Services.Investments
 {
@@ -23,6 +24,14 @@ namespace BulldogFinance.Functions.Services.Investments
             string userId,
             DateTime? fromUtc = null,
             DateTime? toUtc = null,
+            CancellationToken cancellationToken = default);
+
+        Task<PagedResult<PlaidInvestmentTransactionEntity>> GetTransactionsPageAsync(
+            string userId,
+            DateTime? fromUtc = null,
+            DateTime? toUtc = null,
+            int limit = 50,
+            string? cursor = null,
             CancellationToken cancellationToken = default);
 
         Task<IReadOnlyList<InvestmentPortfolioSnapshotEntity>> GetPortfolioSnapshotsAsync(

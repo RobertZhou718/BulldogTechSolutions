@@ -233,6 +233,10 @@ export function useApiClient() {
         if (params.accountId) search.set("accountId", params.accountId);
         if (params.from) search.set("from", params.from);
         if (params.to) search.set("to", params.to);
+        if (params.type && params.type !== "ALL") search.set("type", params.type);
+        if (params.category) search.set("category", params.category);
+        if (params.limit) search.set("limit", params.limit);
+        if (params.cursor) search.set("cursor", params.cursor);
 
         const qs = search.toString();
         const path = qs ? `/transactions?${qs}` : "/transactions";
@@ -347,6 +351,7 @@ export function useApiClient() {
         const search = new URLSearchParams();
         if (params.days) search.set("days", params.days);
         if (params.limit) search.set("limit", params.limit);
+        if (params.cursor) search.set("cursor", params.cursor);
 
         const qs = search.toString();
         const path = qs ? `/investments/activity?${qs}` : "/investments/activity";

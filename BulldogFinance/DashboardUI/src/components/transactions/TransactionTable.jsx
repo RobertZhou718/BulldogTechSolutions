@@ -117,6 +117,9 @@ export default function TransactionTable({
     onResetFilters,
     onUpdateTransaction,
     onDeleteTransaction,
+    hasMore = false,
+    loadingMore = false,
+    onLoadMore,
 }) {
     const [editingTransaction, setEditingTransaction] = useState(null);
     const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
@@ -315,8 +318,9 @@ export default function TransactionTable({
                         No transactions match the current filters.
                     </div>
                 ) : (
-                    <div className="mt-6 overflow-x-auto">
-                        <table className="w-full min-w-[920px] table-fixed divide-y divide-[var(--card-border)]">
+                    <>
+                        <div className="mt-6 overflow-x-auto">
+                            <table className="w-full min-w-[920px] table-fixed divide-y divide-[var(--card-border)]">
                             <colgroup>
                                 <col className="w-[9%]" />
                                 <col className="w-[13%]" />
@@ -416,8 +420,22 @@ export default function TransactionTable({
                                     );
                                 })}
                             </tbody>
-                        </table>
-                    </div>
+                            </table>
+                        </div>
+                        {hasMore && onLoadMore ? (
+                            <div className="mt-5 flex justify-center">
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    onClick={onLoadMore}
+                                    loading={loadingMore}
+                                    loadingText="Loading..."
+                                >
+                                    Load more
+                                </Button>
+                            </div>
+                        ) : null}
+                    </>
                 )}
             </Card>
 

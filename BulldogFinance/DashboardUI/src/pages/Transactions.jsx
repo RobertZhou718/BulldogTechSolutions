@@ -19,6 +19,8 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 
+const TRANSACTION_PAGE_SIZE = 50;
+
 export default function TransactionsPage() {
     const {
         getAccounts,
@@ -34,6 +36,9 @@ export default function TransactionsPage() {
     const [transactions, setTransactions] = useState([]);
     const [loadingAccounts, setLoadingAccounts] = useState(true);
     const [loadingTx, setLoadingTx] = useState(false);
+    const [loadingMoreTx, setLoadingMoreTx] = useState(false);
+    const [nextCursor, setNextCursor] = useState(null);
+    const [hasMoreTransactions, setHasMoreTransactions] = useState(false);
     const [filters, setFilters] = useState({ type: "ALL", from: "", to: "", category: "" });
     const [sortField, setSortField] = useState("date");
     const [sortDirection, setSortDirection] = useState("desc");
@@ -69,23 +74,48 @@ export default function TransactionsPage() {
             params.to = transactionDateToUtcIso(filters.to, true);
         }
 
+        if (filters.type && filters.type !== "ALL") {
+            params.type = filters.type;
+        }
+
+        if (filters.category) {
+            params.category = filters.category.trim();
+        }
+
         return params;
-    }, [filters.from, filters.to, historyAccountId]);
-    const loadTransactions = useCallback(async () => {
+    }, [filters.category, filters.from, filters.to, filters.type, historyAccountId]);
+    const loadTransactions = useCallback(async ({ append = false, cursor = null } = {}) => {
         if (!historyAccountId) {
             return;
         }
 
-        setLoadingTx(true);
+        if (append) {
+            setLoadingMoreTx(true);
+        } else {
+            setLoadingTx(true);
+            setNextCursor(null);
+            setHasMoreTransactions(false);
+        }
 
         try {
-            const data = await getTransactions(buildTransactionQueryParams());
-            setTransactions(data || []);
+            const data = await getTransactions({
+                ...buildTransactionQueryParams(),
+                limit: TRANSACTION_PAGE_SIZE,
+                cursor,
+            });
+            const items = data?.items || [];
+            setTransactions((current) => (append ? [...current, ...items] : items));
+            setNextCursor(data?.nextCursor || null);
+            setHasMoreTransactions(Boolean(data?.hasMore));
         } catch (e) {
             console.error(e);
             toast.error(e.message || "Failed to load transactions.");
         } finally {
-            setLoadingTx(false);
+            if (append) {
+                setLoadingMoreTx(false);
+            } else {
+                setLoadingTx(false);
+            }
         }
     }, [buildTransactionQueryParams, getTransactions, historyAccountId]);
 
@@ -109,12 +139,6 @@ export default function TransactionsPage() {
     const visibleTransactions = useMemo(() => {
         let list = [...transactions];
 
-        if (filters.type !== "ALL") list = list.filter((tx) => tx.type === filters.type);
-        if (filters.category) {
-            const keyword = filters.category.toLowerCase();
-            list = list.filter((tx) => (tx.category || "").toLowerCase().includes(keyword));
-        }
-
         list.sort((a, b) => {
             if (sortField === "amount") {
                 const av = a.amount ?? 0;
@@ -128,7 +152,15 @@ export default function TransactionsPage() {
         });
 
         return list;
-    }, [transactions, filters.type, filters.category, sortField, sortDirection]);
+    }, [transactions, sortField, sortDirection]);
+
+    const loadMoreTransactions = useCallback(() => {
+        if (!hasMoreTransactions || !nextCursor || loadingMoreTx) {
+            return;
+        }
+
+        void loadTransactions({ append: true, cursor: nextCursor });
+    }, [hasMoreTransactions, loadTransactions, loadingMoreTx, nextCursor]);
 
     const viewAccount = useMemo(
         () => accounts.find((a) => a.accountId === historyAccountId),
@@ -298,6 +330,9 @@ export default function TransactionsPage() {
                         onResetFilters={() => setFilters({ type: "ALL", from: "", to: "", category: "" })}
                         onUpdateTransaction={handleUpdateTransaction}
                         onDeleteTransaction={handleDeleteTransaction}
+                        hasMore={hasMoreTransactions}
+                        loadingMore={loadingMoreTx}
+                        onLoadMore={loadMoreTransactions}
                     />
                 )}
             </div>
