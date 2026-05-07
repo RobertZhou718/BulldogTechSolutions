@@ -1,4 +1,3 @@
-﻿using System.Net;
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Services.Investments;
 using Microsoft.Azure.Functions.Worker;
@@ -24,20 +23,16 @@ namespace BulldogFinance.Functions.Functions
         public async Task<HttpResponseData> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "investments/{symbol}")]
             HttpRequestData req,
-            string symbol,
-            FunctionContext context)
+            string symbol)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
                 return await ApiResponse.UnauthorizedAsync(req);
 
-            _logger.LogInformation("DeleteInvestment for user {UserId}, symbol {Symbol}",
-                userId, symbol);
+            _logger.LogInformation("DeleteInvestment for user {UserId}, symbol {Symbol}", userId, symbol);
 
             await _investmentService.DeleteInvestmentAsync(userId, symbol);
-
-            var resp = req.CreateResponse(HttpStatusCode.NoContent);
-            return resp;
+            return ApiResponse.NoContent(req);
         }
     }
 }

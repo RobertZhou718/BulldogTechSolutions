@@ -36,7 +36,7 @@ namespace BulldogFinance.Functions.Services.Plaid
             _logger = logger;
         }
 
-        public async Task<PlaidInvestmentSyncSummary> SyncHoldingsAsync(
+        private async Task<PlaidInvestmentSyncSummary> SyncHoldingsAsync(
             string userId,
             string itemId,
             CancellationToken cancellationToken = default)
@@ -131,7 +131,7 @@ namespace BulldogFinance.Functions.Services.Plaid
             return summary;
         }
 
-        public async Task<PlaidInvestmentSyncSummary> SyncInvestmentTransactionsAsync(
+        private async Task<PlaidInvestmentSyncSummary> SyncInvestmentTransactionsAsync(
             string userId,
             string itemId,
             DateTime startUtc,

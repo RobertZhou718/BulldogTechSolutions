@@ -16,7 +16,6 @@ public class GetReportLatestFunction
 {
     private readonly BlobContainerClient _container;
     private readonly ILogger<GetReportLatestFunction> _logger;
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public GetReportLatestFunction(
         BlobServiceClient blobServiceClient,
@@ -26,7 +25,6 @@ public class GetReportLatestFunction
         _logger = logger;
         var containerName = config["Reports:ContainerName"] ?? "reports";
         _container = blobServiceClient.GetBlobContainerClient(containerName);
-
     }
 
     [Function("GetReportLatest")]
@@ -52,24 +50,19 @@ public class GetReportLatestFunction
             var blob = _container.GetBlobClient(blobName);
             BlobDownloadResult download = await blob.DownloadContentAsync(cancellationToken: cancellationToken);
             var content = download.Content.ToString();
-            var report = JsonSerializer.Deserialize<GeneratedReport>(content, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
+            var report = JsonSerializer.Deserialize<GeneratedReport>(content, JsonDefaults.Api);
 
             if (report is null)
             {
                 throw new JsonException("Report blob content was empty or invalid.");
             }
 
-            var resp = req.CreateResponse(HttpStatusCode.OK);
-            await WriteJsonAsync(resp, new
+            return await ApiResponse.OkAsync(req, new
             {
                 hasReport = true,
                 report,
                 message = string.Empty
             }, cancellationToken);
-            return resp;
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
         {
@@ -79,36 +72,23 @@ public class GetReportLatestFunction
                 userId,
                 blobName);
 
-            var ok = req.CreateResponse(HttpStatusCode.OK);
-            await WriteJsonAsync(ok, new
+            return await ApiResponse.OkAsync(req, new
             {
                 hasReport = false,
                 report = (GeneratedReport?)null,
                 message = $"No {period} report is available yet. Add more transaction data and try again later."
             }, cancellationToken);
-            return ok;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load latest {Period} report for user {UserId}.", period, userId);
 
-            var error = req.CreateResponse(HttpStatusCode.InternalServerError);
-            await WriteJsonAsync(error, new
+            return await ApiResponse.JsonAsync(req, HttpStatusCode.InternalServerError, new
             {
                 hasReport = false,
                 report = (GeneratedReport?)null,
                 message = $"We couldn't load your latest {period} report right now. Please try again later."
             }, cancellationToken);
-            return error;
         }
-    }
-
-    private static async Task WriteJsonAsync(
-        HttpResponseData response,
-        object payload,
-        CancellationToken cancellationToken)
-    {
-        response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-        await response.WriteStringAsync(JsonSerializer.Serialize(payload, JsonOptions), cancellationToken);
     }
 }

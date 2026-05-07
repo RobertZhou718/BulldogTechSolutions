@@ -285,27 +285,6 @@ export function useApiClient() {
         });
     }, [request]);
 
-    const syncPlaidTransactions = useCallback((payload = {}) => {
-        return request("/plaid/sync-transactions", {
-            method: "POST",
-            body: JSON.stringify(payload),
-        });
-    }, [request]);
-
-    const refreshPlaidBalances = useCallback((payload = {}) => {
-        return request("/plaid/refresh-balances", {
-            method: "POST",
-            body: JSON.stringify(payload),
-        });
-    }, [request]);
-
-    const syncPlaidInvestments = useCallback((payload = {}) => {
-        return request("/plaid/sync-investments", {
-            method: "POST",
-            body: JSON.stringify(payload),
-        });
-    }, [request]);
-
     // Investment APIs.
     const getInvestments = useCallback(() => {
         return request("/investments", { method: "GET" });
@@ -412,9 +391,6 @@ export function useApiClient() {
         createPlaidLinkToken,
         completePlaidItemUpdate,
         exchangePlaidPublicToken,
-        syncPlaidTransactions,
-        refreshPlaidBalances,
-        syncPlaidInvestments,
         getInvestments,
         upsertInvestment,
         deleteInvestment,
@@ -454,11 +430,8 @@ export function useApiClient() {
         getWatchlist,
         postOnboarding,
         archiveSavingsGoal,
-        refreshPlaidBalances,
-        syncPlaidInvestments,
         removeFromWatchlist,
         sendChatMessage,
-        syncPlaidTransactions,
         updateSavingsGoal,
         upsertInvestment,
     ]);

@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text.Json;
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Plaid;
@@ -17,12 +16,6 @@ namespace BulldogFinance.Functions.Functions
     {
         private const string PostLinkQueueName = "plaid-daily-sync-items";
         private const string QueueConnectionName = "QueueStorage";
-
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            PropertyNameCaseInsensitive = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
 
         private readonly IPlaidClientFactory _plaidClientFactory;
         private readonly IPlaidRepository _plaidRepository;
@@ -50,8 +43,7 @@ namespace BulldogFinance.Functions.Functions
         [Function("ExchangePlaidPublicToken")]
         public async Task<ExchangePlaidPublicTokenOutput> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "plaid/exchange-public-token")]
-            HttpRequestData req,
-            FunctionContext context)
+            HttpRequestData req)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
@@ -59,26 +51,14 @@ namespace BulldogFinance.Functions.Functions
 
             var userEmail = AuthHelper.GetUserEmail(req);
 
-            string body;
-            using (var reader = new StreamReader(req.Body))
-            {
-                body = await reader.ReadToEndAsync();
-            }
-
-            if (string.IsNullOrWhiteSpace(body))
+            var body = await req.ReadJsonBodyAsync<ExchangePlaidPublicTokenRequest>();
+            if (body.IsEmpty)
                 return Output(await ApiResponse.BadRequestAsync(req, "Request body is empty."));
-
-            ExchangePlaidPublicTokenRequest? requestModel;
-            try
-            {
-                requestModel = JsonSerializer.Deserialize<ExchangePlaidPublicTokenRequest>(body, JsonOptions);
-            }
-            catch (JsonException)
-            {
+            if (body.IsInvalid)
                 return Output(await ApiResponse.BadRequestAsync(req, "Invalid JSON."));
-            }
 
-            if (requestModel == null || string.IsNullOrWhiteSpace(requestModel.PublicToken))
+            var requestModel = body.Value!;
+            if (string.IsNullOrWhiteSpace(requestModel.PublicToken))
                 return Output(await ApiResponse.BadRequestAsync(req, "publicToken is required."));
 
             var exchangeClient = _plaidClientFactory.Create();
@@ -194,22 +174,14 @@ namespace BulldogFinance.Functions.Functions
                 UserId = userId,
                 ItemId = exchange.ItemId,
                 EnqueuedAtUtc = queuedAt
-            }, JsonOptions);
+            }, JsonDefaults.Api);
 
-            var response = req.CreateResponse(HttpStatusCode.OK);
-            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-            await response.WriteStringAsync(JsonSerializer.Serialize(new ExchangePlaidPublicTokenResponse
+            var response = await ApiResponse.OkAsync(req, new ExchangePlaidPublicTokenResponse
             {
                 ItemId = exchange.ItemId,
                 AccountsConnected = importedAccounts.Count,
-                TransactionsAdded = 0,
-                TransactionsModified = 0,
-                TransactionsRemoved = 0,
-                InvestmentHoldingsSynced = 0,
-                InvestmentSecuritiesSynced = 0,
-                InvestmentTransactionsSynced = 0,
                 BackgroundSyncQueued = true
-            }, JsonOptions));
+            });
 
             return Output(response, queueMessage);
         }

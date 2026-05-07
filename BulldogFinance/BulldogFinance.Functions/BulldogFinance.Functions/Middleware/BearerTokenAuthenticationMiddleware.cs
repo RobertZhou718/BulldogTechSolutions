@@ -13,8 +13,7 @@ namespace BulldogFinance.Functions.Middleware
         // requires a valid bearer token; missing/invalid tokens get 401 here.
         private static readonly HashSet<string> AnonymousFunctions = new(StringComparer.OrdinalIgnoreCase)
         {
-            "NativeAuthProxy", // CIAM native-auth gateway, used pre-login
-            "PlaidWebhook"     // Plaid webhook, validates its own signature
+            "NativeAuthProxy" // CIAM native-auth gateway, used pre-login
         };
 
         private readonly IAuthTokenValidator _authTokenValidator;

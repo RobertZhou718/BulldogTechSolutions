@@ -1,5 +1,3 @@
-using System.Net;
-using System.Text.Json;
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Investments;
 using BulldogFinance.Functions.Services.Investments;
@@ -10,11 +8,6 @@ namespace BulldogFinance.Functions.Functions
 {
     public class GetInvestmentActivityFunction
     {
-        private static readonly JsonSerializerOptions JsonOptions = new()
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
-
         private readonly IPlaidInvestmentRepository _plaidInvestmentRepository;
 
         public GetInvestmentActivityFunction(IPlaidInvestmentRepository plaidInvestmentRepository)
@@ -25,17 +18,17 @@ namespace BulldogFinance.Functions.Functions
         [Function("GetInvestmentActivity")]
         public async Task<HttpResponseData> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "investments/activity")]
-            HttpRequestData req,
-            FunctionContext context)
+            HttpRequestData req)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
                 return await ApiResponse.UnauthorizedAsync(req);
 
-            var limit = ReadIntQuery(req.Url.Query, "limit", 50, 1, 200);
-            var cursor = ReadStringQuery(req.Url.Query, "cursor");
+            var query = QueryHelper.Parse(req);
+            var limit = query.GetInt("limit", 50, 1, 200);
+            var cursor = query.GetString("cursor");
             var endUtc = DateTime.UtcNow.Date.AddDays(1);
-            var startUtc = endUtc.AddDays(-ReadIntQuery(req.Url.Query, "days", 90, 1, 730));
+            var startUtc = endUtc.AddDays(-query.GetInt("days", 90, 1, 730));
 
             var securities = await _plaidInvestmentRepository.GetSecuritiesAsync(userId);
             var securityByKey = securities
@@ -49,7 +42,7 @@ namespace BulldogFinance.Functions.Functions
                 limit,
                 cursor);
 
-            return await WriteJsonAsync(req, new
+            return await ApiResponse.OkAsync(req, new
             {
                 items = page.Items.Select(transaction => ToDto(transaction, securityByKey)).ToList(),
                 nextCursor = page.NextCursor,
@@ -86,69 +79,6 @@ namespace BulldogFinance.Functions.Functions
                 Fees = transaction.Fees,
                 Currency = transaction.Currency
             };
-        }
-
-        private static int ReadIntQuery(
-            string query,
-            string key,
-            int defaultValue,
-            int min,
-            int max)
-        {
-            var trimmed = query.TrimStart('?');
-            if (string.IsNullOrWhiteSpace(trimmed))
-            {
-                return defaultValue;
-            }
-
-            foreach (var pair in trimmed.Split('&', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var parts = pair.Split('=', 2);
-                if (parts.Length != 2 ||
-                    !string.Equals(parts[0], key, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (int.TryParse(Uri.UnescapeDataString(parts[1]), out var value))
-                {
-                    return Math.Clamp(value, min, max);
-                }
-            }
-
-            return defaultValue;
-        }
-
-        private static string? ReadStringQuery(string query, string key)
-        {
-            var trimmed = query.TrimStart('?');
-            if (string.IsNullOrWhiteSpace(trimmed))
-            {
-                return null;
-            }
-
-            foreach (var pair in trimmed.Split('&', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var parts = pair.Split('=', 2);
-                if (parts.Length == 2 &&
-                    string.Equals(parts[0], key, StringComparison.OrdinalIgnoreCase))
-                {
-                    return Uri.UnescapeDataString(parts[1]);
-                }
-            }
-
-            return null;
-        }
-
-        private static async Task<HttpResponseData> WriteJsonAsync(
-            HttpRequestData req,
-            object payload,
-            HttpStatusCode statusCode = HttpStatusCode.OK)
-        {
-            var response = req.CreateResponse(statusCode);
-            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-            await response.WriteStringAsync(JsonSerializer.Serialize(payload, JsonOptions));
-            return response;
         }
     }
 }

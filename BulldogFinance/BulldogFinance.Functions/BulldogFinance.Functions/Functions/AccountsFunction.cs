@@ -7,8 +7,6 @@ using BulldogFinance.Functions.Services.Plaid;
 using BulldogFinance.Functions.Services.Transactions;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
-using System.Net;
-using System.Text.Json;
 
 namespace BulldogFinance.Functions.Functions
 {
@@ -18,12 +16,6 @@ namespace BulldogFinance.Functions.Functions
         private readonly ITransactionRepository _transactionRepository;
         private readonly IPlaidRepository _plaidRepository;
         private readonly IPlaidSyncService _plaidSyncService;
-
-        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
 
         public AccountsFunction(
             IAccountRepository accountRepository,
@@ -40,31 +32,13 @@ namespace BulldogFinance.Functions.Functions
         [Function("GetAccounts")]
         public async Task<HttpResponseData> Get(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "accounts")]
-            HttpRequestData req,
-            FunctionContext context)
+            HttpRequestData req)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
                 return await ApiResponse.UnauthorizedAsync(req);
 
-            bool includeArchived = false;
-            var query = req.Url.Query;
-            if (!string.IsNullOrEmpty(query))
-            {
-                var trimmed = query.TrimStart('?');
-                var pairs = trimmed.Split('&', StringSplitOptions.RemoveEmptyEntries);
-                foreach (var pair in pairs)
-                {
-                    var kv = pair.Split('=', 2);
-                    if (kv.Length == 2 &&
-                        string.Equals(kv[0], "includeArchived", StringComparison.OrdinalIgnoreCase) &&
-                        bool.TryParse(Uri.UnescapeDataString(kv[1]), out var parsed))
-                    {
-                        includeArchived = parsed;
-                        break;
-                    }
-                }
-            }
+            var includeArchived = QueryHelper.Parse(req).GetBool("includeArchived", false);
 
             var accounts = await _accountRepository.GetAccountsAsync(userId, includeArchived);
             var plaidAccountLinks = await _plaidRepository.GetAccountLinksAsync(userId);
@@ -85,43 +59,26 @@ namespace BulldogFinance.Functions.Functions
                     plaidItemByItemId))
                 .ToList();
 
-            var response = req.CreateResponse(HttpStatusCode.OK);
-            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-            await response.WriteStringAsync(JsonSerializer.Serialize(dtoList, JsonOptions));
-
-            return response;
+            return await ApiResponse.OkAsync(req, dtoList);
         }
 
         [Function("CreateAccount")]
         public async Task<HttpResponseData> Create(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "accounts")]
-            HttpRequestData req,
-            FunctionContext context)
+            HttpRequestData req)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
                 return await ApiResponse.UnauthorizedAsync(req);
 
-            string body;
-            using (var reader = new StreamReader(req.Body))
-            {
-                body = await reader.ReadToEndAsync();
-            }
-
-            if (string.IsNullOrWhiteSpace(body))
+            var body = await req.ReadJsonBodyAsync<AccountCreateRequest>();
+            if (body.IsEmpty)
                 return await ApiResponse.BadRequestAsync(req, "Request body is empty.");
-
-            AccountCreateRequest? requestModel;
-            try
-            {
-                requestModel = JsonSerializer.Deserialize<AccountCreateRequest>(body, JsonOptions);
-            }
-            catch (JsonException)
-            {
+            if (body.IsInvalid)
                 return await ApiResponse.BadRequestAsync(req, "Invalid JSON.");
-            }
 
-            if (requestModel == null || string.IsNullOrWhiteSpace(requestModel.Name))
+            var requestModel = body.Value!;
+            if (string.IsNullOrWhiteSpace(requestModel.Name))
                 return await ApiResponse.BadRequestAsync(req, "Account name is required.");
 
             var existingAccounts = await _accountRepository.GetAccountsAsync(userId, includeArchived: true);
@@ -171,22 +128,17 @@ namespace BulldogFinance.Functions.Functions
                 });
             }
 
-            var response = req.CreateResponse(HttpStatusCode.OK);
-            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-            await response.WriteStringAsync(JsonSerializer.Serialize(new CreateAccountResponse
+            return await ApiResponse.OkAsync(req, new CreateAccountResponse
             {
                 Account = ToDto(account)
-            }, JsonOptions));
-
-            return response;
+            });
         }
 
         [Function("DeleteAccount")]
         public async Task<HttpResponseData> Delete(
             [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "accounts/{accountId}")]
             HttpRequestData req,
-            string accountId,
-            FunctionContext context)
+            string accountId)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
@@ -236,7 +188,7 @@ namespace BulldogFinance.Functions.Functions
                 await _accountRepository.DeleteAccountAsync(userId, account.RowKey);
             }
 
-            return req.CreateResponse(HttpStatusCode.NoContent);
+            return ApiResponse.NoContent(req);
         }
 
         private static AccountDto ToDto(
@@ -255,25 +207,25 @@ namespace BulldogFinance.Functions.Functions
             }
 
             return new AccountDto
-        {
-            AccountId = account.RowKey,
-            Name = account.Name,
-            Type = account.Type,
-            Currency = account.Currency,
-            CurrentBalance = account.CurrentBalanceCents / 100m,
-            AvailableBalance = account.AvailableBalanceCents.HasValue ? account.AvailableBalanceCents.Value / 100m : null,
-            IsArchived = account.IsArchived,
-            ExternalSource = account.ExternalSource,
-            InstitutionName = account.InstitutionName,
-            Mask = account.Mask,
-            PlaidItemId = plaidAccountLink?.ItemId,
-            PlaidItemStatus = plaidItem?.Status,
-            LastBalanceRefreshUtc = account.LastBalanceRefreshUtc,
-            LastTransactionSyncUtc = plaidItem?.LastSyncAtUtc,
-            LastSyncStatus = plaidItem?.LastSyncStatus,
-            LastSyncErrorCode = plaidItem?.LastSyncErrorCode,
-            LastSyncError = plaidItem?.LastSyncError
-        };
+            {
+                AccountId = account.RowKey,
+                Name = account.Name,
+                Type = account.Type,
+                Currency = account.Currency,
+                CurrentBalance = account.CurrentBalanceCents / 100m,
+                AvailableBalance = account.AvailableBalanceCents.HasValue ? account.AvailableBalanceCents.Value / 100m : null,
+                IsArchived = account.IsArchived,
+                ExternalSource = account.ExternalSource,
+                InstitutionName = account.InstitutionName,
+                Mask = account.Mask,
+                PlaidItemId = plaidAccountLink?.ItemId,
+                PlaidItemStatus = plaidItem?.Status,
+                LastBalanceRefreshUtc = account.LastBalanceRefreshUtc,
+                LastTransactionSyncUtc = plaidItem?.LastSyncAtUtc,
+                LastSyncStatus = plaidItem?.LastSyncStatus,
+                LastSyncErrorCode = plaidItem?.LastSyncErrorCode,
+                LastSyncError = plaidItem?.LastSyncError
+            };
         }
     }
 }

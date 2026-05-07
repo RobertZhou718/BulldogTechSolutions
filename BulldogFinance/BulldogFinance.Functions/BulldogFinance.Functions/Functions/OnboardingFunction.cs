@@ -1,4 +1,4 @@
-﻿using BulldogFinance.Functions.Helper;
+using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Accounts;
 using BulldogFinance.Functions.Models.Transactions;
 using BulldogFinance.Functions.Models.Users;
@@ -7,8 +7,6 @@ using BulldogFinance.Functions.Services.Transactions;
 using BulldogFinance.Functions.Services.Users;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
-using System.Net;
-using System.Text.Json;
 
 namespace BulldogFinance.Functions.Functions
 {
@@ -17,11 +15,6 @@ namespace BulldogFinance.Functions.Functions
         private readonly IUserRepository _userRepository;
         private readonly IAccountRepository _accountRepository;
         private readonly ITransactionRepository _transactionRepository;
-
-        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        };
 
         public OnboardingFunction(
             IUserRepository userRepository,
@@ -36,8 +29,7 @@ namespace BulldogFinance.Functions.Functions
         [Function("Onboarding")]
         public async Task<HttpResponseData> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "onboarding")]
-            HttpRequestData req,
-            FunctionContext context)
+            HttpRequestData req)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
@@ -45,27 +37,13 @@ namespace BulldogFinance.Functions.Functions
 
             var userEmail = AuthHelper.GetUserEmail(req);
 
-            string body;
-            using (var reader = new StreamReader(req.Body))
-            {
-                body = await reader.ReadToEndAsync();
-            }
-
-            if (string.IsNullOrWhiteSpace(body))
+            var body = await req.ReadJsonBodyAsync<OnboardingRequest>();
+            if (body.IsEmpty)
                 return await ApiResponse.BadRequestAsync(req, "Request body is empty.");
-
-            OnboardingRequest? request;
-            try
-            {
-                request = JsonSerializer.Deserialize<OnboardingRequest>(body, JsonOptions);
-            }
-            catch (JsonException)
-            {
-                return await ApiResponse.BadRequestAsync(req, "Invalid JSON.");
-            }
-
-            if (request == null)
+            if (body.IsInvalid || body.Value is null)
                 return await ApiResponse.BadRequestAsync(req, "Invalid request body.");
+
+            var request = body.Value;
 
             var defaultCurrency = string.IsNullOrWhiteSpace(request.DefaultCurrency)
                 ? "CAD"
@@ -166,13 +144,7 @@ namespace BulldogFinance.Functions.Functions
 
             await _userRepository.UpsertUserAsync(userEntity);
 
-            var response = req.CreateResponse(HttpStatusCode.OK);
-            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-
-            await response.WriteStringAsync(
-                JsonSerializer.Serialize(responseModel));
-
-            return response;
+            return await ApiResponse.OkAsync(req, responseModel);
         }
     }
 }

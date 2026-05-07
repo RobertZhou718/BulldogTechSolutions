@@ -1,5 +1,3 @@
-﻿using System.Net;
-using System.Text.Json;
 using BulldogFinance.Functions.Helper;
 using BulldogFinance.Functions.Models.Investments;
 using BulldogFinance.Functions.Services.Investments;
@@ -13,7 +11,6 @@ namespace BulldogFinance.Functions.Functions
     {
         private readonly IInvestmentService _investmentService;
         private readonly ILogger<UpsertInvestmentFunction> _logger;
-        private readonly JsonSerializerOptions _jsonOptions;
 
         public UpsertInvestmentFunction(
             IInvestmentService investmentService,
@@ -21,36 +18,23 @@ namespace BulldogFinance.Functions.Functions
         {
             _investmentService = investmentService;
             _logger = logger;
-            _jsonOptions = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            };
         }
 
         [Function("UpsertInvestment")]
         public async Task<HttpResponseData> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "investments")]
-            HttpRequestData req,
-            FunctionContext context)
+            HttpRequestData req)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
                 return await ApiResponse.UnauthorizedAsync(req);
 
-            UpsertInvestmentRequest? payload;
-            try
-            {
-                payload = await JsonSerializer.DeserializeAsync<UpsertInvestmentRequest>(
-                    req.Body,
-                    _jsonOptions);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to deserialize UpsertInvestmentRequest");
+            var body = await req.ReadJsonBodyAsync<UpsertInvestmentRequest>();
+            if (body.IsMissingOrInvalid || body.Value is null)
                 return await ApiResponse.BadRequestAsync(req, "Invalid JSON payload.");
-            }
 
-            if (payload == null || string.IsNullOrWhiteSpace(payload.Symbol))
+            var payload = body.Value;
+            if (string.IsNullOrWhiteSpace(payload.Symbol))
                 return await ApiResponse.BadRequestAsync(req, "Symbol is required.");
 
             if (payload.Quantity < 0 || payload.AvgCost < 0)
@@ -62,10 +46,7 @@ namespace BulldogFinance.Functions.Functions
             try
             {
                 var dto = await _investmentService.UpsertInvestmentAsync(userId, payload);
-
-                var resp = req.CreateResponse(HttpStatusCode.OK);
-                await resp.WriteAsJsonAsync(dto);
-                return resp;
+                return await ApiResponse.OkAsync(req, dto);
             }
             catch (Exception ex)
             {
