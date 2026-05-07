@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using BulldogFinance.Functions.Models.Investments;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -7,7 +7,24 @@ namespace BulldogFinance.Functions.Services.Investments
 {
     public class InvestmentOverviewService : IInvestmentOverviewService
     {
+        private static readonly HashSet<string> UsMarketIdentifierCodes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "XNYS",
+            "XNAS",
+            "ARCX",
+            "BATS",
+            "IEXG"
+        };
+
+        private static readonly HashSet<string> CanadianMarketIdentifierCodes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "XTSE",
+            "XTSX",
+            "XCNQ"
+        };
+
         private readonly IInvestmentService _investmentService;
+        private readonly IPlaidInvestmentRepository _plaidInvestmentRepository;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly ILogger<InvestmentOverviewService> _logger;
@@ -15,11 +32,13 @@ namespace BulldogFinance.Functions.Services.Investments
 
         public InvestmentOverviewService(
             IInvestmentService investmentService,
+            IPlaidInvestmentRepository plaidInvestmentRepository,
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
             ILogger<InvestmentOverviewService> logger)
         {
             _investmentService = investmentService;
+            _plaidInvestmentRepository = plaidInvestmentRepository;
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
             _logger = logger;
@@ -34,116 +53,314 @@ namespace BulldogFinance.Functions.Services.Investments
             CancellationToken cancellationToken = default)
         {
             var apiKey = _configuration["Finnhub:ApiKey"];
-            if (string.IsNullOrWhiteSpace(apiKey))
-            {
-                throw new InvalidOperationException("Finnhub:ApiKey is not configured.");
-            }
-
+            var hasFinnhub = !string.IsNullOrWhiteSpace(apiKey);
             int maxSymbolsPerUser = GetInt("Finnhub:MaxSymbolsPerUser", 10);
             int maxNewsPerSymbol = GetInt("Finnhub:MaxNewsPerSymbol", 3);
             int newsDays = GetInt("Finnhub:NewsDays", 3);
 
-            var client = _httpClientFactory.CreateClient("Finnhub");
+            var client = hasFinnhub
+                ? _httpClientFactory.CreateClient("Finnhub")
+                : null;
 
             var overview = new InvestmentOverviewDto();
-
-            var holdings = await _investmentService.GetInvestmentsForUserAsync(userId, cancellationToken);
+            var manualHoldings = await _investmentService.GetInvestmentsForUserAsync(userId, cancellationToken);
+            var plaidHoldings = await _plaidInvestmentRepository.GetHoldingsAsync(
+                userId,
+                includeDeleted: false,
+                cancellationToken);
+            var plaidSecurities = await _plaidInvestmentRepository.GetSecuritiesAsync(userId, cancellationToken);
+            var plaidSecurityByKey = plaidSecurities
+                .GroupBy(x => SecurityLookupKey(x.ItemId, x.SecurityId), StringComparer.Ordinal)
+                .ToDictionary(x => x.Key, x => x.First(), StringComparer.Ordinal);
 
             var today = DateTime.UtcNow.Date;
             var fromDate = today.AddDays(-newsDays);
             var fromStr = fromDate.ToString("yyyy-MM-dd");
             var toStr = today.ToString("yyyy-MM-dd");
 
-            if (holdings.Count > 0)
+            if (manualHoldings.Count > 0)
             {
-                // Deduplicate held symbols and cap external requests per user.
-                var symbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var h in holdings)
-                {
-                    if (!string.IsNullOrWhiteSpace(h.Symbol))
-                        symbols.Add(h.Symbol.Trim().ToUpperInvariant());
-                }
-
-                var symbolSet = symbols.Take(maxSymbolsPerUser).ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-                var holdingTasks = holdings
-                    .Where(h => !string.IsNullOrWhiteSpace(h.Symbol)
-                                && symbolSet.Contains(h.Symbol.Trim().ToUpperInvariant()))
-                    .Select(async h =>
-                    {
-                        var symbol = h.Symbol!.Trim().ToUpperInvariant();
-
-                        var quoteTask = GetQuoteAsync(client, apiKey, symbol, cancellationToken);
-                        var newsTask = GetNewsAsync(client, apiKey, symbol, fromStr, toStr, maxNewsPerSymbol, cancellationToken);
-                        await Task.WhenAll(quoteTask, newsTask);
-
-                        var (price, changePercent) = quoteTask.Result;
-                        var news = newsTask.Result;
-
-                        var marketValue = h.Quantity * price;
-                        var costValue = h.Quantity * h.AvgCost;
-                        double unrealizedPnL = 0;
-                        double unrealizedPnLPercent = 0;
-
-                        if (costValue > 1e-8)
-                        {
-                            unrealizedPnL = marketValue - costValue;
-                            unrealizedPnLPercent = unrealizedPnL / costValue * 100.0;
-                        }
-
-                        return new InvestmentHoldingOverviewDto
-                        {
-                            Symbol = symbol,
-                            Exchange = h.Exchange,
-                            Quantity = h.Quantity,
-                            AvgCost = h.AvgCost,
-                            Currency = h.Currency,
-                            CurrentPrice = price,
-                            ChangePercent = changePercent,
-                            MarketValue = marketValue,
-                            UnrealizedPnL = unrealizedPnL,
-                            UnrealizedPnLPercent = unrealizedPnLPercent,
-                            News = news
-                        };
-                    });
-
-                overview.Holdings.AddRange(await Task.WhenAll(holdingTasks));
-            }
-            else
-            {
-                // Fall back to configured symbols when the user has no holdings yet.
-                var popularStr = _configuration["Finnhub:PopularSymbols"]
-                                 ?? "AAPL,MSFT,NVDA,TSLA,GOOGL,AMZN";
-
-                var popularSymbols = popularStr
-                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                var symbolSet = manualHoldings
+                    .Where(h => !string.IsNullOrWhiteSpace(h.Symbol))
+                    .Select(h => h.Symbol.Trim().ToUpperInvariant())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Take(maxSymbolsPerUser)
-                    .Select(s => s.ToUpperInvariant())
-                    .ToList();
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-                var popularTasks = popularSymbols.Select(async symbol =>
+                var manualTasks = manualHoldings
+                    .Where(h => !string.IsNullOrWhiteSpace(h.Symbol) &&
+                                symbolSet.Contains(h.Symbol.Trim().ToUpperInvariant()))
+                    .Select(h => BuildManualHoldingAsync(
+                        h,
+                        client,
+                        apiKey,
+                        fromStr,
+                        toStr,
+                        maxNewsPerSymbol,
+                        cancellationToken));
+
+                overview.Holdings.AddRange(await Task.WhenAll(manualTasks));
+            }
+
+            if (plaidHoldings.Count > 0)
+            {
+                var plaidTasks = plaidHoldings.Select(holding =>
                 {
-                    var quoteTask = GetQuoteAsync(client, apiKey, symbol, cancellationToken);
-                    var newsTask = GetNewsAsync(client, apiKey, symbol, fromStr, toStr, maxNewsPerSymbol, cancellationToken);
-                    await Task.WhenAll(quoteTask, newsTask);
+                    plaidSecurityByKey.TryGetValue(
+                        SecurityLookupKey(holding.ItemId, holding.SecurityId),
+                        out var security);
 
-                    var (price, changePercent) = quoteTask.Result;
-                    var news = newsTask.Result;
-
-                    return new SymbolOverviewDto
-                    {
-                        Symbol = symbol,
-                        Exchange = "US",
-                        CurrentPrice = price,
-                        ChangePercent = changePercent,
-                        News = news
-                    };
+                    return BuildPlaidHoldingAsync(
+                        holding,
+                        security,
+                        client,
+                        apiKey,
+                        fromStr,
+                        toStr,
+                        maxNewsPerSymbol,
+                        cancellationToken);
                 });
 
-                overview.Popular.AddRange(await Task.WhenAll(popularTasks));
+                overview.Holdings.AddRange(await Task.WhenAll(plaidTasks));
             }
 
+            if (overview.Holdings.Count == 0 && hasFinnhub && client != null)
+            {
+                await AddPopularSymbolsAsync(
+                    overview,
+                    client,
+                    apiKey!,
+                    fromStr,
+                    toStr,
+                    maxSymbolsPerUser,
+                    maxNewsPerSymbol,
+                    cancellationToken);
+            }
+
+            overview.TotalsByCurrency.AddRange(BuildTotals(overview.Holdings));
+            overview.Performance.AddRange(await BuildPerformanceAsync(
+                userId,
+                overview.TotalsByCurrency,
+                cancellationToken));
+
             return overview;
+        }
+
+        private async Task<InvestmentHoldingOverviewDto> BuildManualHoldingAsync(
+            InvestmentDto holding,
+            HttpClient? client,
+            string? apiKey,
+            string fromStr,
+            string toStr,
+            int maxNewsPerSymbol,
+            CancellationToken cancellationToken)
+        {
+            var symbol = holding.Symbol.Trim().ToUpperInvariant();
+            var exchange = string.IsNullOrWhiteSpace(holding.Exchange)
+                ? "US"
+                : holding.Exchange.Trim().ToUpperInvariant();
+            var canUseFinnhub = client != null &&
+                                !string.IsNullOrWhiteSpace(apiKey) &&
+                                IsFinnhubSupported(symbol, exchange, null);
+            var quoteTask = canUseFinnhub
+                ? GetQuoteAsync(client!, apiKey!, symbol, cancellationToken)
+                : Task.FromResult((price: 0.0, changePercent: 0.0));
+            var newsTask = canUseFinnhub
+                ? GetNewsAsync(client!, apiKey!, symbol, fromStr, toStr, maxNewsPerSymbol, cancellationToken)
+                : Task.FromResult(new List<InvestmentNewsItemDto>());
+
+            await Task.WhenAll(quoteTask, newsTask);
+
+            var (price, changePercent) = quoteTask.Result;
+            var marketValue = holding.Quantity * price;
+            var costValue = holding.Quantity * holding.AvgCost;
+            var unrealizedPnL = costValue > 1e-8 ? marketValue - costValue : 0;
+            var unrealizedPnLPercent = costValue > 1e-8 ? unrealizedPnL / costValue * 100.0 : 0;
+
+            return new InvestmentHoldingOverviewDto
+            {
+                HoldingId = $"manual|{symbol}",
+                Source = "Manual",
+                Symbol = symbol,
+                Exchange = exchange,
+                Quantity = holding.Quantity,
+                AvgCost = holding.AvgCost,
+                CostBasis = costValue,
+                Currency = holding.Currency,
+                CurrentPrice = price,
+                ChangePercent = changePercent,
+                MarketValue = marketValue,
+                UnrealizedPnL = unrealizedPnL,
+                UnrealizedPnLPercent = unrealizedPnLPercent,
+                CanDelete = true,
+                News = newsTask.Result
+            };
+        }
+
+        private async Task<InvestmentHoldingOverviewDto> BuildPlaidHoldingAsync(
+            PlaidInvestmentHoldingEntity holding,
+            PlaidInvestmentSecurityEntity? security,
+            HttpClient? client,
+            string? apiKey,
+            string fromStr,
+            string toStr,
+            int maxNewsPerSymbol,
+            CancellationToken cancellationToken)
+        {
+            var symbol = !string.IsNullOrWhiteSpace(security?.TickerSymbol)
+                ? security!.TickerSymbol!.Trim().ToUpperInvariant()
+                : holding.SecurityId;
+            var exchange = ResolveExchange(security?.MarketIdentifierCode);
+            var currentPrice = holding.InstitutionPrice > 0
+                ? holding.InstitutionPrice
+                : security?.ClosePrice ?? 0;
+            var marketValue = Math.Abs(holding.InstitutionValue) > 1e-8
+                ? holding.InstitutionValue
+                : holding.Quantity * currentPrice;
+            var costBasis = holding.CostBasis ?? 0;
+            var avgCost = Math.Abs(holding.Quantity) > 1e-8 && costBasis > 0
+                ? costBasis / holding.Quantity
+                : 0;
+            var unrealizedPnL = costBasis > 1e-8 ? marketValue - costBasis : 0;
+            var unrealizedPnLPercent = costBasis > 1e-8 ? unrealizedPnL / costBasis * 100.0 : 0;
+
+            var canUseFinnhub = client != null &&
+                                !string.IsNullOrWhiteSpace(apiKey) &&
+                                IsFinnhubSupported(symbol, exchange, security?.MarketIdentifierCode);
+            var news = canUseFinnhub
+                ? await GetNewsAsync(client!, apiKey!, symbol, fromStr, toStr, maxNewsPerSymbol, cancellationToken)
+                : new List<InvestmentNewsItemDto>();
+
+            return new InvestmentHoldingOverviewDto
+            {
+                HoldingId = $"plaid|{holding.RowKey}",
+                Source = "Plaid",
+                Symbol = symbol,
+                Exchange = exchange,
+                SecurityId = holding.SecurityId,
+                SecurityName = security?.Name,
+                AccountId = holding.LocalAccountId,
+                AccountName = holding.AccountName,
+                InstitutionName = holding.InstitutionName,
+                MarketIdentifierCode = security?.MarketIdentifierCode,
+                IsCashEquivalent = security?.IsCashEquivalent ?? false,
+                CanDelete = false,
+                Quantity = holding.Quantity,
+                AvgCost = avgCost,
+                CostBasis = costBasis,
+                Currency = holding.Currency,
+                CurrentPrice = currentPrice,
+                ChangePercent = 0,
+                PriceAsOfUtc = holding.InstitutionPriceDatetimeUtc
+                    ?? holding.InstitutionPriceAsOfUtc
+                    ?? security?.ClosePriceAsOfUtc
+                    ?? security?.UpdateDatetimeUtc,
+                MarketValue = marketValue,
+                UnrealizedPnL = unrealizedPnL,
+                UnrealizedPnLPercent = unrealizedPnLPercent,
+                News = news
+            };
+        }
+
+        private async Task AddPopularSymbolsAsync(
+            InvestmentOverviewDto overview,
+            HttpClient client,
+            string apiKey,
+            string fromStr,
+            string toStr,
+            int maxSymbolsPerUser,
+            int maxNewsPerSymbol,
+            CancellationToken cancellationToken)
+        {
+            var popularStr = _configuration["Finnhub:PopularSymbols"]
+                             ?? "AAPL,MSFT,NVDA,TSLA,GOOGL,AMZN";
+
+            var popularSymbols = popularStr
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Take(maxSymbolsPerUser)
+                .Select(s => s.ToUpperInvariant())
+                .ToList();
+
+            var popularTasks = popularSymbols.Select(async symbol =>
+            {
+                var quoteTask = GetQuoteAsync(client, apiKey, symbol, cancellationToken);
+                var newsTask = GetNewsAsync(client, apiKey, symbol, fromStr, toStr, maxNewsPerSymbol, cancellationToken);
+                await Task.WhenAll(quoteTask, newsTask);
+
+                var (price, changePercent) = quoteTask.Result;
+                var news = newsTask.Result;
+
+                return new SymbolOverviewDto
+                {
+                    Symbol = symbol,
+                    Exchange = "US",
+                    CurrentPrice = price,
+                    ChangePercent = changePercent,
+                    News = news
+                };
+            });
+
+            overview.Popular.AddRange(await Task.WhenAll(popularTasks));
+        }
+
+        private static List<InvestmentCurrencyTotalDto> BuildTotals(
+            IEnumerable<InvestmentHoldingOverviewDto> holdings)
+        {
+            return holdings
+                .GroupBy(x => string.IsNullOrWhiteSpace(x.Currency) ? "USD" : x.Currency.ToUpperInvariant())
+                .Select(group => new InvestmentCurrencyTotalDto
+                {
+                    Currency = group.Key,
+                    MarketValue = group.Sum(x => x.MarketValue),
+                    CostBasis = group.Sum(x => x.CostBasis),
+                    UnrealizedPnL = group.Sum(x => x.UnrealizedPnL),
+                    Positions = group.Count()
+                })
+                .OrderByDescending(x => x.MarketValue)
+                .ThenBy(x => x.Currency)
+                .ToList();
+        }
+
+        private async Task<List<InvestmentPerformancePointDto>> BuildPerformanceAsync(
+            string userId,
+            IReadOnlyList<InvestmentCurrencyTotalDto> currentTotals,
+            CancellationToken cancellationToken)
+        {
+            var endUtc = DateTime.UtcNow.Date.AddDays(1);
+            var startUtc = endUtc.AddDays(-90);
+            var snapshots = await _plaidInvestmentRepository.GetPortfolioSnapshotsAsync(
+                userId,
+                startUtc,
+                endUtc,
+                cancellationToken);
+
+            var result = snapshots
+                .Select(snapshot => new InvestmentPerformancePointDto
+                {
+                    SnapshotDateUtc = snapshot.SnapshotDateUtc,
+                    Label = snapshot.SnapshotDateUtc.ToString("MMM d"),
+                    Currency = snapshot.Currency,
+                    MarketValue = snapshot.MarketValue,
+                    CostBasis = snapshot.CostBasis,
+                    UnrealizedPnL = snapshot.UnrealizedPnL
+                })
+                .ToList();
+
+            if (result.Count == 0 && currentTotals.Count > 0)
+            {
+                var today = DateTime.UtcNow.Date;
+                result.AddRange(currentTotals.Select(total => new InvestmentPerformancePointDto
+                {
+                    SnapshotDateUtc = today,
+                    Label = today.ToString("MMM d"),
+                    Currency = total.Currency,
+                    MarketValue = total.MarketValue,
+                    CostBasis = total.CostBasis,
+                    UnrealizedPnL = total.UnrealizedPnL
+                }));
+            }
+
+            return result;
         }
 
         private int GetInt(string key, int defaultValue)
@@ -243,10 +460,56 @@ namespace BulldogFinance.Functions.Services.Investments
             return result;
         }
 
+        private static bool IsFinnhubSupported(
+            string symbol,
+            string? exchange,
+            string? marketIdentifierCode)
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(marketIdentifierCode))
+            {
+                return UsMarketIdentifierCodes.Contains(marketIdentifierCode);
+            }
+
+            if (!string.IsNullOrWhiteSpace(exchange))
+            {
+                return string.Equals(exchange, "US", StringComparison.OrdinalIgnoreCase);
+            }
+
+            return !symbol.Contains('.') && !symbol.Contains(':');
+        }
+
+        private static string ResolveExchange(string? marketIdentifierCode)
+        {
+            if (string.IsNullOrWhiteSpace(marketIdentifierCode))
+            {
+                return "Plaid";
+            }
+
+            if (UsMarketIdentifierCodes.Contains(marketIdentifierCode))
+            {
+                return "US";
+            }
+
+            if (CanadianMarketIdentifierCodes.Contains(marketIdentifierCode))
+            {
+                return "CA";
+            }
+
+            return marketIdentifierCode.ToUpperInvariant();
+        }
+
+        private static string SecurityLookupKey(string itemId, string securityId) =>
+            $"{itemId}|{securityId}";
+
         private class FinnhubQuoteResponse
         {
-            public double c { get; set; }   // current price
-            public double dp { get; set; }  // percent change
+            public double c { get; set; }
+            public double dp { get; set; }
         }
 
         private class FinnhubNewsItem

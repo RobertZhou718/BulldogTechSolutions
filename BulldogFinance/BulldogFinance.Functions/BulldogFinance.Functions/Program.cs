@@ -145,9 +145,11 @@ var host = new HostBuilder()
         services.AddSingleton<INativeAuthApiProxyService, NativeAuthApiProxyService>();
         services.AddSingleton<IInvestmentService, InvestmentService>();
         services.AddSingleton<IInvestmentOverviewService, InvestmentOverviewService>();
+        services.AddSingleton<IPlaidInvestmentRepository, PlaidInvestmentRepository>();
         services.AddSingleton<IPlaidTokenProtector, PlaidTokenProtector>();
         services.AddSingleton<IPlaidClientFactory, PlaidClientFactory>();
         services.AddSingleton<IPlaidSyncService, PlaidSyncService>();
+        services.AddSingleton<IPlaidInvestmentSyncService, PlaidInvestmentSyncService>();
 
         services.AddSingleton<IAiClient, AzureOpenAiClient>();
         services.AddSingleton(sp => (AzureOpenAiClient)sp.GetRequiredService<IAiClient>());

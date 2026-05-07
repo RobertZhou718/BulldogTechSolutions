@@ -50,10 +50,16 @@ namespace BulldogFinance.Functions.Functions
                 }
             }
 
-            var countryCodes = (requestModel?.CountryCodes?.Length > 0 ? requestModel.CountryCodes : new[] { "CA" })
+            var countryCodes = (requestModel?.CountryCodes?.Length > 0 ? requestModel.CountryCodes : new[] { "CA", "US" })
                 .Select(ParseCountryCode).ToArray();
             var products = (requestModel?.Products?.Length > 0 ? requestModel.Products : new[] { "transactions" })
                 .Select(ParseProduct).ToArray();
+            var additionalConsentedProducts = (requestModel?.AdditionalConsentedProducts?.Length > 0
+                    ? requestModel.AdditionalConsentedProducts
+                    : new[] { "investments" })
+                .Select(ParseProduct)
+                .Where(product => !products.Contains(product))
+                .ToArray();
 
             var plaidRequest = new LinkTokenCreateRequest
             {
@@ -61,6 +67,7 @@ namespace BulldogFinance.Functions.Functions
                 Language = Language.English,
                 CountryCodes = countryCodes,
                 Products = products,
+                AdditionalConsentedProducts = additionalConsentedProducts,
                 User = new LinkTokenCreateRequestUser
                 {
                     ClientUserId = userId

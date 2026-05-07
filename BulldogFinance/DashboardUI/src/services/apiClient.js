@@ -271,6 +271,13 @@ export function useApiClient() {
         });
     }, [request]);
 
+    const syncPlaidInvestments = useCallback((payload = {}) => {
+        return request("/plaid/sync-investments", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    }, [request]);
+
     // Investment APIs.
     const getInvestments = useCallback(() => {
         return request("/investments", { method: "GET" });
@@ -312,6 +319,16 @@ export function useApiClient() {
         return request("/investments/overview", { method: "GET", ...options });
     }, [request]);
 
+    const getInvestmentActivity = useCallback((params = {}, options = {}) => {
+        const search = new URLSearchParams();
+        if (params.days) search.set("days", params.days);
+        if (params.limit) search.set("limit", params.limit);
+
+        const qs = search.toString();
+        const path = qs ? `/investments/activity?${qs}` : "/investments/activity";
+        return request(path, { method: "GET", ...options });
+    }, [request]);
+
     const sendChatMessage = useCallback((payload) => {
         return request("/chat", {
             method: "POST",
@@ -351,6 +368,7 @@ export function useApiClient() {
         exchangePlaidPublicToken,
         syncPlaidTransactions,
         refreshPlaidBalances,
+        syncPlaidInvestments,
         getInvestments,
         upsertInvestment,
         deleteInvestment,
@@ -358,6 +376,7 @@ export function useApiClient() {
         addToWatchlist,
         removeFromWatchlist,
         getInvestmentOverview,
+        getInvestmentActivity,
         sendChatMessage,
         getChatConversations,
         getChatConversation,
@@ -376,6 +395,7 @@ export function useApiClient() {
         getChatConversation,
         getChatConversations,
         getInvestmentOverview,
+        getInvestmentActivity,
         getInvestments,
         getLatestReport,
         getMe,
@@ -384,6 +404,7 @@ export function useApiClient() {
         postOnboarding,
         archiveSavingsGoal,
         refreshPlaidBalances,
+        syncPlaidInvestments,
         removeFromWatchlist,
         sendChatMessage,
         syncPlaidTransactions,

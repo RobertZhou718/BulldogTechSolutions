@@ -231,24 +231,58 @@ export default function DashboardPage() {
         };
     }, [defaultCurrency, transactions]);
 
-    const holdings = overview?.holdings ?? overview?.Holdings ?? [];
-    const investmentLabels = holdings.map((holding) => holding.symbol ?? holding.Symbol ?? "Holding");
-    const portfolioSeries = [
-        {
-            label: "Market value",
-            data: holdings.map((holding) => Number(holding.marketValue ?? holding.MarketValue ?? 0)),
-            color: "#1570ef",
-        },
-        {
-            label: "Cost basis",
-            data: holdings.map((holding) => {
-                const quantity = Number(holding.quantity ?? holding.Quantity ?? 0);
-                const avgCost = Number(holding.avgCost ?? holding.AvgCost ?? 0);
-                return quantity * avgCost;
-            }),
-            color: "#12b76a",
-        },
-    ];
+    const holdings = useMemo(
+        () => overview?.holdings ?? overview?.Holdings ?? [],
+        [overview]
+    );
+    const performancePoints = useMemo(
+        () => overview?.performance ?? overview?.Performance ?? [],
+        [overview]
+    );
+    const investmentChartData = useMemo(() => {
+        if (Array.isArray(performancePoints) && performancePoints.length > 0) {
+            const labels = Array.from(
+                new Set(performancePoints.map((point) => point.Label ?? point.label ?? "Today"))
+            );
+            const currencies = Array.from(
+                new Set(performancePoints.map((point) => point.Currency ?? point.currency ?? "USD"))
+            );
+            const marketSeries = currencies.map((currency, index) => ({
+                label: currencies.length > 1 ? `Market value (${currency})` : "Market value",
+                data: labels.map((label) => {
+                    const point = performancePoints.find((candidate) =>
+                        (candidate.Label ?? candidate.label ?? "Today") === label &&
+                        (candidate.Currency ?? candidate.currency ?? "USD") === currency
+                    );
+                    return Number(point?.MarketValue ?? point?.marketValue ?? 0);
+                }),
+                color: ["#1570ef", "#12b76a", "#f79009", "#7a5af8"][index % 4],
+            }));
+
+            return {
+                labels,
+                series: marketSeries,
+                description: "Daily snapshots from connected investment accounts.",
+            };
+        }
+
+        return {
+            labels: holdings.map((holding) => holding.symbol ?? holding.Symbol ?? "Holding"),
+            series: [
+                {
+                    label: "Market value",
+                    data: holdings.map((holding) => Number(holding.marketValue ?? holding.MarketValue ?? 0)),
+                    color: "#1570ef",
+                },
+                {
+                    label: "Cost basis",
+                    data: holdings.map((holding) => Number(holding.costBasis ?? holding.CostBasis ?? 0)),
+                    color: "#12b76a",
+                },
+            ],
+            description: "Current tracked holdings; trend begins after daily Plaid snapshots are available.",
+        };
+    }, [holdings, performancePoints]);
 
     const accountBalanceSummary = useMemo(
         () => summarizeAccountBalances(accounts, defaultCurrency),
@@ -362,8 +396,9 @@ export default function DashboardPage() {
                 </div>
                 <div className="xl:col-span-6">
                     <InvestmentsChart
-                        dates={investmentLabels}
-                        portfolioSeries={portfolioSeries}
+                        dates={investmentChartData.labels}
+                        portfolioSeries={investmentChartData.series}
+                        description={investmentChartData.description}
                     />
                 </div>
                 <ConnectedAccountsCard

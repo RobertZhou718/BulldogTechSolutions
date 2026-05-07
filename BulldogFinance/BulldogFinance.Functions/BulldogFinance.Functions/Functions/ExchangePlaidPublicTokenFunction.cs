@@ -23,6 +23,7 @@ namespace BulldogFinance.Functions.Functions
         private readonly IPlaidClientFactory _plaidClientFactory;
         private readonly IPlaidRepository _plaidRepository;
         private readonly IPlaidSyncService _plaidSyncService;
+        private readonly IPlaidInvestmentSyncService _plaidInvestmentSyncService;
         private readonly IPlaidTokenProtector _tokenProtector;
         private readonly IUserRepository _userRepository;
         private readonly ILogger<ExchangePlaidPublicTokenFunction> _logger;
@@ -31,6 +32,7 @@ namespace BulldogFinance.Functions.Functions
             IPlaidClientFactory plaidClientFactory,
             IPlaidRepository plaidRepository,
             IPlaidSyncService plaidSyncService,
+            IPlaidInvestmentSyncService plaidInvestmentSyncService,
             IPlaidTokenProtector tokenProtector,
             IUserRepository userRepository,
             ILogger<ExchangePlaidPublicTokenFunction> logger)
@@ -38,6 +40,7 @@ namespace BulldogFinance.Functions.Functions
             _plaidClientFactory = plaidClientFactory;
             _plaidRepository = plaidRepository;
             _plaidSyncService = plaidSyncService;
+            _plaidInvestmentSyncService = plaidInvestmentSyncService;
             _tokenProtector = tokenProtector;
             _userRepository = userRepository;
             _logger = logger;
@@ -142,6 +145,7 @@ namespace BulldogFinance.Functions.Functions
             }
 
             var syncSummary = new PlaidSyncSummary();
+            var investmentSummary = new BulldogFinance.Functions.Models.Investments.PlaidInvestmentSyncSummary();
 
             try
             {
@@ -167,6 +171,26 @@ namespace BulldogFinance.Functions.Functions
                     "Plaid transactions sync failed after linking; accounts remain connected and user can retry. UserId={UserId} ItemId={ItemId}",
                     userId,
                     exchange.ItemId);
+            }
+
+            if (importedAccounts.Any(account => IsInvestmentAccount(account.Type)))
+            {
+                try
+                {
+                    investmentSummary = await _plaidInvestmentSyncService.SyncInvestmentsAsync(
+                        userId,
+                        exchange.ItemId,
+                        transactionStartUtc: DateTime.UtcNow.Date.AddDays(-30),
+                        transactionEndUtc: DateTime.UtcNow.Date);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "Plaid investments sync failed after linking; accounts remain connected and user can retry. UserId={UserId} ItemId={ItemId}",
+                        userId,
+                        exchange.ItemId);
+                }
             }
 
             try
@@ -204,10 +228,25 @@ namespace BulldogFinance.Functions.Functions
                 AccountsConnected = importedAccounts.Count,
                 TransactionsAdded = syncSummary.Added,
                 TransactionsModified = syncSummary.Modified,
-                TransactionsRemoved = syncSummary.Removed
+                TransactionsRemoved = syncSummary.Removed,
+                InvestmentHoldingsSynced = investmentSummary.HoldingsSynced,
+                InvestmentSecuritiesSynced = investmentSummary.SecuritiesSynced,
+                InvestmentTransactionsSynced = investmentSummary.InvestmentTransactionsSynced
             }, JsonOptions));
 
             return response;
+        }
+
+        private static bool IsInvestmentAccount(string? accountType)
+        {
+            if (string.IsNullOrWhiteSpace(accountType))
+            {
+                return false;
+            }
+
+            return accountType
+                .Trim()
+                .StartsWith("investment", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

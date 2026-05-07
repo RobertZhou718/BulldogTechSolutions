@@ -10,6 +10,11 @@ import {
 } from "@/components/ui/dialog";
 import { Field, Input } from "@/components/ui/Field.jsx";
 import Spinner from "@/components/ui/Spinner.jsx";
+import { formatCurrency, formatCurrencyBreakdown, formatDateTime } from "@/lib/utils";
+
+const quantityFormatter = new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 6,
+});
 
 export default function HoldingsCard({
     holdings,
@@ -28,15 +33,26 @@ export default function HoldingsCard({
     const list = useMemo(() => holdings || [], [holdings]);
 
     const totals = useMemo(() => {
-        const totalMarketValue = list.reduce(
-            (sum, h) => sum + (h.MarketValue ?? h.marketValue ?? 0),
-            0
-        );
-        const totalPnL = list.reduce(
-            (sum, h) => sum + (h.UnrealizedPnL ?? h.unrealizedPnL ?? 0),
-            0
-        );
-        return { totalMarketValue, totalPnL };
+        const byCurrency = new Map();
+        list.forEach((h) => {
+            const currency = h.Currency ?? h.currency ?? "USD";
+            const current = byCurrency.get(currency) ?? { currency, marketValue: 0, pnl: 0 };
+            current.marketValue += h.MarketValue ?? h.marketValue ?? 0;
+            current.pnl += h.UnrealizedPnL ?? h.unrealizedPnL ?? 0;
+            byCurrency.set(currency, current);
+        });
+
+        const entries = Array.from(byCurrency.values());
+        return {
+            marketValue: formatCurrencyBreakdown(
+                entries.map((entry) => ({ currency: entry.currency, amount: entry.marketValue })),
+                2
+            ),
+            pnl: formatCurrencyBreakdown(
+                entries.map((entry) => ({ currency: entry.currency, amount: entry.pnl })),
+                2
+            ),
+        };
     }, [list]);
 
     const handleChange = (field) => (e) => {
@@ -69,7 +85,7 @@ export default function HoldingsCard({
                             Investments
                         </h2>
                         <p className="mt-2 text-sm text-[var(--text-muted)]">
-                            Total MV: ${totals.totalMarketValue.toFixed(2)} · PnL: ${totals.totalPnL.toFixed(2)}
+                            Total MV: {totals.marketValue} · PnL: {totals.pnl}
                         </p>
                     </div>
 
@@ -93,6 +109,7 @@ export default function HoldingsCard({
                             <thead>
                                 <tr className="bg-[var(--bg-main)] text-left text-xs font-semibold uppercase tracking-[0.06em] text-[var(--text-soft)]">
                                     <th className="px-4 py-3">Symbol</th>
+                                    <th className="px-4 py-3">Account</th>
                                     <th className="px-4 py-3 text-right">Qty</th>
                                     <th className="px-4 py-3 text-right">Avg Cost</th>
                                     <th className="px-4 py-3 text-right">Price</th>
@@ -105,22 +122,54 @@ export default function HoldingsCard({
                             <tbody className="divide-y divide-[var(--card-border)] bg-white text-sm">
                                 {list.map((h) => {
                                     const symbol = h.Symbol ?? h.symbol;
+                                    const holdingId = h.HoldingId ?? h.holdingId ?? symbol;
+                                    const source = h.Source ?? h.source ?? "Manual";
+                                    const securityName = h.SecurityName ?? h.securityName;
+                                    const accountName = h.AccountName ?? h.accountName;
+                                    const institutionName = h.InstitutionName ?? h.institutionName;
                                     const qty = h.Quantity ?? h.quantity ?? 0;
                                     const avgCost = h.AvgCost ?? h.avgCost ?? 0;
                                     const price = h.CurrentPrice ?? h.currentPrice ?? 0;
+                                    const priceAsOf = h.PriceAsOfUtc ?? h.priceAsOfUtc;
+                                    const currency = h.Currency ?? h.currency ?? "USD";
                                     const mv = h.MarketValue ?? h.marketValue ?? qty * price;
                                     const pnl = h.UnrealizedPnL ?? h.unrealizedPnL ?? 0;
                                     const pnlPct = h.UnrealizedPnLPercent ?? h.unrealizedPnLPercent ?? 0;
+                                    const canDelete = h.CanDelete ?? h.canDelete ?? source !== "Plaid";
 
                                     return (
-                                        <tr key={symbol}>
+                                        <tr key={holdingId}>
                                             <td className="px-4 py-4 font-semibold text-[var(--text-main)]">
-                                                {symbol}
+                                                <div>
+                                                    <p>{symbol}</p>
+                                                    {securityName ? (
+                                                        <p className="mt-1 max-w-48 truncate text-xs font-normal text-[var(--text-soft)]">
+                                                            {securityName}
+                                                        </p>
+                                                    ) : null}
+                                                </div>
                                             </td>
-                                            <td className="px-4 py-4 text-right">{qty}</td>
-                                            <td className="px-4 py-4 text-right">{avgCost.toFixed(2)}</td>
-                                            <td className="px-4 py-4 text-right">{price ? price.toFixed(2) : "-"}</td>
-                                            <td className="px-4 py-4 text-right">{mv ? mv.toFixed(2) : "-"}</td>
+                                            <td className="px-4 py-4">
+                                                <p className="text-sm text-[var(--text-main)]">
+                                                    {accountName || source}
+                                                </p>
+                                                <p className="mt-1 text-xs text-[var(--text-soft)]">
+                                                    {institutionName || source}
+                                                </p>
+                                            </td>
+                                            <td className="px-4 py-4 text-right">{quantityFormatter.format(qty)}</td>
+                                            <td className="px-4 py-4 text-right">{avgCost ? formatCurrency(avgCost, currency, 2) : "-"}</td>
+                                            <td className="px-4 py-4 text-right">
+                                                <div>
+                                                    <p>{price ? formatCurrency(price, currency, 2) : "-"}</p>
+                                                    {priceAsOf ? (
+                                                        <p className="mt-1 text-xs text-[var(--text-soft)]">
+                                                            {formatDateTime(priceAsOf)}
+                                                        </p>
+                                                    ) : null}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4 text-right">{mv ? formatCurrency(mv, currency, 2) : "-"}</td>
                                             <td
                                                 className={`px-4 py-4 text-right font-semibold ${
                                                     pnl >= 0
@@ -128,7 +177,7 @@ export default function HoldingsCard({
                                                         : "text-[var(--color-error-700)]"
                                                 }`}
                                             >
-                                                {pnl ? pnl.toFixed(2) : "-"}
+                                                {pnl ? formatCurrency(pnl, currency, 2) : "-"}
                                             </td>
                                             <td
                                                 className={`px-4 py-4 text-right font-semibold ${
@@ -140,14 +189,18 @@ export default function HoldingsCard({
                                                 {pnlPct ? `${pnlPct.toFixed(2)}%` : "-"}
                                             </td>
                                             <td className="px-4 py-4 text-right">
-                                                <Button
-                                                    variant="ghost"
-                                                    className="px-3 py-1.5 text-sm"
-                                                    onClick={() => onDelete?.(symbol)}
-                                                    disabled={saving}
-                                                >
-                                                    Remove
-                                                </Button>
+                                                {canDelete ? (
+                                                    <Button
+                                                        variant="ghost"
+                                                        className="px-3 py-1.5 text-sm"
+                                                        onClick={() => onDelete?.(symbol)}
+                                                        disabled={saving}
+                                                    >
+                                                        Remove
+                                                    </Button>
+                                                ) : (
+                                                    <span className="text-xs text-[var(--text-soft)]">Plaid sync</span>
+                                                )}
                                             </td>
                                         </tr>
                                     );
