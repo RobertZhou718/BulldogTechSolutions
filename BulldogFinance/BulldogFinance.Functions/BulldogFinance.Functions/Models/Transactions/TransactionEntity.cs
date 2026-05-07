@@ -45,6 +45,21 @@ namespace BulldogFinance.Functions.Models.Transactions
         public string TransactionId { get; set; } = default!;
         public string AccountId { get; set; } = default!;
         public DateTime OccurredAtUtc { get; set; }
-        public DateTime UpdatedAtUtc { get; set; }
+
+        public string? Type { get; set; }
+        public long AmountCents { get; set; }
+        public string? Currency { get; set; }
+        public string? Category { get; set; }
+        public string? Note { get; set; }
+        public string? MerchantName { get; set; }
+        public string? Source { get; set; }
+        public string? ExternalTransactionId { get; set; }
+        public string? ExternalAccountId { get; set; }
+        public bool Pending { get; set; }
+        public DateTime? AuthorizedAtUtc { get; set; }
+        public DateTime? PostedAtUtc { get; set; }
+        public DateTime? CreatedAtUtc { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
+        public bool IsSystemGenerated { get; set; }
     }
 }
