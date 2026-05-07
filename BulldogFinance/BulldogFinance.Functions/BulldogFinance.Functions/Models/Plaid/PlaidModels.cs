@@ -90,6 +90,7 @@ namespace BulldogFinance.Functions.Models.Plaid
         public int InvestmentHoldingsSynced { get; set; }
         public int InvestmentSecuritiesSynced { get; set; }
         public int InvestmentTransactionsSynced { get; set; }
+        public bool BackgroundSyncQueued { get; set; }
     }
 
     public class PlaidWebhookRequest

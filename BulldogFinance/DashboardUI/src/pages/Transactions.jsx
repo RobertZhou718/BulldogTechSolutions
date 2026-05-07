@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import TransactionFilters from "@/components/transactions/TransactionFilters.jsx";
 import TransactionForm from "@/components/transactions/TransactionForm.jsx";
 import TransactionTable from "@/components/transactions/TransactionTable.jsx";
 import LatestReportCard from "@/components/reports/LatestReportCard.jsx";
@@ -231,12 +230,6 @@ export default function TransactionsPage() {
                     onSubmit={handleCreateTransaction}
                 />
 
-                <TransactionFilters
-                    filters={filters}
-                    onChange={setFilters}
-                    onReset={() => setFilters({ type: "ALL", from: "", to: "", category: "" })}
-                />
-
                 {loadingTx ? (
                     <div className="space-y-2">
                         <Skeleton className="h-10 rounded-[var(--radius-lg)]" />
@@ -255,6 +248,9 @@ export default function TransactionsPage() {
                             setSortField(field);
                             setSortDirection(direction);
                         }}
+                        filters={filters}
+                        onFiltersChange={setFilters}
+                        onResetFilters={() => setFilters({ type: "ALL", from: "", to: "", category: "" })}
                     />
                 )}
             </div>

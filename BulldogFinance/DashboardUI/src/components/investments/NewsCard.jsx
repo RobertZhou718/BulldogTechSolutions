@@ -1,7 +1,10 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import Card from "@/components/ui/Card.jsx";
 
+const COLLAPSED_COUNT = 3;
+
 export default function NewsCard({ overview, loading }) {
+    const [expanded, setExpanded] = useState(false);
     const items = useMemo(() => {
         if (!overview) return [];
 
@@ -43,6 +46,9 @@ export default function NewsCard({ overview, loading }) {
             .slice(0, 8);
     }, [overview]);
 
+    const visibleItems = expanded ? items : items.slice(0, COLLAPSED_COUNT);
+    const hiddenCount = Math.max(items.length - COLLAPSED_COUNT, 0);
+
     return (
         <Card className="h-full">
             <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
@@ -58,16 +64,16 @@ export default function NewsCard({ overview, loading }) {
             {loading && items.length === 0 ? (
                 <p className="mt-6 text-sm text-[var(--text-muted)]">Loading news...</p>
             ) : items.length === 0 ? (
-                <p className="mt-6 text-sm text-[var(--text-muted)]">No recent news available.</p>
+                <p className="mt-6 text-sm text-[var(--text-muted)]">No recent market headlines.</p>
             ) : (
                 <div className="mt-6 space-y-4">
-                    {items.map((item) => (
+                    {visibleItems.map((item) => (
                         <a
                             key={`${item.id}-${item.symbol}`}
                             href={item.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="block rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-4 transition hover:border-[#b2ddff] hover:bg-white"
+                            className="block rounded-2xl border border-[var(--card-border)] bg-[var(--bg-main)] px-4 py-4 transition hover:border-[#b2ddff] hover:bg-[var(--card-bg-strong)]"
                         >
                             <div className="flex items-start gap-3">
                                 <span className="inline-flex rounded-full bg-[var(--brand-soft)] px-2.5 py-1 text-xs font-medium text-[var(--brand)]">
@@ -85,6 +91,19 @@ export default function NewsCard({ overview, loading }) {
                             </div>
                         </a>
                     ))}
+
+                    {hiddenCount > 0 ? (
+                        <div className="flex justify-end">
+                            <button
+                                type="button"
+                                aria-expanded={expanded}
+                                onClick={() => setExpanded((current) => !current)}
+                                className="min-h-9 rounded-full px-3 text-sm font-semibold text-[var(--brand)] transition hover:bg-[var(--brand-soft)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
+                            >
+                                {expanded ? "Collapse" : `+${hiddenCount} more`}
+                            </button>
+                        </div>
+                    ) : null}
                 </div>
             )}
         </Card>

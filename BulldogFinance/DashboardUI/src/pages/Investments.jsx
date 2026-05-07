@@ -3,7 +3,6 @@ import HoldingsCard from "@/components/investments/HoldingsCard.jsx";
 import InvestmentActivityCard from "@/components/investments/InvestmentActivityCard.jsx";
 import NewsCard from "@/components/investments/NewsCard.jsx";
 import WatchlistCard from "@/components/investments/WatchlistCard.jsx";
-import MetricCard from "@/components/ui/MetricCard.jsx";
 import PageHeader from "@/components/ui/PageHeader.jsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatCurrencyBreakdown } from "@/lib/utils";
@@ -115,16 +114,14 @@ export default function InvestmentsPage() {
                     <Skeleton className="h-4 w-24" />
                     <Skeleton className="h-9 w-72" />
                     <Skeleton className="h-4 w-[28rem] max-w-full" />
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
-                        <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
-                        <Skeleton className="h-24 rounded-[var(--radius-2xl)]" />
-                    </div>
                 </div>
-                <div className="grid gap-6 xl:grid-cols-12">
-                    <Skeleton className="h-80 rounded-[var(--radius-2xl)] xl:col-span-7" />
-                    <Skeleton className="h-80 rounded-[var(--radius-2xl)] xl:col-span-5" />
-                    <Skeleton className="h-64 rounded-[var(--radius-2xl)] xl:col-span-5 xl:col-start-8" />
+                <div className="grid grid-cols-1 gap-6">
+                    <Skeleton className="h-80 rounded-[var(--radius-2xl)]" />
+                    <div className="grid gap-6 xl:grid-cols-12">
+                        <Skeleton className="h-72 rounded-[var(--radius-2xl)] xl:col-span-5" />
+                        <Skeleton className="h-72 rounded-[var(--radius-2xl)] xl:col-span-7" />
+                    </div>
+                    <Skeleton className="h-64 rounded-[var(--radius-2xl)]" />
                 </div>
             </div>
         );
@@ -136,58 +133,41 @@ export default function InvestmentsPage() {
                 eyebrow="Investments"
                 title="Portfolio overview"
                 description="Track your positions, watchlist, and market context from a single portfolio workspace."
-            >
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    <MetricCard
-                        label="Total market value"
-                        value={totals.marketValueLabel}
-                    />
-                    <MetricCard
-                        label="Unrealized PnL"
-                        value={totals.pnlLabel}
-                        tone={totals.pnlTone}
-                    />
-                    <MetricCard label="Positions" value={totals.positions} />
-                </div>
-            </PageHeader>
+            />
 
-            <div className="grid gap-6 xl:grid-cols-12">
-                <div className="xl:col-span-7">
-                    <HoldingsCard
-                        holdings={holdings}
-                        loading={loading}
-                        saving={saving}
-                        onAdd={(payload) => withSave(() => upsertInvestment(payload), "Failed to save investment.")}
-                        onDelete={(symbol) => withSave(() => deleteInvestment(symbol), "Failed to delete investment.")}
-                    />
-                </div>
+            <div className="grid grid-cols-1 gap-6">
+                <HoldingsCard
+                    holdings={holdings}
+                    loading={loading}
+                    saving={saving}
+                    totals={totals}
+                    onAdd={(payload) => withSave(() => upsertInvestment(payload), "Failed to save investment.")}
+                    onDelete={(symbol) => withSave(() => deleteInvestment(symbol), "Failed to delete investment.")}
+                />
 
-                <div className="xl:col-span-5">
-                    <WatchlistCard
-                        items={watchlist}
-                        loading={loading}
-                        saving={saving}
-                        onAdd={(symbol, exchange) =>
-                            withSave(
-                                () => addToWatchlist({ symbol, exchange }),
-                                "Failed to add watchlist item."
-                            )
-                        }
-                        onDelete={(symbol) =>
-                            withSave(() => removeFromWatchlist(symbol), "Failed to remove watchlist item.")
-                        }
-                    />
+                <div className="grid gap-6 xl:grid-cols-12">
+                    <div className="xl:col-span-5">
+                        <WatchlistCard
+                            items={watchlist}
+                            loading={loading}
+                            saving={saving}
+                            onAdd={(symbol, exchange) =>
+                                withSave(
+                                    () => addToWatchlist({ symbol, exchange }),
+                                    "Failed to add watchlist item."
+                                )
+                            }
+                            onDelete={(symbol) =>
+                                withSave(() => removeFromWatchlist(symbol), "Failed to remove watchlist item.")
+                            }
+                        />
+                    </div>
+                    <div className="xl:col-span-7">
+                        <NewsCard overview={overview} loading={loading} />
+                    </div>
                 </div>
 
-                <div className="xl:col-span-7" />
-
-                <div className="xl:col-span-5">
-                    <NewsCard overview={overview} loading={loading} />
-                </div>
-
-                <div className="xl:col-span-12">
-                    <InvestmentActivityCard items={activity} loading={loading} />
-                </div>
+                <InvestmentActivityCard items={activity} loading={loading} />
             </div>
         </div>
     );
