@@ -118,6 +118,45 @@ namespace BulldogFinance.Functions.Services.Chat
             };
         }
 
+        public async Task<bool> DeleteConversationAsync(
+            string userId,
+            string conversationId,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(conversationId))
+            {
+                return false;
+            }
+
+            var conversation = await GetConversationEntityAsync(userId, conversationId, ct);
+            if (conversation is null)
+            {
+                return false;
+            }
+
+            var messagePartitionKey = BuildMessagePartitionKey(userId, conversationId);
+            var messages = _messagesTable.QueryAsync<ChatMessageEntity>(
+                entity => entity.PartitionKey == messagePartitionKey,
+                cancellationToken: ct);
+
+            await foreach (var message in messages)
+            {
+                await DeleteEntityIfExistsAsync(
+                    _messagesTable,
+                    message.PartitionKey,
+                    message.RowKey,
+                    ct);
+            }
+
+            await DeleteEntityIfExistsAsync(
+                _conversationsTable,
+                conversation.PartitionKey,
+                conversation.RowKey,
+                ct);
+
+            return true;
+        }
+
         public async Task AppendUserMessageAsync(
             ChatContextDto context,
             string message,
@@ -228,6 +267,21 @@ namespace BulldogFinance.Functions.Services.Chat
             };
 
             await _messagesTable.AddEntityAsync(entity, ct);
+        }
+
+        private static async Task DeleteEntityIfExistsAsync(
+            TableClient table,
+            string partitionKey,
+            string rowKey,
+            CancellationToken ct)
+        {
+            try
+            {
+                await table.DeleteEntityAsync(partitionKey, rowKey, ETag.All, ct);
+            }
+            catch (RequestFailedException ex) when (ex.Status == 404)
+            {
+            }
         }
 
         private async Task TouchConversationAsync(

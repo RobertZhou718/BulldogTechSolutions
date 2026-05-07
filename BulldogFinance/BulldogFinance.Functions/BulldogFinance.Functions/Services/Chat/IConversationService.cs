@@ -18,6 +18,11 @@ namespace BulldogFinance.Functions.Services.Chat
             string conversationId,
             CancellationToken ct = default);
 
+        Task<bool> DeleteConversationAsync(
+            string userId,
+            string conversationId,
+            CancellationToken ct = default);
+
         Task AppendUserMessageAsync(
             ChatContextDto context,
             string message,

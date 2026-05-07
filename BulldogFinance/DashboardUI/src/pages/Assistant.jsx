@@ -1,10 +1,12 @@
 import React from "react";
+import { Trash01 } from "@untitledui/icons";
 import ChatbotPanel from "@/components/chat/ChatbotPanel.jsx";
 import { useChatbot } from "@/components/chat/chatbotContext.js";
 import Card from "@/components/ui/Card.jsx";
 import PageHeader from "@/components/ui/PageHeader.jsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const starterPrompts = [
     "Summarize my latest spending patterns.",
@@ -19,7 +21,10 @@ export default function AssistantPage() {
         conversationId,
         activeConversationTitle,
         openConversation,
+        deleteConversation,
         startNewConversation,
+        deletingConversationId,
+        isSending,
         isLoadingHistory,
         isLoadingConversations,
     } = useChatbot();
@@ -68,26 +73,48 @@ export default function AssistantPage() {
                                     const itemTitle = conversation?.title ?? conversation?.Title ?? "Untitled chat";
                                     const updatedAtUtc = conversation?.updatedAtUtc ?? conversation?.UpdatedAtUtc;
                                     const isActive = itemConversationId === conversationId;
+                                    const isDeleting = deletingConversationId === itemConversationId;
 
                                     return (
-                                        <button
+                                        <div
                                             key={itemConversationId}
-                                            type="button"
-                                            onClick={() => openConversation(itemConversationId)}
-                                            disabled={isLoadingHistory}
-                                            className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+                                            className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center rounded-2xl border transition ${
                                                 isActive
                                                     ? "border-[#b2ddff] bg-white"
                                                     : "border-[var(--card-border)] bg-[var(--bg-main)] hover:border-[#b2ddff] hover:bg-white"
                                             }`}
                                         >
-                                            <p className="text-sm font-semibold text-[var(--text-main)]">
-                                                {itemTitle}
-                                            </p>
-                                            <p className="mt-1 text-xs text-[var(--text-soft)]">
-                                                {updatedAtUtc ? `Updated ${new Date(updatedAtUtc).toLocaleString()}` : "Saved chat"}
-                                            </p>
-                                        </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => openConversation(itemConversationId)}
+                                                disabled={isLoadingHistory || isDeleting}
+                                                className="min-w-0 px-4 py-4 text-left disabled:cursor-not-allowed disabled:opacity-60"
+                                            >
+                                                <p className="truncate text-sm font-semibold text-[var(--text-main)]">
+                                                    {itemTitle}
+                                                </p>
+                                                <p className="mt-1 truncate text-xs text-[var(--text-soft)]">
+                                                    {updatedAtUtc ? `Updated ${new Date(updatedAtUtc).toLocaleString()}` : "Saved chat"}
+                                                </p>
+                                            </button>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="mr-2 rounded-full text-[var(--text-soft)] hover:text-[var(--color-error-700)]"
+                                                        onClick={() => deleteConversation(itemConversationId)}
+                                                        disabled={isLoadingHistory || isSending || isDeleting}
+                                                        aria-label={`Delete ${itemTitle}`}
+                                                        aria-busy={isDeleting ? "true" : undefined}
+                                                    >
+                                                        <Trash01 className="h-4 w-4" />
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>Delete chat</TooltipContent>
+                                            </Tooltip>
+                                        </div>
                                     );
                                 })
                             )}
