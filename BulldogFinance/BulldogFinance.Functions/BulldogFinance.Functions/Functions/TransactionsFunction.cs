@@ -1,4 +1,5 @@
 ﻿using BulldogFinance.Functions.Helper;
+using BulldogFinance.Functions.Models.Accounts;
 using BulldogFinance.Functions.Models.Transactions;
 using BulldogFinance.Functions.Services.Accounts;
 using BulldogFinance.Functions.Services.Transactions;
@@ -20,6 +21,21 @@ namespace BulldogFinance.Functions.Functions
             PropertyNameCaseInsensitive = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
+
+        private static readonly string[] BankManagedUpdateFields =
+        [
+            "accountId",
+            "type",
+            "amount",
+            "currency",
+            "occurredAtUtc",
+            "authorizedAtUtc",
+            "postedAtUtc",
+            "pending",
+            "source",
+            "externalTransactionId",
+            "externalAccountId"
+        ];
 
         public TransactionsFunction(
             IAccountRepository accountRepository,
@@ -70,6 +86,9 @@ namespace BulldogFinance.Functions.Functions
             if (account == null || account.IsArchived)
                 return await ApiResponse.NotFoundAsync(req, "Account not found or archived.");
 
+            if (IsConnectedAccount(account))
+                return await ApiResponse.BadRequestAsync(req, "Manual transactions can only be created for manual accounts.");
+
             var now = DateTime.UtcNow;
             var occurredAt = requestModel.OccurredAtUtc ?? now;
 
@@ -107,22 +126,9 @@ namespace BulldogFinance.Functions.Functions
             var balanceDelta = typeUpper == "INCOME" ? amountCents : -amountCents;
             account = await ApplyBalanceDeltaWithRetryAsync(userId, account.RowKey, balanceDelta, now);
 
-            var dto = new TransactionDto
-            {
-                TransactionId = transactionId,
-                AccountId = account.RowKey,
-                Type = typeUpper,
-                Amount = amountCents / 100m,
-                Currency = currency,
-                Category = requestModel.Category,
-                Note = requestModel.Note,
-                OccurredAtUtc = occurredAt,
-                CreatedAtUtc = now
-            };
-
             var result = new CreateTransactionResponse
             {
-                Transaction = dto,
+                Transaction = ToDto(transactionEntity),
                 AccountBalanceAfter = account.CurrentBalanceCents / 100m
             };
 
@@ -162,6 +168,149 @@ namespace BulldogFinance.Functions.Functions
             }
 
             throw new InvalidOperationException("The account balance could not be updated due to a concurrency conflict.");
+        }
+
+        [Function("UpdateTransaction")]
+        public async Task<HttpResponseData> Update(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "patch", Route = "transactions/{transactionId}")]
+            HttpRequestData req,
+            string transactionId)
+        {
+            var userId = AuthHelper.GetUserId(req);
+            if (string.IsNullOrWhiteSpace(userId))
+                return await ApiResponse.UnauthorizedAsync(req);
+
+            var transaction = await _transactionRepository.GetTransactionAsync(userId, transactionId);
+            if (transaction == null || transaction.IsDeleted)
+                return await ApiResponse.NotFoundAsync(req, "Transaction not found.");
+
+            var account = await _accountRepository.GetAccountAsync(userId, transaction.AccountId);
+            if (account == null || account.IsArchived)
+                return await ApiResponse.NotFoundAsync(req, "Account not found or archived.");
+
+            string body;
+            using (var reader = new StreamReader(req.Body))
+            {
+                body = await reader.ReadToEndAsync();
+            }
+
+            if (string.IsNullOrWhiteSpace(body))
+                return await ApiResponse.BadRequestAsync(req, "Request body is empty.");
+
+            JsonDocument document;
+            TransactionUpdateRequest? requestModel;
+            try
+            {
+                document = JsonDocument.Parse(body);
+                requestModel = JsonSerializer.Deserialize<TransactionUpdateRequest>(body, JsonOptions);
+            }
+            catch (JsonException)
+            {
+                return await ApiResponse.BadRequestAsync(req, "Invalid JSON.");
+            }
+
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                return await ApiResponse.BadRequestAsync(req, "Request body must be a JSON object.");
+
+            if (requestModel == null)
+                return await ApiResponse.BadRequestAsync(req, "Invalid request body.");
+
+            var isConnectedTransaction = IsConnectedTransaction(transaction, account);
+            var now = DateTime.UtcNow;
+
+            if (isConnectedTransaction)
+            {
+                if (ContainsAnyProperty(document.RootElement, BankManagedUpdateFields))
+                {
+                    return await ApiResponse.BadRequestAsync(
+                        req,
+                        "Connected account transactions are managed by bank sync. Only category, note, and merchant name can be edited.");
+                }
+
+                ApplyMetadataUpdates(document.RootElement, transaction);
+                transaction.UpdatedAtUtc = now;
+                await _transactionRepository.UpdateTransactionAsync(transaction);
+                return await WriteJsonAsync(req, new { transaction = ToDto(transaction) });
+            }
+
+            if (transaction.IsSystemGenerated)
+                return await ApiResponse.BadRequestAsync(req, "System-generated transactions cannot be edited.");
+
+            var oldSignedAmountCents = GetSignedAmountCents(transaction);
+
+            if (TryGetPropertyIgnoreCase(document.RootElement, "type", out _))
+            {
+                var typeUpper = (requestModel.Type ?? string.Empty).Trim().ToUpperInvariant();
+                if (typeUpper != "INCOME" && typeUpper != "EXPENSE")
+                    return await ApiResponse.BadRequestAsync(req, "Type must be INCOME or EXPENSE.");
+
+                transaction.Type = typeUpper;
+            }
+
+            if (TryGetPropertyIgnoreCase(document.RootElement, "amount", out _))
+            {
+                if (!requestModel.Amount.HasValue || requestModel.Amount.Value <= 0)
+                    return await ApiResponse.BadRequestAsync(req, "Amount must be positive.");
+
+                transaction.AmountCents = (long)decimal.Round(
+                    requestModel.Amount.Value * 100m,
+                    0,
+                    MidpointRounding.AwayFromZero);
+            }
+
+            if (TryGetPropertyIgnoreCase(document.RootElement, "occurredAtUtc", out _))
+            {
+                transaction.OccurredAtUtc = requestModel.OccurredAtUtc;
+            }
+
+            ApplyMetadataUpdates(document.RootElement, transaction);
+            transaction.UpdatedAtUtc = now;
+            await _transactionRepository.UpdateTransactionAsync(transaction);
+
+            var balanceDeltaCents = GetSignedAmountCents(transaction) - oldSignedAmountCents;
+            if (balanceDeltaCents != 0)
+            {
+                account = await ApplyBalanceDeltaWithRetryAsync(userId, account.RowKey, balanceDeltaCents, now);
+            }
+
+            return await WriteJsonAsync(req, new
+            {
+                transaction = ToDto(transaction),
+                accountBalanceAfter = account.CurrentBalanceCents / 100m
+            });
+        }
+
+        [Function("DeleteTransaction")]
+        public async Task<HttpResponseData> Delete(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "transactions/{transactionId}")]
+            HttpRequestData req,
+            string transactionId)
+        {
+            var userId = AuthHelper.GetUserId(req);
+            if (string.IsNullOrWhiteSpace(userId))
+                return await ApiResponse.UnauthorizedAsync(req);
+
+            var transaction = await _transactionRepository.GetTransactionAsync(userId, transactionId);
+            if (transaction == null || transaction.IsDeleted)
+                return await ApiResponse.NotFoundAsync(req, "Transaction not found.");
+
+            var account = await _accountRepository.GetAccountAsync(userId, transaction.AccountId);
+            if (account == null || account.IsArchived)
+                return await ApiResponse.NotFoundAsync(req, "Account not found or archived.");
+
+            if (IsConnectedTransaction(transaction, account))
+                return await ApiResponse.BadRequestAsync(req, "Connected account transactions cannot be deleted.");
+
+            if (transaction.IsSystemGenerated)
+                return await ApiResponse.BadRequestAsync(req, "System-generated transactions cannot be deleted.");
+
+            var now = DateTime.UtcNow;
+            transaction.IsDeleted = true;
+            transaction.UpdatedAtUtc = now;
+            await _transactionRepository.UpdateTransactionAsync(transaction);
+            await ApplyBalanceDeltaWithRetryAsync(userId, account.RowKey, -GetSignedAmountCents(transaction), now);
+
+            return req.CreateResponse(HttpStatusCode.NoContent);
         }
 
         [Function("GetTransactions")]
@@ -218,32 +367,118 @@ namespace BulldogFinance.Functions.Functions
                 fromUtc,
                 toUtc);
 
-            var list = entities.Select(t =>
-            {
-                var occurred = t.OccurredAtUtc ?? t.CreatedAtUtc;
-                return new TransactionDto
-                {
-                    TransactionId = t.RowKey,
-                    AccountId = t.AccountId,
-                    Type = t.Type,
-                    Amount = t.AmountCents / 100m,
-                    Currency = t.Currency,
-                    Category = t.Category,
-                    Note = t.Note,
-                    MerchantName = t.MerchantName,
-                    Source = t.Source,
-                    Pending = t.Pending,
-                    OccurredAtUtc = occurred,
-                    AuthorizedAtUtc = t.AuthorizedAtUtc,
-                    PostedAtUtc = t.PostedAtUtc,
-                    CreatedAtUtc = t.CreatedAtUtc
-                };
-            }).ToList();
+            var list = entities.Select(ToDto).ToList();
 
             var response = req.CreateResponse(HttpStatusCode.OK);
             response.Headers.Add("Content-Type", "application/json; charset=utf-8");
             await response.WriteStringAsync(JsonSerializer.Serialize(list, JsonOptions));
 
+            return response;
+        }
+
+        private static TransactionDto ToDto(TransactionEntity transaction)
+        {
+            var occurred = transaction.OccurredAtUtc ?? transaction.CreatedAtUtc;
+            return new TransactionDto
+            {
+                TransactionId = transaction.RowKey,
+                AccountId = transaction.AccountId,
+                Type = transaction.Type,
+                Amount = transaction.AmountCents / 100m,
+                Currency = transaction.Currency,
+                Category = transaction.Category,
+                Note = transaction.Note,
+                MerchantName = transaction.MerchantName,
+                Source = transaction.Source,
+                Pending = transaction.Pending,
+                OccurredAtUtc = occurred,
+                AuthorizedAtUtc = transaction.AuthorizedAtUtc,
+                PostedAtUtc = transaction.PostedAtUtc,
+                CreatedAtUtc = transaction.CreatedAtUtc,
+                UpdatedAtUtc = transaction.UpdatedAtUtc,
+                IsSystemGenerated = transaction.IsSystemGenerated
+            };
+        }
+
+        private static bool IsConnectedAccount(AccountEntity account)
+        {
+            return string.Equals(account.ExternalSource, "Plaid", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsConnectedTransaction(TransactionEntity transaction, AccountEntity account)
+        {
+            return IsConnectedAccount(account) ||
+                string.Equals(transaction.Source, "Plaid", StringComparison.OrdinalIgnoreCase) ||
+                !string.IsNullOrWhiteSpace(transaction.ExternalTransactionId);
+        }
+
+        private static long GetSignedAmountCents(TransactionEntity transaction)
+        {
+            return string.Equals(transaction.Type, "EXPENSE", StringComparison.OrdinalIgnoreCase)
+                ? -transaction.AmountCents
+                : transaction.AmountCents;
+        }
+
+        private static bool ContainsAnyProperty(JsonElement root, IEnumerable<string> propertyNames)
+        {
+            return propertyNames.Any(propertyName => TryGetPropertyIgnoreCase(root, propertyName, out _));
+        }
+
+        private static bool TryGetPropertyIgnoreCase(JsonElement root, string propertyName, out JsonElement value)
+        {
+            foreach (var property in root.EnumerateObject())
+            {
+                if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = property.Value;
+                    return true;
+                }
+            }
+
+            value = default;
+            return false;
+        }
+
+        private static void ApplyMetadataUpdates(JsonElement root, TransactionEntity transaction)
+        {
+            if (TryGetPropertyIgnoreCase(root, "category", out var category))
+            {
+                transaction.Category = ReadNullableString(category);
+            }
+
+            if (TryGetPropertyIgnoreCase(root, "note", out var note))
+            {
+                transaction.Note = ReadNullableString(note);
+            }
+
+            if (TryGetPropertyIgnoreCase(root, "merchantName", out var merchantName))
+            {
+                transaction.MerchantName = ReadNullableString(merchantName);
+            }
+        }
+
+        private static string? ReadNullableString(JsonElement value)
+        {
+            if (value.ValueKind == JsonValueKind.Null || value.ValueKind == JsonValueKind.Undefined)
+            {
+                return null;
+            }
+
+            var text = value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : value.ToString();
+
+            return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+        }
+
+        private static async Task<HttpResponseData> WriteJsonAsync(
+            HttpRequestData req,
+            object payload,
+            HttpStatusCode statusCode = HttpStatusCode.OK)
+        {
+            var response = req.CreateResponse(statusCode);
+            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
+            await response.WriteStringAsync(JsonSerializer.Serialize(payload, JsonOptions));
             return response;
         }
 

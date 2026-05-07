@@ -247,6 +247,19 @@ export function useApiClient() {
         });
     }, [request]);
 
+    const updateTransaction = useCallback((transactionId, payload) => {
+        return request(`/transactions/${encodeURIComponent(transactionId)}`, {
+            method: "PATCH",
+            body: JSON.stringify(payload),
+        });
+    }, [request]);
+
+    const deleteTransaction = useCallback((transactionId) => {
+        return request(`/transactions/${encodeURIComponent(transactionId)}`, {
+            method: "DELETE",
+        });
+    }, [request]);
+
     // Plaid APIs.
     const createPlaidLinkToken = useCallback((payload = {}) => {
         return request("/plaid/link-token", {
@@ -389,6 +402,8 @@ export function useApiClient() {
         archiveSavingsGoal,
         getTransactions,
         createTransaction,
+        updateTransaction,
+        deleteTransaction,
         createPlaidLinkToken,
         completePlaidItemUpdate,
         exchangePlaidPublicToken,
@@ -415,6 +430,8 @@ export function useApiClient() {
         createAccount,
         createSavingsGoal,
         createTransaction,
+        updateTransaction,
+        deleteTransaction,
         deleteAccount,
         deleteChatConversation,
         deleteInvestment,

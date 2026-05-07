@@ -7,6 +7,7 @@ import PageHeader from "@/components/ui/PageHeader.jsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { formatDateTime } from "@/lib/utils";
+import { isManualAccount } from "@/lib/accountSources.js";
 import { getTransactionTimestamp, transactionDateToUtcIso } from "@/lib/transactionDates.js";
 import { useApiClient } from "@/services/apiClient";
 import { Field } from "@/components/ui/Field.jsx";
@@ -19,7 +20,13 @@ import {
 } from "@/components/ui/select";
 
 export default function TransactionsPage() {
-    const { getAccounts, getTransactions, createTransaction } = useApiClient();
+    const {
+        getAccounts,
+        getTransactions,
+        createTransaction,
+        updateTransaction,
+        deleteTransaction,
+    } = useApiClient();
 
     const [accounts, setAccounts] = useState([]);
     const [formAccountId, setFormAccountId] = useState("");
@@ -30,6 +37,23 @@ export default function TransactionsPage() {
     const [filters, setFilters] = useState({ type: "ALL", from: "", to: "", category: "" });
     const [sortField, setSortField] = useState("date");
     const [sortDirection, setSortDirection] = useState("desc");
+    const manualAccounts = useMemo(() => accounts.filter(isManualAccount), [accounts]);
+
+    const loadAccounts = useCallback(async () => {
+        const data = await getAccounts();
+        const accountList = data || [];
+        const manualAccountList = accountList.filter(isManualAccount);
+
+        setAccounts(accountList);
+        setFormAccountId((current) => {
+            if (manualAccountList.some((account) => account.accountId === current)) {
+                return current;
+            }
+
+            return manualAccountList[0]?.accountId || "";
+        });
+    }, [getAccounts]);
+
     const buildTransactionQueryParams = useCallback(() => {
         const params = {};
 
@@ -68,11 +92,7 @@ export default function TransactionsPage() {
     useEffect(() => {
         (async () => {
             try {
-                const data = await getAccounts();
-                setAccounts(data || []);
-                if (data?.length) {
-                    setFormAccountId(data[0].accountId);
-                }
+                await loadAccounts();
             } catch (e) {
                 console.error(e);
                 toast.error(e.message || "Failed to load accounts.");
@@ -80,7 +100,7 @@ export default function TransactionsPage() {
                 setLoadingAccounts(false);
             }
         })();
-    }, [getAccounts]);
+    }, [loadAccounts]);
 
     useEffect(() => {
         void loadTransactions();
@@ -157,10 +177,34 @@ export default function TransactionsPage() {
         try {
             await createTransaction(txInput);
             toast.success("Transaction added.");
-            await loadTransactions();
+            await Promise.all([loadAccounts(), loadTransactions()]);
         } catch (e) {
             console.error(e);
             toast.error(e.message || "Failed to create transaction.");
+        }
+    };
+
+    const handleUpdateTransaction = async (transactionId, payload) => {
+        try {
+            await updateTransaction(transactionId, payload);
+            toast.success("Transaction updated.");
+            await Promise.all([loadAccounts(), loadTransactions()]);
+        } catch (e) {
+            console.error(e);
+            toast.error(e.message || "Failed to update transaction.");
+            throw e;
+        }
+    };
+
+    const handleDeleteTransaction = async (transactionId) => {
+        try {
+            await deleteTransaction(transactionId);
+            toast.success("Transaction deleted.");
+            await Promise.all([loadAccounts(), loadTransactions()]);
+        } catch (e) {
+            console.error(e);
+            toast.error(e.message || "Failed to delete transaction.");
+            throw e;
         }
     };
 
@@ -224,7 +268,7 @@ export default function TransactionsPage() {
                 <LatestReportCard />
 
                 <TransactionForm
-                    accounts={accounts}
+                    accounts={manualAccounts}
                     selectedAccountId={formAccountId}
                     onAccountChange={setFormAccountId}
                     onSubmit={handleCreateTransaction}
@@ -241,6 +285,7 @@ export default function TransactionsPage() {
                 ) : (
                     <TransactionTable
                         transactions={visibleTransactions}
+                        accounts={accounts}
                         accountNames={accountNameMap}
                         sortField={sortField}
                         sortDirection={sortDirection}
@@ -251,6 +296,8 @@ export default function TransactionsPage() {
                         filters={filters}
                         onFiltersChange={setFilters}
                         onResetFilters={() => setFilters({ type: "ALL", from: "", to: "", category: "" })}
+                        onUpdateTransaction={handleUpdateTransaction}
+                        onDeleteTransaction={handleDeleteTransaction}
                     />
                 )}
             </div>
