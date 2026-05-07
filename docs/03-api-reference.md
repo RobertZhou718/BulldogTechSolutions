@@ -112,6 +112,9 @@ Forces a balance refresh for all linked items for the current user.
 ### `POST /plaid/sync-transactions`
 Pulls new transactions using Plaid's `/transactions/sync` cursor.
 
+### `POST /plaid/sync-investments`
+Syncs Plaid investment holdings, securities, recent investment transactions, and portfolio snapshots for one Item or all active Items.
+
 ### `DELETE /plaid/items/{itemId}`
 Unlinks a Plaid item and clears stored tokens.
 
@@ -131,6 +134,7 @@ Webhook endpoint called by Plaid. Verifies the payload and queues the appropriat
 | POST | `/investments/watchlist` | Add a watchlist entry (`{ "symbol", "exchange" }`) |
 | DELETE | `/investments/watchlist/{symbol}` | Remove a watchlist entry |
 | GET | `/investments/overview` | Holdings valuations + company news; returns popular symbols if the user has no holdings |
+| GET | `/investments/activity` | Recent Plaid investment transactions such as buys, sells, dividends, fees, and transfers |
 
 ---
 

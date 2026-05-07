@@ -9,6 +9,7 @@
 - Plaid Link, balance refresh, and transaction sync (Going.Plaid)
 - Encrypted Plaid token storage (ASP.NET Core Data Protection)
 - Investment holdings + watchlist + Finnhub aggregation
+- Plaid investments product sync for holdings, securities, investment transactions, and portfolio snapshots
 - Weekly / monthly AI reports (Azure OpenAI)
 - In-app chat assistant with tool-calling agent and persistent conversations
 - Application Insights telemetry
@@ -33,7 +34,6 @@
 ## Phase 3 — experience & growth
 
 - Smart suggestion cards on the dashboard (budget, category trend, anomaly)
-- Plaid investments product (holdings auto-sync)
 - Multi-currency refinements (FX rates, display vs. base currency)
 - Prompt A/B experiments with metric-linked rollout
 - Accessibility audit of React Aria Components usage

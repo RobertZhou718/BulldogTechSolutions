@@ -19,15 +19,18 @@ namespace BulldogFinance.Functions.Functions
 
         private readonly IPlaidRepository _plaidRepository;
         private readonly IPlaidSyncService _plaidSyncService;
+        private readonly IPlaidInvestmentSyncService _plaidInvestmentSyncService;
         private readonly ILogger<DailyPlaidSyncFunctions> _logger;
 
         public DailyPlaidSyncFunctions(
             IPlaidRepository plaidRepository,
             IPlaidSyncService plaidSyncService,
+            IPlaidInvestmentSyncService plaidInvestmentSyncService,
             ILogger<DailyPlaidSyncFunctions> logger)
         {
             _plaidRepository = plaidRepository;
             _plaidSyncService = plaidSyncService;
+            _plaidInvestmentSyncService = plaidInvestmentSyncService;
             _logger = logger;
         }
 
@@ -125,15 +128,24 @@ namespace BulldogFinance.Functions.Functions
                     message.ItemId,
                     cancellationToken);
 
+                var investmentSummary = await _plaidInvestmentSyncService.SyncInvestmentsAsync(
+                    message.UserId,
+                    message.ItemId,
+                    transactionStartUtc: DateTime.UtcNow.Date.AddDays(-30),
+                    transactionEndUtc: DateTime.UtcNow.Date,
+                    cancellationToken);
+
                 await MarkSyncCompletedAsync(message.UserId, message.ItemId, cancellationToken);
 
                 _logger.LogInformation(
-                    "Plaid daily sync completed. UserId={UserId} ItemId={ItemId} Added={Added} Modified={Modified} Removed={Removed}",
+                    "Plaid daily sync completed. UserId={UserId} ItemId={ItemId} Added={Added} Modified={Modified} Removed={Removed} InvestmentHoldings={InvestmentHoldings} InvestmentTransactions={InvestmentTransactions}",
                     message.UserId,
                     message.ItemId,
                     summary.Added,
                     summary.Modified,
-                    summary.Removed);
+                    summary.Removed,
+                    investmentSummary.HoldingsSynced,
+                    investmentSummary.InvestmentTransactionsSynced);
             }
             catch (Exception ex)
             {

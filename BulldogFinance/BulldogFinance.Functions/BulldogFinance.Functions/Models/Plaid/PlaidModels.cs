@@ -64,6 +64,7 @@ namespace BulldogFinance.Functions.Models.Plaid
     {
         public string[]? CountryCodes { get; set; }
         public string[]? Products { get; set; }
+        public string[]? AdditionalConsentedProducts { get; set; }
     }
 
     public class ExchangePlaidPublicTokenRequest
@@ -86,6 +87,9 @@ namespace BulldogFinance.Functions.Models.Plaid
         public int TransactionsAdded { get; set; }
         public int TransactionsModified { get; set; }
         public int TransactionsRemoved { get; set; }
+        public int InvestmentHoldingsSynced { get; set; }
+        public int InvestmentSecuritiesSynced { get; set; }
+        public int InvestmentTransactionsSynced { get; set; }
     }
 
     public class PlaidWebhookRequest

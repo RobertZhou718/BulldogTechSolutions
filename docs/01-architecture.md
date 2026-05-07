@@ -7,7 +7,7 @@ Bulldog Finance is a personal "wealth view" application that covers:
 - Authentication via Microsoft Entra External ID and MSAL Custom Native Auth, with a backend `/api/native-auth` gateway for CIAM native auth calls
 - First-run onboarding
 - Account and transaction management, including Plaid Link bank connections
-- Investment holdings, watchlist, and market information aggregation
+- Investment holdings, Plaid investment account sync, watchlist, and market information aggregation
 - AI-generated reports based on financial snapshots
 - An in-app AI assistant (tool-calling agent) that can query the user's financial data and market news
 
@@ -28,7 +28,7 @@ Bulldog Finance is a personal "wealth view" application that covers:
   - REST API surface (`/me`, `/onboarding`, `/accounts`, `/transactions`, `/investments`, `/reports`, `/chat`, `/plaid/*`, `/native-auth/*`)
   - Bearer-token middleware that validates Entra JWTs and populates the per-request user context
   - Native auth gateway (`/api/native-auth/{*path}`) that forwards MSAL Custom Native Auth SDK calls to the Entra Native Auth API
-  - Plaid webhook handling and timer-triggered balance refresh + transaction sync
+  - Plaid webhook handling and timer-triggered balance, transaction, investment holding, and investment activity sync
   - Timer triggers for weekly / monthly AI report generation
 
 ### Service layer
@@ -44,7 +44,7 @@ Bulldog Finance is a personal "wealth view" application that covers:
 
 ### Data layer
 
-- **Azure Table Storage**: `Users`, `Accounts`, `Transactions`, `Investments`, `Watchlist`, `PlaidItems`, `ChatConversations`
+- **Azure Table Storage**: `Users`, `Accounts`, `Transactions`, `Investments`, `Watchlist`, `PlaidItems`, `PlaidInvestmentHoldings`, `PlaidInvestmentSecurities`, `PlaidInvestmentTransactions`, `InvestmentPortfolioSnapshots`, `ChatConversations`
 - **Azure Blob Storage**: `reports` container (weekly/monthly latest markdown reports)
 - **Azure Queue Storage**: `plaid-daily-sync-items` queue for fan-out daily Plaid sync work
 - Credentials: connection string **or** `ServiceUri` + `DefaultAzureCredential` (managed identity friendly; `ManagedIdentity:ClientId` supported)
@@ -78,6 +78,7 @@ Bulldog Finance is a personal "wealth view" application that covers:
 3. Client exchanges it via `POST /plaid/exchange-public-token`.
 4. Backend encrypts the access token (Data Protection) and persists the item via `PlaidRepository`.
 5. Plaid webhooks hit `/plaid/webhook`; timer triggers refresh balances and sync transactions through `PlaidSyncService`.
+6. If the linked Item includes active investment accounts, the backend syncs Plaid investment holdings, securities, recent investment transactions, and daily portfolio snapshots.
 
 ### Flow C — Transactions
 
@@ -88,7 +89,9 @@ Bulldog Finance is a personal "wealth view" application that covers:
 ### Flow D — Investment overview
 
 1. `GET /investments/overview`.
-2. Backend loads holdings, pulls quotes + company news from Finnhub, and returns a Holdings + Popular payload.
+2. Backend loads manual holdings and Plaid investment holdings.
+3. Plaid-connected holdings use Plaid institution value, institution price, and cost basis as source-of-truth portfolio data.
+4. Finnhub is used only as a market context layer for supported US symbols.
 
 ### Flow E — AI reports
 

@@ -3,6 +3,7 @@ using BulldogFinance.Functions.Models.Accounts;
 using BulldogFinance.Functions.Models.Plaid;
 using BulldogFinance.Functions.Models.Transactions;
 using BulldogFinance.Functions.Services.Accounts;
+using BulldogFinance.Functions.Services.Investments;
 using BulldogFinance.Functions.Services.Transactions;
 using Going.Plaid.Accounts;
 using Going.Plaid.Converters;
@@ -22,19 +23,22 @@ namespace BulldogFinance.Functions.Services.Plaid
         private readonly IPlaidTokenProtector _tokenProtector;
         private readonly IAccountRepository _accountRepository;
         private readonly ITransactionRepository _transactionRepository;
+        private readonly IPlaidInvestmentRepository _plaidInvestmentRepository;
 
         public PlaidSyncService(
             IPlaidClientFactory plaidClientFactory,
             IPlaidRepository plaidRepository,
             IPlaidTokenProtector tokenProtector,
             IAccountRepository accountRepository,
-            ITransactionRepository transactionRepository)
+            ITransactionRepository transactionRepository,
+            IPlaidInvestmentRepository plaidInvestmentRepository)
         {
             _plaidClientFactory = plaidClientFactory;
             _plaidRepository = plaidRepository;
             _tokenProtector = tokenProtector;
             _accountRepository = accountRepository;
             _transactionRepository = transactionRepository;
+            _plaidInvestmentRepository = plaidInvestmentRepository;
         }
 
         public async Task<IReadOnlyList<AccountEntity>> ImportAccountsAsync(
@@ -284,6 +288,7 @@ namespace BulldogFinance.Functions.Services.Plaid
                 await _plaidRepository.DeleteAccountLinkAsync(userId, link.RowKey, cancellationToken);
             }
 
+            await _plaidInvestmentRepository.DeleteByItemAsync(userId, itemId, cancellationToken);
             await _plaidRepository.DeleteItemAsync(userId, itemId, cancellationToken);
         }
 

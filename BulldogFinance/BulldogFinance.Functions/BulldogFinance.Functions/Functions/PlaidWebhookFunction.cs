@@ -20,6 +20,7 @@ namespace BulldogFinance.Functions.Functions
 
         private readonly IPlaidRepository _plaidRepository;
         private readonly IPlaidSyncService _plaidSyncService;
+        private readonly IPlaidInvestmentSyncService _plaidInvestmentSyncService;
         private readonly ILogger<PlaidWebhookFunction> _logger;
         private readonly string? _webhookSharedSecret;
         private readonly string _webhookSecretQueryParameter;
@@ -27,11 +28,13 @@ namespace BulldogFinance.Functions.Functions
         public PlaidWebhookFunction(
             IPlaidRepository plaidRepository,
             IPlaidSyncService plaidSyncService,
+            IPlaidInvestmentSyncService plaidInvestmentSyncService,
             ILogger<PlaidWebhookFunction> logger,
             IConfiguration configuration)
         {
             _plaidRepository = plaidRepository;
             _plaidSyncService = plaidSyncService;
+            _plaidInvestmentSyncService = plaidInvestmentSyncService;
             _logger = logger;
             _webhookSharedSecret = configuration["Plaid:WebhookSharedSecret"];
             _webhookSecretQueryParameter = configuration["Plaid:WebhookSecretQueryParameter"] ?? "secret";
@@ -76,6 +79,19 @@ namespace BulldogFinance.Functions.Functions
                 {
                     await HandleItemErrorAsync(payload.ItemId, payload.Error);
                 }
+                else if (payload?.WebhookType == "HOLDINGS" &&
+                         payload.WebhookCode == "DEFAULT_UPDATE" &&
+                         !string.IsNullOrWhiteSpace(payload.ItemId))
+                {
+                    await HandleInvestmentHoldingsUpdateAsync(payload.ItemId);
+                }
+                else if (payload?.WebhookType == "INVESTMENTS_TRANSACTIONS" &&
+                         !string.IsNullOrWhiteSpace(payload.ItemId))
+                {
+                    await HandleInvestmentTransactionsUpdateAsync(
+                        payload.ItemId,
+                        payload.WebhookCode);
+                }
             }
 
             var response = req.CreateResponse(HttpStatusCode.OK);
@@ -101,6 +117,60 @@ namespace BulldogFinance.Functions.Functions
                 item.PartitionKey,
                 error?.ErrorCode,
                 error?.ErrorMessage);
+        }
+
+        private async Task HandleInvestmentHoldingsUpdateAsync(string itemId)
+        {
+            var item = await _plaidRepository.GetItemByItemIdAsync(itemId);
+            if (item == null || !string.Equals(item.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            try
+            {
+                await _plaidInvestmentSyncService.SyncHoldingsAsync(item.PartitionKey, item.RowKey);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Plaid investment holdings webhook sync failed. ItemId={ItemId} UserId={UserId}",
+                    itemId,
+                    item.PartitionKey);
+            }
+        }
+
+        private async Task HandleInvestmentTransactionsUpdateAsync(string itemId, string? webhookCode)
+        {
+            var item = await _plaidRepository.GetItemByItemIdAsync(itemId);
+            if (item == null || !string.Equals(item.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var endUtc = DateTime.UtcNow.Date;
+            var startUtc = string.Equals(webhookCode, "HISTORICAL_UPDATE", StringComparison.OrdinalIgnoreCase)
+                ? endUtc.AddMonths(-24)
+                : endUtc.AddDays(-30);
+
+            try
+            {
+                await _plaidInvestmentSyncService.SyncInvestmentTransactionsAsync(
+                    item.PartitionKey,
+                    item.RowKey,
+                    startUtc,
+                    endUtc);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Plaid investment transactions webhook sync failed. ItemId={ItemId} UserId={UserId} WebhookCode={WebhookCode}",
+                    itemId,
+                    item.PartitionKey,
+                    webhookCode);
+            }
         }
 
         private bool HasValidWebhookSecret(HttpRequestData req)
