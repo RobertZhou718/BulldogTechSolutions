@@ -78,6 +78,26 @@ namespace BulldogFinance.Functions.Services.Transactions
             return result;
         }
 
+        public async Task<TransactionEntity?> GetTransactionAsync(
+            string userId,
+            string transactionId,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var response = await _transactionsTable.GetEntityAsync<TransactionEntity>(
+                    userId,
+                    transactionId,
+                    cancellationToken: cancellationToken);
+
+                return response.Value;
+            }
+            catch (RequestFailedException ex) when (ex.Status == 404)
+            {
+                return null;
+            }
+        }
+
         public async Task<TransactionEntity?> GetByExternalTransactionIdAsync(
             string userId,
             string externalTransactionId,

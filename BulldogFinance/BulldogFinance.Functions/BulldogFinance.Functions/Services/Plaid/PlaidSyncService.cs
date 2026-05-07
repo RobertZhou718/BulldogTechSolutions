@@ -398,10 +398,11 @@ namespace BulldogFinance.Functions.Services.Plaid
             entity.Currency = !string.IsNullOrWhiteSpace(plaidTransaction.IsoCurrencyCode)
                 ? plaidTransaction.IsoCurrencyCode!
                 : localAccount.Currency;
-            entity.Category = plaidTransaction.PersonalFinanceCategory?.Detailed
+            var plaidCategory = plaidTransaction.PersonalFinanceCategory?.Detailed
                 ?? plaidTransaction.PersonalFinanceCategory?.Primary;
-            entity.Note = note;
-            entity.MerchantName = plaidTransaction.MerchantName;
+            entity.Category = existing == null ? plaidCategory : existing.Category;
+            entity.Note = existing == null ? note : existing.Note;
+            entity.MerchantName = existing == null ? plaidTransaction.MerchantName : existing.MerchantName;
             entity.Source = "Plaid";
             entity.ExternalTransactionId = plaidTransaction.TransactionId;
             entity.ExternalAccountId = plaidTransaction.AccountId;

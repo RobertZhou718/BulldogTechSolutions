@@ -15,6 +15,11 @@ namespace BulldogFinance.Functions.Services.Transactions
             DateTime? toUtc = null,
             CancellationToken cancellationToken = default);
 
+        Task<TransactionEntity?> GetTransactionAsync(
+            string userId,
+            string transactionId,
+            CancellationToken cancellationToken = default);
+
         Task<TransactionEntity?> GetByExternalTransactionIdAsync(
             string userId,
             string externalTransactionId,

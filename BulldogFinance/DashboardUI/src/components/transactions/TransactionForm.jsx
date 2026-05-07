@@ -10,6 +10,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { isManualAccount } from "@/lib/accountSources.js";
 import { getLocalDateInputValue, transactionDateToUtcIso } from "@/lib/transactionDates.js";
 
 const TYPE_OPTIONS = [
@@ -38,9 +39,12 @@ export default function TransactionForm({
     const [category, setCategory] = useState("General");
     const [note, setNote] = useState("");
     const [date, setDate] = useState(() => getLocalDateInputValue());
-    const accountId = selectedAccountId || accounts[0]?.accountId || "";
+    const manualAccounts = accounts.filter(isManualAccount);
+    const accountId = manualAccounts.some((account) => account.accountId === selectedAccountId)
+        ? selectedAccountId
+        : manualAccounts[0]?.accountId || "";
 
-    const currentAccount = accounts.find((a) => a.accountId === accountId);
+    const currentAccount = manualAccounts.find((a) => a.accountId === accountId);
     const currency = currentAccount?.currency || "CAD";
 
     const handleSubmit = (e) => {
@@ -73,85 +77,91 @@ export default function TransactionForm({
                 Add a transaction
             </h2>
             <p className="mt-2 text-sm text-[var(--text-muted)]">
-                Capture income and expenses against any linked account.
+                Capture income and expenses against manual accounts.
             </p>
 
-            <form onSubmit={handleSubmit} className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <Field label="Account" className="xl:col-span-2">
-                    <Select
-                        value={accountId}
-                        onValueChange={(value) => onAccountChange?.(value)}
-                    >
-                        <SelectTrigger className="w-full">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {accounts.map((acc) => (
-                                <SelectItem key={acc.accountId} value={acc.accountId}>
-                                    {acc.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </Field>
-
-                <Field label="Type">
-                    <Select value={type} onValueChange={setType}>
-                        <SelectTrigger className="w-full">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {TYPE_OPTIONS.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </Field>
-
-                <Field label="Date">
-                    <DatePicker value={date} onChange={setDate} />
-                </Field>
-
-                <Field label="Amount">
-                    <div className="relative">
-                        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center border-r border-input px-3 text-sm text-muted-foreground">
-                            {currency}
-                        </span>
-                        <Input
-                            type="number"
-                            step="0.01"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            className="pl-16"
-                        />
-                    </div>
-                </Field>
-
-                <Field label="Category">
-                    <Select value={category} onValueChange={setCategory}>
-                        <SelectTrigger className="w-full">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {DEFAULT_CATEGORIES.map((item) => (
-                                <SelectItem key={item} value={item}>
-                                    {item}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </Field>
-
-                <Field label="Note" className="md:col-span-2 xl:col-span-2">
-                    <Input value={note} onChange={(e) => setNote(e.target.value)} />
-                </Field>
-
-                <div className="md:col-span-2 xl:col-span-4 flex justify-end">
-                    <Button type="submit">Save transaction</Button>
+            {manualAccounts.length === 0 ? (
+                <div className="mt-6 rounded-md border border-dashed border-[var(--card-border)] px-4 py-6 text-sm text-[var(--text-muted)]">
+                    Manual transaction creation is available after adding a manual account.
                 </div>
-            </form>
+            ) : (
+                <form onSubmit={handleSubmit} className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <Field label="Account" className="xl:col-span-2">
+                        <Select
+                            value={accountId}
+                            onValueChange={(value) => onAccountChange?.(value)}
+                        >
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {manualAccounts.map((acc) => (
+                                    <SelectItem key={acc.accountId} value={acc.accountId}>
+                                        {acc.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </Field>
+
+                    <Field label="Type">
+                        <Select value={type} onValueChange={setType}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {TYPE_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </Field>
+
+                    <Field label="Date">
+                        <DatePicker value={date} onChange={setDate} />
+                    </Field>
+
+                    <Field label="Amount">
+                        <div className="relative">
+                            <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center border-r border-input px-3 text-sm text-muted-foreground">
+                                {currency}
+                            </span>
+                            <Input
+                                type="number"
+                                step="0.01"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                                className="pl-16"
+                            />
+                        </div>
+                    </Field>
+
+                    <Field label="Category">
+                        <Select value={category} onValueChange={setCategory}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {DEFAULT_CATEGORIES.map((item) => (
+                                    <SelectItem key={item} value={item}>
+                                        {item}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </Field>
+
+                    <Field label="Note" className="md:col-span-2 xl:col-span-2">
+                        <Input value={note} onChange={(e) => setNote(e.target.value)} />
+                    </Field>
+
+                    <div className="md:col-span-2 xl:col-span-4 flex justify-end">
+                        <Button type="submit">Save transaction</Button>
+                    </div>
+                </form>
+            )}
         </Card>
     );
 }
