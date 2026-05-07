@@ -42,20 +42,31 @@ namespace BulldogFinance.Functions.Functions
                 }
             }
 
-            if (!string.IsNullOrWhiteSpace(itemId))
+            try
             {
-                await _plaidSyncService.RefreshBalancesAsync(userId, itemId);
-            }
-            else
-            {
-                var items = await _plaidRepository.GetItemsAsync(userId);
-                foreach (var item in items)
+                if (!string.IsNullOrWhiteSpace(itemId))
                 {
-                    if (item.Status == "ACTIVE")
+                    await _plaidSyncService.RefreshBalancesAsync(userId, itemId);
+                }
+                else
+                {
+                    var items = await _plaidRepository.GetItemsAsync(userId);
+                    foreach (var item in items)
                     {
-                        await _plaidSyncService.RefreshBalancesAsync(userId, item.RowKey);
+                        if (item.Status == "ACTIVE")
+                        {
+                            await _plaidSyncService.RefreshBalancesAsync(userId, item.RowKey);
+                        }
                     }
                 }
+            }
+            catch (PlaidApiException ex) when (ex.RequiresLinkUpdate)
+            {
+                return await ApiResponse.ConflictAsync(req, "This bank connection needs to be reconnected.");
+            }
+            catch (PlaidApiException ex)
+            {
+                return await ApiResponse.BadGatewayAsync(req, ex.Message);
             }
 
             var response = req.CreateResponse(HttpStatusCode.OK);

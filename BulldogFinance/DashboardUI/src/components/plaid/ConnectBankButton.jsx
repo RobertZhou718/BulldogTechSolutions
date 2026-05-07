@@ -2,41 +2,56 @@ import React, { useEffect, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import { Bank } from "@untitledui/icons";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useApiClient } from "@/services/apiClient";
 import { toast } from "sonner";
 
-export default function ConnectBankButton({ onConnected, className }) {
-    const { createPlaidLinkToken, exchangePlaidPublicToken } = useApiClient();
+export default function ConnectBankButton({ onConnected, className, buttonClassName, itemId, label }) {
+    const { createPlaidLinkToken, exchangePlaidPublicToken, completePlaidItemUpdate } = useApiClient();
     const [linkToken, setLinkToken] = useState("");
     const [loadingToken, setLoadingToken] = useState(false);
     const [pendingOpen, setPendingOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const isUpdateMode = Boolean(itemId);
 
     const { open, ready } = usePlaidLink({
         token: linkToken || null,
         onSuccess: async (publicToken, metadata) => {
             setSubmitting(true);
             setLinkToken("");
-            const toastId = toast.loading("Linking your bank...");
+            const toastId = toast.loading(
+                isUpdateMode ? "Updating bank connection..." : "Linking your bank..."
+            );
 
             try {
-                await exchangePlaidPublicToken({
-                    publicToken,
-                    institutionId: metadata?.institution?.institution_id || null,
-                    institutionName: metadata?.institution?.name || null,
-                });
+                if (isUpdateMode) {
+                    await completePlaidItemUpdate(itemId);
+                } else {
+                    await exchangePlaidPublicToken({
+                        publicToken,
+                        institutionId: metadata?.institution?.institution_id || null,
+                        institutionName: metadata?.institution?.name || null,
+                    });
+                }
             } catch (e) {
-                toast.error(e.message || "Failed to connect bank account.", { id: toastId });
+                toast.error(
+                    e.message ||
+                        (isUpdateMode
+                            ? "Failed to update bank connection."
+                            : "Failed to connect bank account."),
+                    { id: toastId }
+                );
                 setSubmitting(false);
                 return;
             }
 
-            toast.success(
-                metadata?.institution?.name
-                    ? `${metadata.institution.name} connected.`
-                    : "Bank connected.",
-                { id: toastId }
-            );
+            const successMessage = isUpdateMode
+                ? "Bank connection updated."
+                : metadata?.institution?.name
+                  ? `${metadata.institution.name} connected.`
+                  : "Bank connected.";
+
+            toast.success(successMessage, { id: toastId });
 
             try {
                 await onConnected?.();
@@ -80,7 +95,7 @@ export default function ConnectBankButton({ onConnected, className }) {
         setLoadingToken(true);
 
         try {
-            const result = await createPlaidLinkToken();
+            const result = await createPlaidLinkToken(isUpdateMode ? { itemId } : {});
             const nextLinkToken = result?.linkToken || "";
             if (!nextLinkToken) {
                 throw new Error("Plaid did not return a link token.");
@@ -96,7 +111,8 @@ export default function ConnectBankButton({ onConnected, className }) {
     };
 
     const isLoading = loadingToken || submitting;
-    const loadingText = submitting ? "Connecting..." : "Preparing...";
+    const loadingText = submitting ? (isUpdateMode ? "Updating..." : "Connecting...") : "Preparing...";
+    const buttonText = label || (isUpdateMode ? "Reconnect" : "Connect with bank");
 
     return (
         <div className={className}>
@@ -105,10 +121,13 @@ export default function ConnectBankButton({ onConnected, className }) {
                 loading={isLoading}
                 loadingText={loadingText}
                 disabled={isLoading}
-                className="group h-10 w-full min-w-[12.5rem] justify-center gap-2 rounded-full bg-[var(--brand)] px-5 text-sm font-semibold text-white shadow-[0_8px_20px_-8px_rgba(21,112,239,0.55)] transition-all duration-200 hover:-translate-y-px hover:bg-[var(--brand-strong)] hover:shadow-[0_12px_24px_-8px_rgba(21,112,239,0.6)] active:translate-y-0 active:shadow-[0_4px_12px_-6px_rgba(21,112,239,0.5)] sm:w-auto"
+                className={cn(
+                    "group h-10 w-full min-w-[12.5rem] justify-center gap-2 rounded-full bg-[var(--brand)] px-5 text-sm font-semibold text-white shadow-[0_8px_20px_-8px_rgba(21,112,239,0.55)] transition-all duration-200 hover:-translate-y-px hover:bg-[var(--brand-strong)] hover:shadow-[0_12px_24px_-8px_rgba(21,112,239,0.6)] active:translate-y-0 active:shadow-[0_4px_12px_-6px_rgba(21,112,239,0.5)] sm:w-auto",
+                    buttonClassName
+                )}
             >
                 <Bank className="size-4 transition-transform duration-200 group-hover:scale-110" />
-                Connect with bank
+                {buttonText}
             </Button>
         </div>
     );

@@ -38,20 +38,31 @@ namespace BulldogFinance.Functions.Functions
             var startUtc = request.StartUtc ?? endUtc.AddDays(-30);
 
             PlaidInvestmentSyncSummary summary;
-            if (string.IsNullOrWhiteSpace(request.ItemId))
+            try
             {
-                summary = await _plaidInvestmentSyncService.SyncInvestmentsForAllItemsAsync(
-                    userId,
-                    startUtc,
-                    endUtc);
+                if (string.IsNullOrWhiteSpace(request.ItemId))
+                {
+                    summary = await _plaidInvestmentSyncService.SyncInvestmentsForAllItemsAsync(
+                        userId,
+                        startUtc,
+                        endUtc);
+                }
+                else
+                {
+                    summary = await _plaidInvestmentSyncService.SyncInvestmentsAsync(
+                        userId,
+                        request.ItemId.Trim(),
+                        startUtc,
+                        endUtc);
+                }
             }
-            else
+            catch (PlaidApiException ex) when (ex.RequiresLinkUpdate)
             {
-                summary = await _plaidInvestmentSyncService.SyncInvestmentsAsync(
-                    userId,
-                    request.ItemId.Trim(),
-                    startUtc,
-                    endUtc);
+                return await ApiResponse.ConflictAsync(req, "This bank connection needs to be reconnected.");
+            }
+            catch (PlaidApiException ex)
+            {
+                return await ApiResponse.BadGatewayAsync(req, ex.Message);
             }
 
             var response = req.CreateResponse(HttpStatusCode.OK);

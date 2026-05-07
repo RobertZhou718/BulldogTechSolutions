@@ -57,6 +57,24 @@ function getTimestampLabel(value, fallback = "Pending first sync") {
     return formatted || fallback;
 }
 
+function needsPlaidReconnect(account) {
+    if (account.externalSource !== "Plaid") {
+        return false;
+    }
+
+    const itemStatus = String(account.plaidItemStatus || "").toUpperCase();
+    const syncStatus = String(account.lastSyncStatus || "").toUpperCase();
+    const errorCode = String(account.lastSyncErrorCode || "").toUpperCase();
+    const errorText = String(account.lastSyncError || "").toUpperCase();
+
+    return (
+        itemStatus === "ERROR" ||
+        syncStatus === "RELINK_REQUIRED" ||
+        errorCode === "ITEM_LOGIN_REQUIRED" ||
+        errorText.includes("ITEM_LOGIN_REQUIRED")
+    );
+}
+
 export default function ConnectedAccountsCard({
     accounts,
     defaultCurrency = "CAD",
@@ -82,6 +100,11 @@ export default function ConnectedAccountsCard({
         () => (expanded ? accounts : accounts.slice(0, DEFAULT_VISIBLE_COUNT)),
         [accounts, expanded]
     );
+    const reconnectRequiredAccounts = useMemo(
+        () => accounts.filter((account) => needsPlaidReconnect(account) && account.plaidItemId),
+        [accounts]
+    );
+    const firstReconnectAccount = reconnectRequiredAccounts[0];
 
     const isPlaidPending = pendingAccount?.externalSource === "Plaid";
     const remainingPlaidForItem = isPlaidPending
@@ -184,6 +207,22 @@ export default function ConnectedAccountsCard({
                 </div>
             </div>
 
+            {firstReconnectAccount ? (
+                <Alert className="mt-6 border-[var(--color-warning-100)] bg-[var(--color-warning-50)] text-[var(--color-warning-700)]">
+                    <AlertDescription className="gap-3 text-[var(--color-warning-700)] sm:flex sm:items-center sm:justify-between">
+                        <span>
+                            {firstReconnectAccount.institutionName || "A bank connection"} needs to be reconnected before Plaid sync can continue.
+                        </span>
+                        <ConnectBankButton
+                            itemId={firstReconnectAccount.plaidItemId}
+                            label="Reconnect"
+                            onConnected={onPlaidConnected}
+                            buttonClassName="h-8 w-auto min-w-0 px-3 text-xs shadow-none hover:translate-y-0"
+                        />
+                    </AlertDescription>
+                </Alert>
+            ) : null}
+
             {showAddForm ? (
                 <form
                     onSubmit={handleFormSubmit}
@@ -271,6 +310,7 @@ export default function ConnectedAccountsCard({
                 <div className="divide-y divide-[var(--card-border)]">
                     {visibleAccounts.map((account) => {
                         const balance = getAccountBalanceDisplay(account);
+                        const requiresReconnect = needsPlaidReconnect(account);
 
                         return (
                             <div
@@ -290,9 +330,27 @@ export default function ConnectedAccountsCard({
                                         {getSourceLabel(account)}
                                     </span>
                                     {account.externalSource === "Plaid" ? (
-                                        <p className="mt-2 text-xs text-[var(--text-soft)]">
-                                            Transactions: {getTimestampLabel(account.lastTransactionSyncUtc)}
+                                        <p
+                                            className={cn(
+                                                "mt-2 text-xs",
+                                                requiresReconnect
+                                                    ? "font-medium text-[var(--color-warning-700)]"
+                                                    : "text-[var(--text-soft)]"
+                                            )}
+                                        >
+                                            {requiresReconnect
+                                                ? "Reconnect required"
+                                                : `Transactions: ${getTimestampLabel(account.lastTransactionSyncUtc)}`}
                                         </p>
+                                    ) : null}
+                                    {requiresReconnect && account.plaidItemId ? (
+                                        <ConnectBankButton
+                                            itemId={account.plaidItemId}
+                                            label="Reconnect"
+                                            onConnected={onPlaidConnected}
+                                            className="mt-2"
+                                            buttonClassName="h-8 w-auto min-w-0 px-3 text-xs shadow-none hover:translate-y-0"
+                                        />
                                     ) : null}
                                 </div>
 

@@ -79,6 +79,18 @@ namespace BulldogFinance.Functions.Functions
                 {
                     await HandleItemErrorAsync(payload.ItemId, payload.Error);
                 }
+                else if (payload?.WebhookType == "ITEM" &&
+                         !string.IsNullOrWhiteSpace(payload.ItemId) &&
+                         PlaidItemSyncState.RequiresLinkUpdate(payload.WebhookCode))
+                {
+                    await HandleItemRepairRequiredAsync(payload.ItemId, payload.WebhookCode!);
+                }
+                else if (payload?.WebhookType == "ITEM" &&
+                         payload.WebhookCode == "LOGIN_REPAIRED" &&
+                         !string.IsNullOrWhiteSpace(payload.ItemId))
+                {
+                    await HandleItemRepairedAsync(payload.ItemId);
+                }
                 else if (payload?.WebhookType == "HOLDINGS" &&
                          payload.WebhookCode == "DEFAULT_UPDATE" &&
                          !string.IsNullOrWhiteSpace(payload.ItemId))
@@ -107,8 +119,7 @@ namespace BulldogFinance.Functions.Functions
                 return;
             }
 
-            item.Status = "ERROR";
-            item.UpdatedAtUtc = DateTime.UtcNow;
+            PlaidItemSyncState.ApplyWebhookError(item, error, DateTime.UtcNow);
             await _plaidRepository.UpsertItemAsync(item);
 
             _logger.LogWarning(
@@ -117,6 +128,44 @@ namespace BulldogFinance.Functions.Functions
                 item.PartitionKey,
                 error?.ErrorCode,
                 error?.ErrorMessage);
+        }
+
+        private async Task HandleItemRepairRequiredAsync(string itemId, string webhookCode)
+        {
+            var item = await _plaidRepository.GetItemByItemIdAsync(itemId);
+            if (item == null || !string.Equals(item.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            PlaidItemSyncState.ApplyRepairRequired(item, webhookCode, DateTime.UtcNow);
+            await _plaidRepository.UpsertItemAsync(item);
+
+            _logger.LogWarning(
+                "Plaid item requires Link update mode. ItemId={ItemId} UserId={UserId} WebhookCode={WebhookCode}",
+                itemId,
+                item.PartitionKey,
+                webhookCode);
+        }
+
+        private async Task HandleItemRepairedAsync(string itemId)
+        {
+            var item = await _plaidRepository.GetItemByItemIdAsync(itemId);
+            if (item == null)
+            {
+                return;
+            }
+
+            item.Status = PlaidItemSyncState.Active;
+            item.LastSyncErrorCode = null;
+            item.LastSyncError = null;
+            item.UpdatedAtUtc = DateTime.UtcNow;
+            await _plaidRepository.UpsertItemAsync(item);
+
+            _logger.LogInformation(
+                "Plaid item login repaired. ItemId={ItemId} UserId={UserId}",
+                itemId,
+                item.PartitionKey);
         }
 
         private async Task HandleInvestmentHoldingsUpdateAsync(string itemId)
