@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BulldogFinance.Functions.Models.Investments;
+using BulldogFinance.Functions.Models.Watchlist;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -159,9 +160,7 @@ namespace BulldogFinance.Functions.Services.Investments
             var exchange = string.IsNullOrWhiteSpace(holding.Exchange)
                 ? "US"
                 : holding.Exchange.Trim().ToUpperInvariant();
-            var canUseFinnhub = client != null &&
-                                !string.IsNullOrWhiteSpace(apiKey) &&
-                                IsFinnhubSupported(symbol, exchange, null);
+            var canUseFinnhub = client != null && !string.IsNullOrWhiteSpace(apiKey);
             var quoteTask = canUseFinnhub
                 ? GetQuoteAsync(client!, apiKey!, symbol, cancellationToken)
                 : Task.FromResult((price: 0.0, changePercent: 0.0));
@@ -226,7 +225,7 @@ namespace BulldogFinance.Functions.Services.Investments
 
             var canUseFinnhub = client != null &&
                                 !string.IsNullOrWhiteSpace(apiKey) &&
-                                IsFinnhubSupported(symbol, exchange, security?.MarketIdentifierCode);
+                                !string.IsNullOrWhiteSpace(symbol);
             var news = canUseFinnhub
                 ? await GetNewsAsync(client!, apiKey!, symbol, fromStr, toStr, maxNewsPerSymbol, cancellationToken)
                 : new List<InvestmentNewsItemDto>();
@@ -378,6 +377,16 @@ namespace BulldogFinance.Functions.Services.Investments
             string symbol,
             CancellationToken cancellationToken)
         {
+            var quote = await GetQuoteDetailedAsync(client, apiKey, symbol, cancellationToken);
+            return (quote?.Price ?? 0, quote?.ChangePercent ?? 0);
+        }
+
+        private async Task<FinnhubQuote?> GetQuoteDetailedAsync(
+            HttpClient client,
+            string apiKey,
+            string symbol,
+            CancellationToken cancellationToken)
+        {
             try
             {
                 var url = $"quote?symbol={Uri.EscapeDataString(symbol)}&token={Uri.EscapeDataString(apiKey)}";
@@ -392,15 +401,59 @@ namespace BulldogFinance.Functions.Services.Investments
                     cancellationToken);
 
                 if (data == null)
-                    return (0, 0);
+                    return null;
 
-                return (data.c, data.dp);
+                DateTimeOffset? asOf = data.t > 0
+                    ? DateTimeOffset.FromUnixTimeSeconds(data.t)
+                    : null;
+
+                return new FinnhubQuote(data.c, data.d, data.dp, asOf);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "GetQuoteAsync failed for symbol {Symbol}", symbol);
-                return (0, 0);
+                return null;
             }
+        }
+
+        public async Task<IReadOnlyList<WatchlistItemDto>> GetWatchlistOverviewAsync(
+            string userId,
+            CancellationToken cancellationToken = default)
+        {
+            var items = await _investmentService.GetWatchlistAsync(userId, cancellationToken);
+            if (items.Count == 0) return items;
+
+            var apiKey = _configuration["Finnhub:ApiKey"];
+            var hasFinnhub = !string.IsNullOrWhiteSpace(apiKey);
+            if (!hasFinnhub)
+            {
+                return items;
+            }
+
+            var client = _httpClientFactory.CreateClient("Finnhub");
+
+            var tasks = items.Select(async item =>
+            {
+                var symbol = (item.Symbol ?? string.Empty).Trim().ToUpperInvariant();
+                if (string.IsNullOrWhiteSpace(symbol))
+                {
+                    return item;
+                }
+
+                var quote = await GetQuoteDetailedAsync(client, apiKey!, symbol, cancellationToken);
+                if (quote == null || quote.Price <= 0)
+                {
+                    return item;
+                }
+
+                item.LastPrice = quote.Price;
+                item.DailyChange = quote.Change;
+                item.DailyChangePercent = quote.ChangePercent;
+                item.QuoteAsOfUtc = quote.AsOfUtc;
+                return item;
+            });
+
+            return await Task.WhenAll(tasks);
         }
 
         private async Task<List<InvestmentNewsItemDto>> GetNewsAsync(
@@ -460,29 +513,6 @@ namespace BulldogFinance.Functions.Services.Investments
             return result;
         }
 
-        private static bool IsFinnhubSupported(
-            string symbol,
-            string? exchange,
-            string? marketIdentifierCode)
-        {
-            if (string.IsNullOrWhiteSpace(symbol))
-            {
-                return false;
-            }
-
-            if (!string.IsNullOrWhiteSpace(marketIdentifierCode))
-            {
-                return UsMarketIdentifierCodes.Contains(marketIdentifierCode);
-            }
-
-            if (!string.IsNullOrWhiteSpace(exchange))
-            {
-                return string.Equals(exchange, "US", StringComparison.OrdinalIgnoreCase);
-            }
-
-            return !symbol.Contains('.') && !symbol.Contains(':');
-        }
-
         private static string ResolveExchange(string? marketIdentifierCode)
         {
             if (string.IsNullOrWhiteSpace(marketIdentifierCode))
@@ -509,8 +539,12 @@ namespace BulldogFinance.Functions.Services.Investments
         private class FinnhubQuoteResponse
         {
             public double c { get; set; }
+            public double d { get; set; }
             public double dp { get; set; }
+            public long t { get; set; }
         }
+
+        private record FinnhubQuote(double Price, double Change, double ChangePercent, DateTimeOffset? AsOfUtc);
 
         private class FinnhubNewsItem
         {

@@ -20,6 +20,7 @@ export default function HoldingsCard({
     holdings,
     loading,
     saving,
+    totals: totalsProp,
     onAdd,
     onDelete,
 }) {
@@ -32,7 +33,7 @@ export default function HoldingsCard({
     });
     const list = useMemo(() => holdings || [], [holdings]);
 
-    const totals = useMemo(() => {
+    const fallbackTotals = useMemo(() => {
         const byCurrency = new Map();
         list.forEach((h) => {
             const currency = h.Currency ?? h.currency ?? "USD";
@@ -43,17 +44,28 @@ export default function HoldingsCard({
         });
 
         const entries = Array.from(byCurrency.values());
+        const singlePnl = entries.length === 1 ? entries[0].pnl : null;
         return {
-            marketValue: formatCurrencyBreakdown(
+            marketValueLabel: formatCurrencyBreakdown(
                 entries.map((entry) => ({ currency: entry.currency, amount: entry.marketValue })),
-                2
+                0
             ),
-            pnl: formatCurrencyBreakdown(
+            pnlLabel: formatCurrencyBreakdown(
                 entries.map((entry) => ({ currency: entry.currency, amount: entry.pnl })),
-                2
+                0
             ),
+            pnlTone: singlePnl == null ? "default" : singlePnl >= 0 ? "positive" : "negative",
+            positions: list.length,
         };
     }, [list]);
+
+    const totals = totalsProp ?? fallbackTotals;
+    const pnlClass =
+        totals.pnlTone === "positive"
+            ? "text-[var(--color-success-700)]"
+            : totals.pnlTone === "negative"
+              ? "text-[var(--color-error-700)]"
+              : "text-[var(--text-main)]";
 
     const handleChange = (field) => (e) => {
         setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -77,16 +89,35 @@ export default function HoldingsCard({
         <>
             <Card className="h-full">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                    <div>
+                    <div className="min-w-0">
                         <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
                             Portfolio
                         </p>
                         <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
                             Investments
                         </h2>
-                        <p className="mt-2 text-sm text-[var(--text-muted)]">
-                            Total MV: {totals.marketValue} · PnL: {totals.pnl}
-                        </p>
+                        <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-2 text-sm">
+                            <div className="flex items-baseline gap-1.5">
+                                <span className="text-[var(--text-soft)]">Total value</span>
+                                <span className="font-semibold text-[var(--text-main)]">
+                                    {totals.marketValueLabel}
+                                </span>
+                            </div>
+                            <div className="flex items-baseline gap-1.5">
+                                <span className="text-[var(--text-soft)]">PnL</span>
+                                <span className={`font-semibold ${pnlClass}`}>
+                                    {totals.pnlLabel}
+                                </span>
+                            </div>
+                            <div className="flex items-baseline gap-1.5">
+                                <span className="font-semibold text-[var(--text-main)]">
+                                    {totals.positions}
+                                </span>
+                                <span className="text-[var(--text-soft)]">
+                                    {totals.positions === 1 ? "position" : "positions"}
+                                </span>
+                            </div>
+                        </div>
                     </div>
 
                     <Button onClick={() => setOpen(true)}>
@@ -119,7 +150,7 @@ export default function HoldingsCard({
                                     <th className="px-4 py-3 text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-[var(--card-border)] bg-white text-sm">
+                            <tbody className="divide-y divide-[var(--card-border)] bg-[var(--card-bg-strong)] text-sm">
                                 {list.map((h) => {
                                     const symbol = h.Symbol ?? h.symbol;
                                     const holdingId = h.HoldingId ?? h.holdingId ?? symbol;

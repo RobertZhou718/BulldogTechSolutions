@@ -9,14 +9,14 @@ namespace BulldogFinance.Functions.Functions
 {
     public class GetWatchlistFunction
     {
-        private readonly IInvestmentService _investmentService;
+        private readonly IInvestmentOverviewService _overviewService;
         private readonly ILogger<GetWatchlistFunction> _logger;
 
         public GetWatchlistFunction(
-            IInvestmentService investmentService,
+            IInvestmentOverviewService overviewService,
             ILogger<GetWatchlistFunction> logger)
         {
-            _investmentService = investmentService;
+            _overviewService = overviewService;
             _logger = logger;
         }
 
@@ -32,7 +32,7 @@ namespace BulldogFinance.Functions.Functions
 
             _logger.LogInformation("GetWatchlist for user {UserId}", userId);
 
-            var items = await _investmentService.GetWatchlistAsync(userId);
+            var items = await _overviewService.GetWatchlistOverviewAsync(userId);
 
             var resp = req.CreateResponse(HttpStatusCode.OK);
             await resp.WriteAsJsonAsync(items);

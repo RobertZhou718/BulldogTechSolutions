@@ -7,6 +7,7 @@ using BulldogFinance.Functions.Services.Plaid;
 using BulldogFinance.Functions.Services.Users;
 using Going.Plaid.Item;
 using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging;
 
@@ -14,6 +15,9 @@ namespace BulldogFinance.Functions.Functions
 {
     public class ExchangePlaidPublicTokenFunction
     {
+        private const string PostLinkQueueName = "plaid-daily-sync-items";
+        private const string QueueConnectionName = "QueueStorage";
+
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             PropertyNameCaseInsensitive = true,
@@ -23,7 +27,6 @@ namespace BulldogFinance.Functions.Functions
         private readonly IPlaidClientFactory _plaidClientFactory;
         private readonly IPlaidRepository _plaidRepository;
         private readonly IPlaidSyncService _plaidSyncService;
-        private readonly IPlaidInvestmentSyncService _plaidInvestmentSyncService;
         private readonly IPlaidTokenProtector _tokenProtector;
         private readonly IUserRepository _userRepository;
         private readonly ILogger<ExchangePlaidPublicTokenFunction> _logger;
@@ -32,7 +35,6 @@ namespace BulldogFinance.Functions.Functions
             IPlaidClientFactory plaidClientFactory,
             IPlaidRepository plaidRepository,
             IPlaidSyncService plaidSyncService,
-            IPlaidInvestmentSyncService plaidInvestmentSyncService,
             IPlaidTokenProtector tokenProtector,
             IUserRepository userRepository,
             ILogger<ExchangePlaidPublicTokenFunction> logger)
@@ -40,21 +42,20 @@ namespace BulldogFinance.Functions.Functions
             _plaidClientFactory = plaidClientFactory;
             _plaidRepository = plaidRepository;
             _plaidSyncService = plaidSyncService;
-            _plaidInvestmentSyncService = plaidInvestmentSyncService;
             _tokenProtector = tokenProtector;
             _userRepository = userRepository;
             _logger = logger;
         }
 
         [Function("ExchangePlaidPublicToken")]
-        public async Task<HttpResponseData> Run(
+        public async Task<ExchangePlaidPublicTokenOutput> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "plaid/exchange-public-token")]
             HttpRequestData req,
             FunctionContext context)
         {
             var userId = AuthHelper.GetUserId(req);
             if (string.IsNullOrWhiteSpace(userId))
-                return await ApiResponse.UnauthorizedAsync(req);
+                return Output(await ApiResponse.UnauthorizedAsync(req));
 
             var userEmail = AuthHelper.GetUserEmail(req);
 
@@ -65,7 +66,7 @@ namespace BulldogFinance.Functions.Functions
             }
 
             if (string.IsNullOrWhiteSpace(body))
-                return await ApiResponse.BadRequestAsync(req, "Request body is empty.");
+                return Output(await ApiResponse.BadRequestAsync(req, "Request body is empty."));
 
             ExchangePlaidPublicTokenRequest? requestModel;
             try
@@ -74,11 +75,11 @@ namespace BulldogFinance.Functions.Functions
             }
             catch (JsonException)
             {
-                return await ApiResponse.BadRequestAsync(req, "Invalid JSON.");
+                return Output(await ApiResponse.BadRequestAsync(req, "Invalid JSON."));
             }
 
             if (requestModel == null || string.IsNullOrWhiteSpace(requestModel.PublicToken))
-                return await ApiResponse.BadRequestAsync(req, "publicToken is required.");
+                return Output(await ApiResponse.BadRequestAsync(req, "publicToken is required."));
 
             var exchangeClient = _plaidClientFactory.Create();
             var exchange = await exchangeClient.ItemPublicTokenExchangeAsync(new ItemPublicTokenExchangeRequest
@@ -91,8 +92,8 @@ namespace BulldogFinance.Functions.Functions
                 var detail = exchange.Error != null
                     ? $"{exchange.Error.ErrorType}/{exchange.Error.ErrorCode}: {exchange.Error.ErrorMessage}"
                     : exchange.RawJson ?? "Unknown error";
-                return await ApiResponse.BadGatewayAsync(req,
-                    $"Plaid API /item/public_token/exchange failed: {(int)exchange.StatusCode} {detail}");
+                return Output(await ApiResponse.BadGatewayAsync(req,
+                    $"Plaid API /item/public_token/exchange failed: {(int)exchange.StatusCode} {detail}"));
             }
 
             var now = DateTime.UtcNow;
@@ -141,56 +142,7 @@ namespace BulldogFinance.Functions.Functions
                         exchange.ItemId);
                 }
 
-                return await ApiResponse.BadGatewayAsync(req, "Failed to import accounts from Plaid. The connection has been rolled back.");
-            }
-
-            var syncSummary = new PlaidSyncSummary();
-            var investmentSummary = new BulldogFinance.Functions.Models.Investments.PlaidInvestmentSyncSummary();
-
-            try
-            {
-                await _plaidSyncService.RefreshBalancesAsync(userId, exchange.ItemId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "Plaid balance refresh failed after linking; accounts remain connected and user can retry. UserId={UserId} ItemId={ItemId}",
-                    userId,
-                    exchange.ItemId);
-            }
-
-            try
-            {
-                syncSummary = await _plaidSyncService.SyncTransactionsAsync(userId, exchange.ItemId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(
-                    ex,
-                    "Plaid transactions sync failed after linking; accounts remain connected and user can retry. UserId={UserId} ItemId={ItemId}",
-                    userId,
-                    exchange.ItemId);
-            }
-
-            if (importedAccounts.Any(account => IsInvestmentAccount(account.Type)))
-            {
-                try
-                {
-                    investmentSummary = await _plaidInvestmentSyncService.SyncInvestmentsAsync(
-                        userId,
-                        exchange.ItemId,
-                        transactionStartUtc: DateTime.UtcNow.Date.AddDays(-30),
-                        transactionEndUtc: DateTime.UtcNow.Date);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(
-                        ex,
-                        "Plaid investments sync failed after linking; accounts remain connected and user can retry. UserId={UserId} ItemId={ItemId}",
-                        userId,
-                        exchange.ItemId);
-                }
+                return Output(await ApiResponse.BadGatewayAsync(req, "Failed to import accounts from Plaid. The connection has been rolled back."));
             }
 
             try
@@ -220,33 +172,64 @@ namespace BulldogFinance.Functions.Functions
                     exchange.ItemId);
             }
 
+            var queuedAt = DateTime.UtcNow;
+            try
+            {
+                itemEntity.LastDailySyncQueuedAtUtc = queuedAt;
+                itemEntity.LastSyncStatus = "QUEUED";
+                itemEntity.UpdatedAtUtc = queuedAt;
+                await _plaidRepository.UpsertItemAsync(itemEntity);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Failed to mark Plaid item sync queued after linking. UserId={UserId} ItemId={ItemId}",
+                    userId,
+                    exchange.ItemId);
+            }
+
+            var queueMessage = JsonSerializer.Serialize(new PlaidDailySyncQueueMessage
+            {
+                UserId = userId,
+                ItemId = exchange.ItemId,
+                EnqueuedAtUtc = queuedAt
+            }, JsonOptions);
+
             var response = req.CreateResponse(HttpStatusCode.OK);
             response.Headers.Add("Content-Type", "application/json; charset=utf-8");
             await response.WriteStringAsync(JsonSerializer.Serialize(new ExchangePlaidPublicTokenResponse
             {
                 ItemId = exchange.ItemId,
                 AccountsConnected = importedAccounts.Count,
-                TransactionsAdded = syncSummary.Added,
-                TransactionsModified = syncSummary.Modified,
-                TransactionsRemoved = syncSummary.Removed,
-                InvestmentHoldingsSynced = investmentSummary.HoldingsSynced,
-                InvestmentSecuritiesSynced = investmentSummary.SecuritiesSynced,
-                InvestmentTransactionsSynced = investmentSummary.InvestmentTransactionsSynced
+                TransactionsAdded = 0,
+                TransactionsModified = 0,
+                TransactionsRemoved = 0,
+                InvestmentHoldingsSynced = 0,
+                InvestmentSecuritiesSynced = 0,
+                InvestmentTransactionsSynced = 0,
+                BackgroundSyncQueued = true
             }, JsonOptions));
 
-            return response;
+            return Output(response, queueMessage);
         }
 
-        private static bool IsInvestmentAccount(string? accountType)
+        private static ExchangePlaidPublicTokenOutput Output(HttpResponseData response, params string[] queueMessages)
         {
-            if (string.IsNullOrWhiteSpace(accountType))
+            return new ExchangePlaidPublicTokenOutput
             {
-                return false;
-            }
+                HttpResponse = response,
+                QueueMessages = queueMessages
+            };
+        }
 
-            return accountType
-                .Trim()
-                .StartsWith("investment", StringComparison.OrdinalIgnoreCase);
+        public sealed class ExchangePlaidPublicTokenOutput
+        {
+            [HttpResult]
+            public HttpResponseData HttpResponse { get; set; } = default!;
+
+            [QueueOutput(PostLinkQueueName, Connection = QueueConnectionName)]
+            public string[] QueueMessages { get; set; } = Array.Empty<string>();
         }
     }
 }

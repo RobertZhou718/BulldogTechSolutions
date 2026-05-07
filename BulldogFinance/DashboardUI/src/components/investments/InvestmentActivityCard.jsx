@@ -49,7 +49,7 @@ export default function InvestmentActivityCard({ items, loading }) {
                                 <th className="px-4 py-3 text-right">Amount</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-[var(--card-border)] bg-white text-sm">
+                        <tbody className="divide-y divide-[var(--card-border)] bg-[var(--card-bg-strong)] text-sm">
                             {list.map((item) => {
                                 const id = item.TransactionId ?? item.transactionId;
                                 const date = item.DateUtc ?? item.dateUtc;
