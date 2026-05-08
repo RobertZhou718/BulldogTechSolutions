@@ -38,7 +38,7 @@ Priority coverage:
 - `POST /onboarding` → `GET /accounts`
 - `POST /transactions` → `GET /transactions`
 - `POST /investments` → `GET /investments/overview`
-- `POST /plaid/exchange-public-token` (sandbox) → `POST /plaid/sync-transactions` → `GET /transactions`
+- `POST /plaid/exchange-public-token` (sandbox) → process the queued `plaid-daily-sync-items` message → `GET /transactions`
 - `POST /chat` end-to-end against a recorded Azure OpenAI response, covering a tool-calling turn
 
 ### Frontend end-to-end tests

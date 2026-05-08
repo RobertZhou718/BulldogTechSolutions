@@ -28,7 +28,7 @@ Bulldog Finance is a personal "wealth view" application that covers:
   - REST API surface (`/me`, `/onboarding`, `/accounts`, `/transactions`, `/investments`, `/reports`, `/chat`, `/plaid/*`, `/native-auth/*`)
   - Bearer-token middleware that validates Entra JWTs and populates the per-request user context
   - Native auth gateway (`/api/native-auth/{*path}`) that forwards MSAL Custom Native Auth SDK calls to the Entra Native Auth API
-  - Plaid webhook handling and timer-triggered balance, transaction, investment holding, and investment activity sync
+  - Plaid Link token exchange and queue-backed daily balance, transaction, investment holding, and investment activity sync
   - Timer triggers for weekly / monthly AI report generation
 
 ### Service layer
@@ -77,8 +77,8 @@ Bulldog Finance is a personal "wealth view" application that covers:
 2. `react-plaid-link` completes the Link flow and returns a public token.
 3. Client exchanges it via `POST /plaid/exchange-public-token`.
 4. Backend encrypts the access token (Data Protection) and persists the item via `PlaidRepository`.
-5. Plaid webhooks hit `/plaid/webhook`; timer triggers refresh balances and sync transactions through `PlaidSyncService`.
-6. If the linked Item includes active investment accounts, the backend syncs Plaid investment holdings, securities, recent investment transactions, and daily portfolio snapshots.
+5. The token exchange queues the linked Item on `plaid-daily-sync-items`; a daily timer also fans out active Items onto that queue.
+6. Queue processing refreshes balances, syncs transactions through `PlaidSyncService`, and syncs Plaid investment holdings, securities, recent investment transactions, and daily portfolio snapshots when investment accounts are present.
 
 ### Flow C — Transactions
 

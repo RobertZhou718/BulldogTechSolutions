@@ -22,17 +22,9 @@ namespace BulldogFinance.Functions.Services.Plaid
             string itemId,
             CancellationToken cancellationToken = default);
 
-        Task<PlaidSyncSummary> SyncTransactionsForAllItemsAsync(
-            string userId,
-            CancellationToken cancellationToken = default);
-
         Task RemoveItemAsync(
             string userId,
             string itemId,
-            CancellationToken cancellationToken = default);
-
-        Task<IReadOnlyList<BulldogFinance.Functions.Models.Plaid.PlaidItemEntity>> GetActiveItemsAsync(
-            string userId,
             CancellationToken cancellationToken = default);
     }
 }
