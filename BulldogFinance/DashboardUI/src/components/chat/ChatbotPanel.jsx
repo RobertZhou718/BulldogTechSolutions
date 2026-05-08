@@ -4,12 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/Field.jsx";
 import { useChatbot } from "./chatbotContext.js";
 import chatbotAvatar from "@/assets/BulldogFinance.png";
+import { XIcon } from "lucide-react";
 
 export default function ChatbotPanel({
     className = "",
     title = "Bulldog Finance chat",
     description = "Ask questions about your portfolio, transactions, or the latest report.",
     prompts = [],
+    onClose,
 }) {
     const { messages, draft, error, isSending, isLoadingHistory, setDraft, submitMessage } = useChatbot();
 
@@ -20,23 +22,38 @@ export default function ChatbotPanel({
 
     return (
         <Card className={`flex min-h-0 flex-col overflow-hidden ${className}`}>
-            <div className="flex items-start gap-3">
-                <img
-                    src={chatbotAvatar}
-                    alt="Bulldog Finance assistant"
-                    className="h-11 w-11 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg-strong)] object-cover p-1"
-                />
-                <div className="min-w-0">
-                    <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
-                        Assistant
-                    </p>
-                    <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
-                        {title}
-                    </h2>
-                    <p className="mt-2 text-sm text-[var(--text-muted)]">
-                        {description}
-                    </p>
+            <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                    <img
+                        src={chatbotAvatar}
+                        alt="Bulldog Finance assistant"
+                        className="h-11 w-11 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg-strong)] object-cover p-1"
+                    />
+                    <div className="min-w-0">
+                        <p className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
+                            Assistant
+                        </p>
+                        <h2 className="mt-2 text-xl font-semibold text-[var(--text-main)]">
+                            {title}
+                        </h2>
+                        <p className="mt-2 text-sm text-[var(--text-muted)]">
+                            {description}
+                        </p>
+                    </div>
                 </div>
+
+                {onClose ? (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={onClose}
+                        className="-mr-1 -mt-1 rounded-full text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text-main)]"
+                        aria-label="Close Bulldog Finance chat"
+                    >
+                        <XIcon className="size-4" />
+                    </Button>
+                ) : null}
             </div>
 
             <div className="mt-6 flex min-h-0 flex-1 flex-col overflow-hidden">

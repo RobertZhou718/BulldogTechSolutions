@@ -28,7 +28,8 @@ Telemetry flows into **Azure Application Insights** via `Microsoft.Azure.Functio
 
 ### External integrations
 - `plaid.call.count{endpoint=...}` / failure rate
-- `plaid.webhook.count{type=...}`
+- `plaid.daily_sync.queued`
+- `plaid.daily_sync.failure`
 - `finnhub.call.count` / failure rate
 - `openai.call.count` / failure rate
 
@@ -77,7 +78,7 @@ Never log access tokens, Plaid access tokens, or raw transaction notes at `Infor
 ### Warning
 - Token spend above daily budget threshold
 - Unusual per-user request rate (possible abuse)
-- Plaid webhook backlog growing
+- Plaid daily sync queue backlog or message age growing
 
 ## 6. Runbooks
 
@@ -103,10 +104,10 @@ Never log access tokens, Plaid access tokens, or raw transaction notes at `Infor
 1. Confirm the Data Protection keys directory is intact and hasn't been rotated without re-encryption.
 2. If keys are lost, prompt affected users to re-link accounts; there is no recovery path for old ciphertext.
 
-### Scenario E — Plaid webhook flooding
-1. Verify webhook signatures are passing.
-2. Check `/transactions/sync` cursor progress per item.
-3. If a single item is looping, pause its sync and investigate the cursor in storage.
+### Scenario E — Plaid daily sync backlog
+1. Check the `plaid-daily-sync-items` queue length and oldest message age.
+2. Inspect `ProcessDailyPlaidSyncItem` failures by `ItemId` and Plaid endpoint.
+3. If a single Item is failing repeatedly, check its stored Plaid status and `/transactions/sync` cursor, then prompt the user to reconnect if the error is `ITEM_LOGIN_REQUIRED`.
 
 ## 7. Capacity & cost hygiene
 

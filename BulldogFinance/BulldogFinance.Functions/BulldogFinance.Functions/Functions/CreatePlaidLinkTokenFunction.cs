@@ -33,8 +33,11 @@ namespace BulldogFinance.Functions.Functions
             if (string.IsNullOrWhiteSpace(userId))
                 return await ApiResponse.UnauthorizedAsync(req);
 
-            // Body is optional — defaults apply when absent.
+            // Body is optional; defaults apply when absent.
             var body = await req.ReadJsonBodyAsync<CreatePlaidLinkTokenRequest>();
+            if (body.IsInvalid)
+                return await ApiResponse.BadRequestAsync(req, "Invalid JSON.");
+
             var requestModel = body.Value;
 
             var countryCodes = (requestModel?.CountryCodes?.Length > 0 ? requestModel.CountryCodes : new[] { "CA", "US" })

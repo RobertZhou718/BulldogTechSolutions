@@ -106,20 +106,13 @@ Exchanges the public token returned by Plaid Link for an access token. The acces
 { "publicToken": "public-sandbox-..." }
 ```
 
-### `POST /plaid/refresh-balances`
-Forces a balance refresh for all linked items for the current user.
+The exchange response includes the Plaid Item id, number of imported accounts, and whether a background sync was queued. Transaction, balance, and investment sync now run from the `plaid-daily-sync-items` queue after link exchange and from the daily timer.
 
-### `POST /plaid/sync-transactions`
-Pulls new transactions using Plaid's `/transactions/sync` cursor.
+### `POST /plaid/items/{itemId}/update-complete`
+Called by the SPA after a Plaid Link update-mode reconnect succeeds. Marks the Item active again and queues background sync.
 
-### `POST /plaid/sync-investments`
-Syncs Plaid investment holdings, securities, recent investment transactions, and portfolio snapshots for one Item or all active Items.
-
-### `DELETE /plaid/items/{itemId}`
-Unlinks a Plaid item and clears stored tokens.
-
-### `POST /plaid/webhook`
-Webhook endpoint called by Plaid. Verifies the payload and queues the appropriate refresh/sync.
+### `DELETE /accounts/{accountId}`
+Deletes or archives an account. For Plaid-linked accounts, deleting the final active account for an Item also removes the Plaid Item and stored access token.
 
 ---
 

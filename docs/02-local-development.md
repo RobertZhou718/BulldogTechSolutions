@@ -124,13 +124,13 @@ The backend validates real Entra JWTs via `BearerTokenAuthenticationMiddleware`.
 - Sign in through the SPA to get a real token (MSAL acquires tokens against the API scope defined by `VITE_API_CLIENT_ID`), and pass it as `Authorization: Bearer <jwt>` when calling the API from tools like Postman.
 - The SPA's custom email/password sign-in and sign-up UI uses the MSAL Custom Native Auth SDK, which forwards CIAM native auth requests through `POST /api/native-auth/{*path}`.
 
-There is no anonymous debug-header or EasyAuth-header fallback. Business endpoints require a valid bearer token; only `NativeAuthProxy` and `PlaidWebhook` are intentionally anonymous.
+There is no anonymous debug-header or EasyAuth-header fallback. Business endpoints require a valid bearer token; only `NativeAuthProxy` is intentionally anonymous.
 
 ## 8. Plaid sandbox tips
 
 - Set `Plaid:Environment=Sandbox` and use Plaid's sandbox credentials (e.g. `user_good` / `pass_good`).
 - The Data Protection keys directory (`DataProtection:KeysDirectory`) must be writable; without it the encrypted Plaid access tokens won't survive a host restart.
-- Webhooks can be exercised locally via the Plaid sandbox "fire webhook" endpoints, pointed at a tunnel (ngrok / dev tunnels) to `http://localhost:7071/api/plaid/webhook`.
+- Linking a sandbox institution queues background sync work on `plaid-daily-sync-items`. Keep Azurite running with queue support, or configure `QueueStorage` to a real storage account, before testing end-to-end Plaid data import.
 
 ## 9. Common issues
 

@@ -268,22 +268,6 @@ namespace BulldogFinance.Functions.Services.Plaid
             return summary;
         }
 
-        public async Task<PlaidSyncSummary> SyncTransactionsForAllItemsAsync(string userId, CancellationToken cancellationToken = default)
-        {
-            var items = await _plaidRepository.GetItemsAsync(userId, cancellationToken);
-            var total = new PlaidSyncSummary();
-
-            foreach (var item in items.Where(x => string.Equals(x.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase)))
-            {
-                var summary = await SyncTransactionsAsync(userId, item.RowKey, cancellationToken);
-                total.Added += summary.Added;
-                total.Modified += summary.Modified;
-                total.Removed += summary.Removed;
-            }
-
-            return total;
-        }
-
         public async Task RemoveItemAsync(string userId, string itemId, CancellationToken cancellationToken = default)
         {
             var item = await _plaidRepository.GetItemAsync(userId, itemId, cancellationToken);
@@ -315,14 +299,6 @@ namespace BulldogFinance.Functions.Services.Plaid
 
             await _plaidInvestmentRepository.DeleteByItemAsync(userId, itemId, cancellationToken);
             await _plaidRepository.DeleteItemAsync(userId, itemId, cancellationToken);
-        }
-
-        public async Task<IReadOnlyList<PlaidItemEntity>> GetActiveItemsAsync(string userId, CancellationToken cancellationToken = default)
-        {
-            var items = await _plaidRepository.GetItemsAsync(userId, cancellationToken);
-            return items
-                .Where(x => string.Equals(x.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
-                .ToList();
         }
 
         private async Task<PlaidItemEntity> GetActiveItemAsync(string userId, string itemId, CancellationToken cancellationToken)
